@@ -1,0 +1,38 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Test and build output
+coverage/
+dist/
+*.tsbuildinfo
+/backups/
+/data/
+
+# Generated database client
+src/generated/prisma/
+
+# Local tooling
+.vercel/
