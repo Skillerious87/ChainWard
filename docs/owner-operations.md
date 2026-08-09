@@ -11,10 +11,10 @@ identity is **Skillerious [3212954]**. The page and every review action check th
 identity independently on the server. Hiding the navigation item is not the
 security boundary.
 
-The central purchase queue requires PostgreSQL because licences, access
-requests, users, and audit records are platform-wide data. The per-device
-SQLite mode stores faction reward configuration and paid-chain snapshots, but
-does not operate the shared purchase queue.
+For local testing, the purchase queue, licences, users, and audit records use
+the temporary project SQLite database. A released multi-user service must use
+PostgreSQL so every server instance and every faction sees the same durable
+licence register. Local SQLite is not a shared production licence service.
 
 ## How a faction purchase reaches the queue
 

@@ -8,6 +8,7 @@ import { ServiceHealthPanel } from "@/components/admin/service-health-panel";
 import { AccessAuditTimeline, LicenseRegistry, PurchaseReviewGuide } from "@/components/admin/license-operations";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { isPlatformOwner, PLATFORM_OWNER } from "@/lib/auth/platform-owner";
+import { getDatabaseStatus } from "@/lib/data/database-status";
 import { getAccessRequestQueue } from "@/lib/licensing/request-store";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Platform Administration" };
 export default async function AdminPage() {
   const actor = await getCurrentActor();
   if (!isPlatformOwner(actor)) notFound();
-  const [queue, telemetry] = await Promise.all([getAccessRequestQueue(), getWorkspaceTelemetry()]);
+  const [queue, telemetry, database] = await Promise.all([getAccessRequestQueue(), getWorkspaceTelemetry(), getDatabaseStatus()]);
   const reviewCount = queue.requests.filter((request) => request.status === "Pending" || request.status === "Information").length;
 
   return (
@@ -27,7 +28,7 @@ export default async function AdminPage() {
       <PurchaseReviewGuide />
       <div className="admin-grid">
         <AccessRequestTable initialRequests={queue.requests} databaseConfigured={queue.databaseConfigured} message={queue.message} />
-        <ServiceHealthPanel telemetry={telemetry} databaseConfigured={queue.databaseConfigured} />
+        <ServiceHealthPanel telemetry={telemetry} database={database} />
       </div>
       <div className="admin-records-grid"><LicenseRegistry licenses={queue.activeLicenses} /><AccessAuditTimeline events={queue.auditEvents} /></div>
     </div>

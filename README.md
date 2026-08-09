@@ -10,33 +10,36 @@ not fall back to demonstration records.
 ## Run locally
 
 1. Run `npm install`.
-2. Copy `.env.example` to `.env.local` and replace `SESSION_SECRET` with at
-   least 32 random characters. `TORN_API_KEY` is optional because the in-app
-   connection screen can validate a restricted key directly.
+2. Copy `.env.example` to `.env.local`. `TORN_API_KEY` is optional because the
+   in-app connection screen validates a restricted key directly. A production
+   deployment must replace `SESSION_SECRET`; local development can leave it
+   empty and use the stable machine-private secret in AppData.
 3. Run `npm run dev`.
 4. Open `http://localhost:3000/dashboard`.
-5. Connect the Torn API, then open **Settings → Storage & backups** and press
-   **Create local database**.
+5. Connect the Torn API. The temporary testing database is created
+   automatically in the project when PostgreSQL is not configured.
 
-That button creates a real SQLite file at `data/chainward-local.sqlite` by
-default. Set `CHAINWARD_LOCAL_DB_PATH` to choose another server-side location.
-No Docker installation is required for this single-device mode.
+Local test mode creates a real SQLite file at `data/chainward-local.sqlite` by
+default. Set `CHAINWARD_LOCAL_DB_PATH` to choose another location. No Docker
+installation is required for this single-device mode.
 
-The `/connect` form validates a key directly against Torn. By default it stores
-the key encrypted at rest on the server for 30 days and gives the browser only
-a random, HTTP-only, SameSite session token. Users can opt into a temporary
-12-hour session instead, and **Disconnect Torn API** revokes remembered sessions
-and credentials. Never prefix `SESSION_SECRET` or `TORN_API_KEY` with
-`NEXT_PUBLIC_`, and never commit `.env.local`.
+The `/connect` form validates a key directly against Torn. In local mode it
+stores the encrypted key in `%LOCALAPPDATA%\Chainward\credentials.sqlite`, not
+inside the repository. The browser receives only a random, HTTP-only, SameSite
+session token. Users can opt into a temporary 12-hour session instead, and
+**Disconnect Torn API** revokes remembered sessions and credentials. Never
+prefix `SESSION_SECRET` or `TORN_API_KEY` with `NEXT_PUBLIC_`, and never commit
+`.env.local`.
 
 ## Storage and backups
 
 Chainward supports two storage modes:
 
-- **Local SQLite** is created when remembered access or local workspace storage
-  is first requested. It stores encrypted remembered credentials, reward
-  schemes, their versions, workspace settings, and immutable paid-chain
-  acknowledgements on the machine running Chainward.
+- **Local SQLite** is created automatically during local testing. The project
+  file stores unlock requests and licences, reward schemes, workspace settings,
+  and immutable paid-chain acknowledgements. Encrypted Torn credentials are
+  kept separately in the operating-system AppData directory so recreating the
+  test database does not remove the remembered login.
 - **PostgreSQL** is the shared/hosted option and also supports platform-wide
   licensing and administration records. Open **Settings → PostgreSQL** to enter
   and test a local or hosted server, then copy the generated `DATABASE_URL`.
@@ -78,4 +81,6 @@ npm run check
 Architecture and current Torn API findings are documented in
 [`docs/architecture.md`](docs/architecture.md) and
 [`docs/torn-api.md`](docs/torn-api.md). The complete licensing and reward-payment
-procedure is in [`docs/owner-operations.md`](docs/owner-operations.md).
+procedure is in [`docs/owner-operations.md`](docs/owner-operations.md). The
+local-to-release unlock walkthrough is in
+[`docs/unlock-release-walkthrough.md`](docs/unlock-release-walkthrough.md).

@@ -89,11 +89,13 @@ explicitly present in the API response. API keys and raw payloads never cross
 the server/client boundary.
 
 The `/connect` form validates the submitted key and defaults to a 30-day
-database session. The credential is AES-GCM encrypted at rest on the server;
-the browser receives only a random, HTTP-only, SameSite token whose hash is
-stored server-side. A user can choose a temporary encrypted 12-hour session
-instead. Disconnect revokes the remembered session and credential, while
-`TORN_API_KEY` remains a deployment fallback.
+database session. In single-device mode the AES-GCM encrypted credential and
+opaque session record are stored in the operating-system AppData directory,
+separate from the project SQLite database. In hosted mode they are stored in
+PostgreSQL. The browser receives only a random, HTTP-only, SameSite token whose
+hash is stored server-side. A user can choose a temporary encrypted 12-hour
+session instead. Disconnect revokes the remembered session and credential,
+while `TORN_API_KEY` remains a deployment fallback.
 
 ## Delivery status
 

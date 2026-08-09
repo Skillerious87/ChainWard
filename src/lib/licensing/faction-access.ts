@@ -3,7 +3,15 @@ import "server-only";
 import type { FactionAccessSummary } from "./types";
 
 export async function getFactionAccessSummary(tornFactionId: number | null): Promise<FactionAccessSummary> {
-  if (!tornFactionId || !process.env.DATABASE_URL) return inactive();
+  if (!tornFactionId) return inactive();
+  if (!process.env.DATABASE_URL?.trim()) {
+    try {
+      const { getLocalFactionAccessSummary } = await import("./local-license-store");
+      return getLocalFactionAccessSummary(tornFactionId);
+    } catch {
+      return inactive();
+    }
+  }
   try {
     const { db } = await import("@/lib/db");
     const now = new Date();

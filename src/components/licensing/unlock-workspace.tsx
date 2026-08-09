@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, MessageCircleQuestion, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, MessageCircleQuestion, ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { submitAccessRequest } from "@/app/(platform)/licensing/actions";
@@ -116,9 +116,12 @@ function PendingAccess({ access, factionName }: { access: FactionAccessSummary; 
 }
 
 function ActiveAccess({ access, factionName }: { access: FactionAccessSummary; factionName: string | null }) {
+  const futureCoverage = access.expiresAt
+    ? "While this licence remains active, every new Chainward feature released during that term is added automatically with no extra in-game charge."
+    : "Your lifetime access grows with Chainward. Every new feature released while the service remains actively maintained and moderated is added automatically with no extra in-game charge.";
   return <div className="unlock-workspace unlock-state-page">
     <header className="unlock-state-hero unlock-state-hero--active"><span><Crown size={25} /><ShieldCheck size={13} /></span><div><p className="eyebrow">Protected faction workspace</p><h1>{access.label}</h1><p>{factionName ?? "This faction"} has complete Chainward operations access.</p></div><em><Check size={14} />Active</em></header>
     <section className="unlock-active-grid"><article><small>Licence reference</small><strong title={access.reference ?? undefined}>{access.reference ?? "Unavailable"}</strong></article><article><small>Activated</small><strong>{access.startedAt ? new Date(access.startedAt).toLocaleDateString("en-GB") : "Unavailable"}</strong></article><article><small>Access end</small><strong>{access.expiresAt ? new Date(access.expiresAt).toLocaleDateString("en-GB") : "No expiry"}</strong></article><article><small>Scope</small><strong>One verified faction</strong></article></section>
-    <section className="unlock-included-panel"><div><p className="eyebrow">Included capabilities</p><h2>Everything your faction needs to operate.</h2></div><ul>{licenceBenefits.map((benefit) => <li key={benefit}><Check size={14} />{benefit}</li>)}</ul></section>
+    <section className="unlock-included-panel"><div><p className="eyebrow">Included capabilities</p><h2>Everything your faction needs to operate.</h2><p>Your access covers the complete Chainward feature set—not a reduced or per-seat edition.</p></div><ul>{licenceBenefits.map((benefit) => <li key={benefit}><Check size={14} />{benefit}</li>)}</ul><footer><span><Gem size={18} /></span><p><strong>Future releases are covered</strong><small>{futureCoverage}</small></p><em><Sparkles size={12} />Always included</em></footer></section>
   </div>;
 }

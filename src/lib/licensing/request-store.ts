@@ -54,7 +54,14 @@ export interface AccessQueueResult {
 }
 
 export async function getAccessRequestQueue(): Promise<AccessQueueResult> {
-  if (!process.env.DATABASE_URL?.trim()) return { databaseConfigured: false, requests: [], factionCount: 0, activeLicenseCount: 0, activeLicenses: [], auditEvents: [], message: "DATABASE_URL is not configured." };
+  if (!process.env.DATABASE_URL?.trim()) {
+    try {
+      const { getLocalAccessRequestQueue } = await import("./local-license-store");
+      return getLocalAccessRequestQueue();
+    } catch {
+      return { databaseConfigured: false, requests: [], factionCount: 0, activeLicenseCount: 0, activeLicenses: [], auditEvents: [], message: "The temporary local database could not be queried." };
+    }
+  }
   try {
     const { db } = await import("@/lib/db");
     const [rows, factionCount, licenses, auditRows] = await Promise.all([

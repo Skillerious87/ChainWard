@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -64,12 +64,12 @@ export function ConnectForm() {
   }
 
   return (
-    <form className="connect-form" onSubmit={submit}>
-      <div className="connect-form__heading"><span><KeyRound size={19} /></span><div><h2>Connect Torn API</h2><p>Verify the player, faction, and required API selections securely.</p></div></div>
+    <form className="connect-form" onSubmit={submit} aria-busy={loading}>
+      <div className="connect-form__heading"><span><KeyRound size={19} /></span><div><small>Restricted key connection</small><h2>Connect your Torn API</h2><p>We’ll verify your identity, faction, and required API selections before anything opens.</p></div></div>
       <label className="api-key-field">
-        <span>Torn API key</span>
-        <div><input name="apiKey" type={visible ? "text" : "password"} autoComplete="off" inputMode="text" minLength={16} maxLength={18} pattern="[A-Za-z0-9'&quot;]{16,18}" required placeholder="Enter your 16-character Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); if (result) setResult(null); }} /><button type="button" onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
-        <small id="api-key-guidance">Limited Access is sufficient. Copy the key value from Torn Settings; never enter your Torn password.</small>
+        <span className="api-key-field__label"><strong>Torn API key</strong><small>16–18 characters</small></span>
+        <div><input name="apiKey" type={visible ? "text" : "password"} autoComplete="off" autoCapitalize="none" spellCheck={false} inputMode="text" minLength={16} maxLength={18} pattern="[A-Za-z0-9'&quot;]{16,18}" required placeholder="Paste your restricted Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); if (result) setResult(null); }} /><button type="button" onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
+        <small id="api-key-guidance"><ShieldCheck size={13} /> Limited Access is sufficient. Never enter your Torn password.</small>
       </label>
       <label className="remember-connection">
         <input name="remember" type="checkbox" defaultChecked />
@@ -85,7 +85,7 @@ export function ConnectForm() {
           <p className="connection-session-note"><ShieldCheck size={13} /> {result.session.remembered ? "This browser will reconnect automatically for 30 days." : "Temporary workspace session active for up to 12 hours."}</p>
         </div>
       )}
-      <button type={result ? "button" : "submit"} className="button button--primary connect-submit" disabled={loading} onClick={result ? () => { router.push("/dashboard"); router.refresh(); } : undefined}>{loading ? <><LoaderCircle className="spin" size={16} /> Validating securely…</> : result ? <>Open verified workspace <span>→</span></> : <>Validate and connect <span>→</span></>}</button>
+      <button type={result ? "button" : "submit"} className="button button--primary connect-submit" disabled={loading} onClick={result ? () => { router.push("/dashboard"); router.refresh(); } : undefined}>{loading ? <><LoaderCircle className="spin" size={16} /> Validating securely…</> : result ? <>Open verified workspace <ArrowRight size={16} /></> : <>Validate and connect <ArrowRight size={16} /></>}</button>
     </form>
   );
 }

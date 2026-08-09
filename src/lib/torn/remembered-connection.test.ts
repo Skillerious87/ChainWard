@@ -8,17 +8,20 @@ import {
   readRememberedConnection,
   revokeRememberedConnection,
 } from "./remembered-connection";
+import { credentialDatabasePath } from "./credential-database";
 
 describe.sequential("remembered Torn connections", () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalDatabasePath = process.env.CHAINWARD_LOCAL_DB_PATH;
   const originalSessionSecret = process.env.SESSION_SECRET;
+  const originalAppDataDirectory = process.env.CHAINWARD_APP_DATA_DIR;
   let temporaryDirectory = "";
 
   beforeEach(() => {
     temporaryDirectory = mkdtempSync(path.join(tmpdir(), "chainward-remembered-"));
     delete process.env.DATABASE_URL;
     process.env.CHAINWARD_LOCAL_DB_PATH = path.join(temporaryDirectory, "workspace.sqlite");
+    process.env.CHAINWARD_APP_DATA_DIR = path.join(temporaryDirectory, "appdata");
     process.env.SESSION_SECRET = "test-only-stable-remembered-connection-secret";
   });
 
@@ -29,6 +32,8 @@ describe.sequential("remembered Torn connections", () => {
     else process.env.CHAINWARD_LOCAL_DB_PATH = originalDatabasePath;
     if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = originalSessionSecret;
+    if (originalAppDataDirectory === undefined) delete process.env.CHAINWARD_APP_DATA_DIR;
+    else process.env.CHAINWARD_APP_DATA_DIR = originalAppDataDirectory;
     rmSync(temporaryDirectory, { recursive: true, force: true });
   });
 
@@ -38,7 +43,8 @@ describe.sequential("remembered Torn connections", () => {
 
     expect(stored.token).not.toContain(apiKey);
     expect(stored.token.length).toBeGreaterThanOrEqual(40);
-    expect(readFileSync(process.env.CHAINWARD_LOCAL_DB_PATH!).includes(Buffer.from(apiKey))).toBe(false);
+    expect(readFileSync(credentialDatabasePath()).includes(Buffer.from(apiKey))).toBe(false);
+    expect(() => readFileSync(process.env.CHAINWARD_LOCAL_DB_PATH!)).toThrow();
     await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({
       apiKey,
       tornUserId: 3_212_954,

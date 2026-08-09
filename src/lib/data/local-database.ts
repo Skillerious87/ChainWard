@@ -37,6 +37,18 @@ export function openLocalDatabase(): DatabaseSync | null {
   return database;
 }
 
+export function openLocalTestDatabase(): DatabaseSync | null {
+  if (!localDatabaseExists() && localTestingEnabled()) createLocalDatabase();
+  return openLocalDatabase();
+}
+
+export function localTestingEnabled(): boolean {
+  if (process.env.DATABASE_URL?.trim()) return false;
+  const configured = process.env.CHAINWARD_LOCAL_TEST_MODE?.trim().toLowerCase();
+  if (configured === "false" || configured === "0") return false;
+  return configured === "true" || configured === "1" || process.env.NODE_ENV !== "production";
+}
+
 export function localDatabaseInfo(): LocalDatabaseInfo {
   const databasePath = localDatabasePath();
   const stats = statSync(databasePath);
@@ -140,21 +152,57 @@ function initializeSchema(database: DatabaseSync): void {
       created_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS remembered_torn_connections (
-      token_hash TEXT PRIMARY KEY,
-      torn_user_id INTEGER NOT NULL,
-      torn_user_name TEXT NOT NULL,
-      faction_id INTEGER NOT NULL,
-      faction_name TEXT NOT NULL,
-      faction_tag TEXT NOT NULL DEFAULT '',
-      encrypted_key BLOB NOT NULL,
-      encryption_iv BLOB NOT NULL,
-      key_fingerprint TEXT NOT NULL,
-      key_last_four TEXT NOT NULL,
-      access_type TEXT NOT NULL,
-      selections_json TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      last_seen_at TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS licensing_users (
+      torn_user_id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      is_platform_admin INTEGER NOT NULL DEFAULT 0,
+      last_authenticated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS licensing_factions (
+      faction_id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      tag TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS licensing_access_requests (
+      id TEXT PRIMARY KEY,
+      faction_id INTEGER NOT NULL REFERENCES licensing_factions(faction_id) ON DELETE RESTRICT,
+      submitted_by_torn_id INTEGER NOT NULL REFERENCES licensing_users(torn_user_id) ON DELETE RESTRICT,
+      reviewed_by_torn_id INTEGER REFERENCES licensing_users(torn_user_id) ON DELETE SET NULL,
+      status TEXT NOT NULL CHECK (status IN ('PENDING', 'INFORMATION_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED')) DEFAULT 'PENDING',
+      reference TEXT NOT NULL UNIQUE,
+      customer_note TEXT,
+      private_note TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS licensing_faction_licenses (
+      id TEXT PRIMARY KEY,
+      faction_id INTEGER NOT NULL REFERENCES licensing_factions(faction_id) ON DELETE RESTRICT,
+      status TEXT NOT NULL CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED', 'EXPIRED', 'REVOKED', 'REJECTED')) DEFAULT 'PENDING',
+      term TEXT NOT NULL CHECK (term IN ('PERMANENT', 'MONTHLY', 'QUARTERLY', 'YEARLY', 'CUSTOM')),
+      reference TEXT NOT NULL UNIQUE,
+      issued_at TEXT,
+      expires_at TEXT,
+      approved_by_torn_id INTEGER REFERENCES licensing_users(torn_user_id) ON DELETE SET NULL,
+      payment_notes TEXT,
+      internal_notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS licensing_audit (
+      id TEXT PRIMARY KEY,
+      faction_id INTEGER REFERENCES licensing_factions(faction_id) ON DELETE RESTRICT,
+      actor_torn_user_id INTEGER REFERENCES licensing_users(torn_user_id) ON DELETE SET NULL,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      metadata_json TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -163,7 +211,10 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS faction_access_status ON faction_access_assignments(faction_id, status, updated_at);
     CREATE INDEX IF NOT EXISTS faction_access_audit_recent ON faction_access_audit(faction_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS member_activity_audit_recent ON member_activity_audit(faction_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS remembered_torn_connections_user ON remembered_torn_connections(torn_user_id, expires_at);
+    CREATE INDEX IF NOT EXISTS licensing_requests_status ON licensing_access_requests(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS licensing_requests_faction ON licensing_access_requests(faction_id, status);
+    CREATE INDEX IF NOT EXISTS licensing_licenses_faction ON licensing_faction_licenses(faction_id, status, expires_at);
+    CREATE INDEX IF NOT EXISTS licensing_audit_recent ON licensing_audit(action, created_at DESC);
   `);
   ensureColumn(database, "chain_settlements", "paid_by_name", "TEXT");
 }

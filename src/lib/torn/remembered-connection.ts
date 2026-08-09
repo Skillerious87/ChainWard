@@ -1,10 +1,10 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { createLocalDatabase, openLocalDatabase } from "@/lib/data/local-database";
 import { decryptCredential, encryptCredential } from "@/lib/security/credential-encryption";
 import type { ValidatedTornConnection } from "./connection-service";
 import { connectionEncryptionSecret } from "./connection-session";
+import { openCredentialDatabase } from "./credential-database";
 
 export const REMEMBERED_CONNECTION_COOKIE = "chainward_remembered_connection";
 export const REMEMBERED_CONNECTION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
@@ -62,8 +62,7 @@ function createLocalConnection(
   encrypted: ReturnType<typeof encryptCredential>,
   connection: ValidatedTornConnection,
 ): void {
-  const database = openLocalDatabase() ?? (createLocalDatabase(), openLocalDatabase());
-  if (!database) throw new Error("The local connection store could not be opened.");
+  const database = openCredentialDatabase();
   const now = new Date().toISOString();
   try {
     database.prepare(`
@@ -95,8 +94,7 @@ function createLocalConnection(
 }
 
 function readLocalConnection(tokenHash: string): RememberedConnection | null {
-  const database = openLocalDatabase();
-  if (!database) return null;
+  const database = openCredentialDatabase();
   try {
     const row = database.prepare(`
       SELECT torn_user_id, faction_id, encrypted_key, encryption_iv, expires_at, last_seen_at
@@ -127,8 +125,7 @@ function readLocalConnection(tokenHash: string): RememberedConnection | null {
 }
 
 function revokeLocalConnection(tokenHash: string): void {
-  const database = openLocalDatabase();
-  if (!database) return;
+  const database = openCredentialDatabase();
   try {
     const row = database.prepare("SELECT torn_user_id FROM remembered_torn_connections WHERE token_hash = ?").get(tokenHash) as unknown as { torn_user_id: number } | undefined;
     if (row) database.prepare("DELETE FROM remembered_torn_connections WHERE torn_user_id = ?").run(row.torn_user_id);
