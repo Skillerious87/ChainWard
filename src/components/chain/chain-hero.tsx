@@ -299,18 +299,24 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
             </linearGradient>
           </defs>
           <circle className="timeout-ring__track" cx="64" cy="64" r={radius} />
-          {/* Quarter marks give the sweep a scale to be read against. */}
-          {[0, 90, 180, 270].map((degrees) => {
-            const angle = (degrees * Math.PI) / 180;
-            return <line
-              key={degrees}
-              className="timeout-ring__tick"
-              x1={64 + (radius - 9) * Math.cos(angle)}
-              y1={64 + (radius - 9) * Math.sin(angle)}
-              x2={64 + (radius + 9) * Math.cos(angle)}
-              y2={64 + (radius + 9) * Math.sin(angle)}
-            />;
-          })}
+          {/* A sixty-mark bezel inside the track. It reads as an instrument
+              scale rather than the four stray spokes it replaces, and gives the
+              eye something to measure the arc against. */}
+          <g className="timeout-ring__bezel">
+            {Array.from({ length: 60 }, (_, index) => {
+              const angle = (index * 6 * Math.PI) / 180;
+              const major = index % 5 === 0;
+              const inner = major ? 38.5 : 41;
+              return <line
+                key={index}
+                className={major ? "timeout-ring__mark timeout-ring__mark--major" : "timeout-ring__mark"}
+                x1={64 + inner * Math.cos(angle)}
+                y1={64 + inner * Math.sin(angle)}
+                x2={64 + 44 * Math.cos(angle)}
+                y2={64 + 44 * Math.sin(angle)}
+              />;
+            })}
+          </g>
           <circle
             className="timeout-ring__sweep"
             cx="64"
@@ -322,12 +328,20 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
           />
           {/* A head on the sweep reads as a clock hand, so movement is obvious
               even when a single second barely changes the arc. */}
-          {fraction > 0 && <circle
-            className="timeout-ring__head"
-            cx={64 + radius * Math.cos(fraction * 2 * Math.PI)}
-            cy={64 + radius * Math.sin(fraction * 2 * Math.PI)}
-            r={5.5}
-          />}
+          {fraction > 0 && <>
+            <circle
+              className="timeout-ring__halo"
+              cx={64 + radius * Math.cos(fraction * 2 * Math.PI)}
+              cy={64 + radius * Math.sin(fraction * 2 * Math.PI)}
+              r={8}
+            />
+            <circle
+              className="timeout-ring__head"
+              cx={64 + radius * Math.cos(fraction * 2 * Math.PI)}
+              cy={64 + radius * Math.sin(fraction * 2 * Math.PI)}
+              r={3.4}
+            />
+          </>}
         </svg>
         <div className="timeout-ring__readout" role="timer" aria-live="off">
           <strong>{formatTime(seconds)}</strong>
@@ -339,7 +353,9 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
         <div><dt>Drops at</dt><dd>{deadline > 0 ? formatTornTime(deadline) : "—"}</dd></div>
         <div><dt>Window</dt><dd>{formatDuration(windowSeconds)}</dd></div>
       </dl>
-      <small>Anchored to Torn&apos;s clock and re-synced every 10 seconds while a chain runs. Each hit restarts the window.</small>
+      <small title="Torn reports seconds remaining at the moment it answers. Chainward anchors the deadline to Torn's own clock and re-syncs every 10 seconds while a chain runs.">
+        Anchored to Torn&apos;s clock · every hit restarts the window
+      </small>
     </aside>
   );
 }

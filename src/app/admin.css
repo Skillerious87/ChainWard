@@ -350,3 +350,116 @@
   .role-policy-card__count { flex-direction: row; grid-column: 2; gap: 6px; width: fit-content; align-items: baseline; }
   .role-policy-list { padding: 10px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Owner console layout.
+
+   The screen previously opened with a page header, then an owner banner, then a
+   KPI strip, then a four-step procedure — four full-width blocks before the
+   review queue, which is the only part anyone opens this page to act on. The
+   masthead now carries identity and standing in one row, the queue leads, and
+   the reference material sits in a rail beside it.
+   --------------------------------------------------------------------------- */
+
+.admin-console { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+.admin-masthead {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background:
+    radial-gradient(90% 140% at 0% 0%, rgba(var(--accent-rgb), .05), transparent 58%),
+    linear-gradient(180deg, #0e1317, #0b0f12);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .028);
+}
+.admin-masthead__crest {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), .26);
+  border-radius: 13px;
+  background: rgba(var(--accent-rgb), .07);
+  color: var(--accent);
+}
+.admin-masthead__identity { min-width: 0; }
+.admin-masthead__identity .eyebrow { font-size: 10.5px !important; letter-spacing: 1px; }
+.admin-masthead__identity h1 { margin-top: 3px; font-size: 25px; font-weight: 660; letter-spacing: -.7px; }
+.admin-masthead__identity p:last-child { margin-top: 5px; max-width: 68ch; color: var(--text-muted); font-size: 12.5px !important; line-height: 1.5; }
+.admin-masthead__side { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 9px; }
+
+.admin-owner-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 13px 6px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .016);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.admin-owner-chip:hover { border-color: rgba(var(--accent-rgb), .38); background: rgba(var(--accent-rgb), .05); }
+.admin-owner-chip > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), .26);
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), .08);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 720;
+}
+.admin-owner-chip div { display: flex; flex-direction: column; line-height: 1.25; }
+.admin-owner-chip strong { color: #e6ebed; font-size: 12px; font-weight: 640; }
+.admin-owner-chip small { color: var(--text-muted); font-size: 10.5px; }
+
+.admin-queue-flag {
+  padding: 4px 11px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.admin-queue-flag--action { border-color: rgba(245, 185, 76, .34); background: rgba(245, 185, 76, .08); color: var(--warning); }
+.admin-queue-flag--clear { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .06); color: var(--success); }
+
+/* Queue first, reference material in the rail. */
+.admin-console .admin-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, .42fr); align-items: start; }
+.admin-rail { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
+.admin-rail .service-health,
+.admin-rail .admin-procedure { margin: 0; }
+
+/* The procedure is reference, so it reads as a compact checklist in the rail
+   rather than the full-width feature it used to be. */
+.admin-rail .admin-procedure > header { align-items: flex-start; flex-wrap: wrap; gap: 11px; }
+.admin-rail .admin-procedure > header > a { flex-basis: 100%; }
+.admin-rail .admin-procedure ol { display: grid; gap: 2px; }
+.admin-rail .admin-procedure ol li { align-items: flex-start; }
+
+.admin-console .admin-kpis { border-radius: 12px; }
+.admin-console .admin-kpis > div { padding: 17px 19px; }
+.admin-console .admin-kpis strong { font-size: 22px; letter-spacing: -.5px; }
+
+@media (max-width: 1180px) {
+  .admin-console .admin-grid { grid-template-columns: 1fr; }
+  .admin-rail { flex-direction: row; flex-wrap: wrap; }
+  .admin-rail > * { flex: 1 1 340px; }
+}
+
+@media (max-width: 760px) {
+  .admin-masthead { grid-template-columns: 44px minmax(0, 1fr); row-gap: 14px; padding: 15px 16px; }
+  .admin-masthead__crest { width: 44px; height: 44px; border-radius: 11px; }
+  .admin-masthead__identity h1 { font-size: 21px; }
+  .admin-masthead__side { grid-column: 1 / -1; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .admin-rail { flex-direction: column; }
+}
