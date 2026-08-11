@@ -1,0 +1,229 @@
+/* ---------------------------------------------------------------------------
+   Chain history and chain reports. Loaded after polish.css.
+
+   Both screens were built from bare bordered strips: the history summary was
+   four unlabelled cells between two hairlines, and the report's contributor
+   chart was a 100px name column beside a 6px bar. These are the records a
+   faction settles payouts against, so they are given the same panel treatment
+   as the rest of the workspace and enough room to be read carefully.
+   --------------------------------------------------------------------------- */
+
+/* History summary ----------------------------------------------------------- */
+.history-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #0e1317;
+}
+.history-summary > div {
+  display: grid;
+  min-height: 92px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  gap: 0 11px;
+  padding: 15px 17px;
+  border-right: 1px solid var(--border);
+}
+.history-summary > div:last-child { border-right: 0; }
+.history-summary > div > span:first-child {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  grid-row: 1 / 4;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-muted);
+}
+.history-summary small {
+  color: var(--text-muted);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 660;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+.history-summary strong { margin-top: 2px; color: #eef2f0; font-size: 21px; font-weight: 660; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.history-summary strong em { color: var(--text-muted); font-size: 13px; font-style: normal; font-weight: 600; }
+.history-summary__note { margin-top: 1px; color: var(--text-muted); font-size: 11px !important; }
+
+/* Settlement standing is the actionable figure, so it is coloured by state. */
+.history-summary__settlement > span:first-child { border-color: rgba(103, 211, 145, .26); background: rgba(103, 211, 145, .06); color: var(--success); }
+.history-summary__settlement--open > span:first-child { border-color: rgba(245, 185, 76, .28); background: rgba(245, 185, 76, .07); color: var(--warning); }
+.history-summary__settlement--open strong { color: #f4dca6; }
+
+/* History table ------------------------------------------------------------- */
+.chain-history-page .history-table td { padding-block: 13px; }
+.chain-history-page .chain-id {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .015);
+  color: #dbe3e6;
+  font-size: 12.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+.chain-history-page .chain-id:hover { border-color: rgba(var(--accent-rgb), .4); background: rgba(var(--accent-rgb), .07); color: var(--accent); }
+.chain-history-page .history-time { display: block; margin-top: 2px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chain-history-page .history-reward { display: inline-flex; flex-direction: column; align-items: flex-end; }
+.chain-history-page .history-reward strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.chain-history-page .history-reward small { color: var(--text-muted); font-size: 11px; }
+.chain-history-page .history-reward-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px dashed rgba(var(--accent-rgb), .3);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 620;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.chain-history-page .history-reward-empty:hover { border-style: solid; background: rgba(var(--accent-rgb), .08); }
+.chain-history-page .history-paid,
+.chain-history-page .history-unpaid {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 680;
+  letter-spacing: .3px;
+}
+.chain-history-page .history-paid { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .07); color: var(--success); }
+.chain-history-page .history-unpaid { border-color: var(--border-strong); color: var(--text-muted); }
+.chain-history-page .row-action {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+.chain-history-page .row-action:hover { border-color: rgba(var(--accent-rgb), .38); background: rgba(var(--accent-rgb), .07); color: var(--accent); transform: translateX(2px); }
+
+/* Report overview ----------------------------------------------------------- */
+.report-overview { grid-template-columns: 1.35fr repeat(4, minmax(0, 1fr)); border-radius: 12px; }
+.report-overview > div { min-height: 100px; padding: 16px 20px; }
+.report-overview small {
+  color: var(--text-muted);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 660;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+.report-overview strong { margin: 6px 0 3px; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
+.report-overview span { color: var(--text-muted); font-size: 11.5px; }
+.report-overview__primary {
+  background: linear-gradient(130deg, rgba(var(--accent-rgb), .07), transparent 62%);
+}
+.report-overview__primary strong { font-size: 34px; letter-spacing: -1.4px; }
+
+.report-header__status { border-radius: 999px; padding: 4px 10px; font-size: 10.5px; }
+.back-link { display: inline-flex; align-items: center; gap: 7px; width: fit-content; color: var(--text-muted); font-size: 12px; font-weight: 600; transition: color 150ms ease, gap 150ms ease; }
+.back-link:hover { gap: 10px; color: var(--accent); }
+
+/* Contributor chart ---------------------------------------------------------
+   Rank, identity, share, and total on one line, so the report can be read down
+   a single column instead of decoded from a bar. */
+.report-chart__count {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 640;
+  white-space: nowrap;
+}
+.contributor-chart { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 12px; list-style: none; }
+.contributor-chart__row {
+  display: grid;
+  grid-template-columns: 26px minmax(120px, 1.1fr) minmax(80px, 1.5fr) 74px;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.contributor-chart__row:hover { border-color: var(--border); background: rgba(255, 255, 255, .014); }
+.contributor-chart__row--lead { border-color: rgba(var(--accent-rgb), .22); background: rgba(var(--accent-rgb), .045); }
+.contributor-chart__rank {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.contributor-chart__row--lead .contributor-chart__rank { border-color: rgba(var(--accent-rgb), .38); background: rgba(var(--accent-rgb), .1); color: var(--accent); }
+.contributor-chart__identity { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.contributor-chart__identity > span { display: flex; min-width: 0; flex-direction: column; }
+.contributor-chart__identity strong { overflow: hidden; color: #e5ebe7; font-size: 12.5px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.contributor-chart__identity small { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.contributor-chart__bar { height: 8px; overflow: hidden; border-radius: 999px; background: #161d23; box-shadow: inset 0 1px 3px rgba(0, 0, 0, .4); }
+.contributor-chart__bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), .42), var(--accent));
+  transition: width 600ms cubic-bezier(.22, .82, .28, 1);
+}
+.contributor-chart__value { text-align: right; }
+.contributor-chart__value strong { display: block; color: #eef2f0; font-size: 14px; font-weight: 660; font-variant-numeric: tabular-nums; }
+.contributor-chart__value small { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.contributor-chart__empty { padding: 26px; color: var(--text-muted); font-size: 12px; text-align: center; }
+
+/* Provenance ---------------------------------------------------------------- */
+.snapshot-card dl { padding: 12px 18px 16px; }
+.snapshot-card dl > div { padding: 10px 0; font-size: 12px; }
+.snapshot-card dt { color: var(--text-muted); font-family: var(--font-inter), Inter, "Segoe UI", sans-serif; }
+.snapshot-card dd { margin: 0; color: #dfe5e8; font-weight: 620; font-variant-numeric: tabular-nums; }
+.snapshot-lock { padding: 4px 9px; border-radius: 999px; font-size: 10.5px; }
+
+.report-unavailable strong { font-size: 14px; }
+.report-unavailable p { max-width: 52ch; margin-top: 5px; font-size: 12px !important; line-height: 1.55; }
+
+@media (max-width: 1280px) {
+  .history-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .history-summary > div:nth-child(3) { border-right: 0; }
+  .history-summary > div:nth-child(-n+3) { border-bottom: 1px solid var(--border); }
+  .report-overview { grid-template-columns: 1.35fr repeat(2, minmax(0, 1fr)); }
+  .report-overview > div:nth-child(3) { border-right: 0; }
+  .report-overview > div:nth-child(-n+3) { border-bottom: 1px solid var(--border); }
+}
+
+@media (max-width: 860px) {
+  .history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .history-summary > div { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .history-summary > div:nth-child(2n) { border-right: 0; }
+  .report-overview { grid-template-columns: 1fr 1fr; }
+  .report-overview > div { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .report-overview > div:nth-child(2n) { border-right: 0; }
+  .report-overview__primary { grid-column: 1 / -1; }
+  .contributor-chart__row { grid-template-columns: 26px minmax(0, 1fr) 74px; row-gap: 9px; }
+  .contributor-chart__bar { grid-column: 2 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contributor-chart__bar i { transition: none; }
+  .chain-history-page .row-action:hover { transform: none; }
+}
+:root.reduced-motion .contributor-chart__bar i { transition: none; }

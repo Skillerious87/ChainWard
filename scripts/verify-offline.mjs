@@ -219,6 +219,12 @@ async function run() {
     check("gauge scale is derived from Torn's reported maximum", liveChain.html.includes("1,000"));
     check("live chain labels contributors as live, not last-completed", liveChain.html.includes("Live report contributors"));
 
+    const history = await getRoute("/chains", session.cookie);
+    check("chain history reports settlement standing", history.html.includes("history-summary__settlement") && history.html.includes("marked paid"));
+    const chainReport = await getRoute("/chains/7000003", session.cookie);
+    check("chain report renders the ranked contributor chart", chainReport.html.includes("contributor-chart__rank") && chainReport.html.includes("contributor-chart__bar"));
+    check("chain report states respect per hit", chainReport.html.includes("Respect per hit"));
+
     const settings = await getRoute("/settings", session.cookie);
     check("settings opens straight into its console", settings.html.includes("settings-console") && !settings.html.includes("Manage one area at a time"));
 

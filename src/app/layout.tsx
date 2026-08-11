@@ -9,6 +9,7 @@ import "./rewards.css";
 import "./admin.css";
 import "./settings.css";
 import "./chain.css";
+import "./history.css";
 import "./mobile.css";
 
 /**
