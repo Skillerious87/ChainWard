@@ -332,12 +332,22 @@
 .access-verification-checklist > header svg { color: var(--accent); }
 .access-verification-checklist > header strong { color: #e2e8e4; font-size: 13px; font-weight: 645; }
 .access-verification-checklist > header small { display: block; margin-top: 2px; color: var(--text-muted); font-size: 11.5px !important; }
-.access-verification-checklist > label { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 12px; padding: 15px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.access-verification-checklist > label:not(.reference-confirmation) { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 12px; padding: 15px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .access-verification-checklist > label:last-child { border-bottom: 0; }
-.access-verification-checklist > label strong { color: #dfe5e2; font-size: 13px; font-weight: 620; }
-.access-verification-checklist > label small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11.5px !important; line-height: 1.5; }
+.access-verification-checklist > label:not(.reference-confirmation) strong { color: #dfe5e2; font-size: 13px; font-weight: 620; }
+.access-verification-checklist > label:not(.reference-confirmation) small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11.5px !important; line-height: 1.5; }
 
-.reference-confirmation { display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 8px; background: rgba(242, 199, 102, .022); }
+.access-verification-checklist > .reference-confirmation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  padding: 15px 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+  background: rgba(242, 199, 102, .022);
+  cursor: default;
+}
 .reference-confirmation > span { color: #b0bab5; font-size: 12px; font-weight: 620; }
 .reference-confirmation input {
   width: 100%;
