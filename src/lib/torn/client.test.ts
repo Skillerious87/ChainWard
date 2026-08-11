@@ -84,3 +84,33 @@ describe("TornClient", () => {
     expect(userFacingTornError(error)).not.toContain("raw upstream detail");
   });
 });
+
+describe("chain response freshness", () => {
+  it("caches the ongoing chain for less time than other live values", async () => {
+    const chain = { chain: { id: 9, current: 21, max: 25, timeout: 300, modifier: 1, cooldown: 0, start: 1, end: 0 } };
+    const fetchImplementation = vi.fn().mockImplementation(() => Promise.resolve(Response.json(chain)));
+    const client = new TornClient({ apiKey: `chain-cache-${Math.random()}`, fetchImplementation, chainCacheSeconds: 0, liveCacheSeconds: 600 });
+
+    await client.getCurrentChain();
+    await client.getCurrentChain();
+
+    // A zero-second chain window must not be served from the long live cache.
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports when Torn actually answered so a countdown can anchor to it", async () => {
+    const chain = { chain: { id: 9, current: 21, max: 25, timeout: 300, modifier: 1, cooldown: 0, start: 1, end: 0 } };
+    const fetchImplementation = vi.fn().mockImplementation(() => Promise.resolve(Response.json(chain)));
+    const client = new TornClient({ apiKey: `chain-anchor-${Math.random()}`, fetchImplementation, chainCacheSeconds: 600 });
+
+    const before = Date.now();
+    await client.getCurrentChain();
+    const first = client.getCurrentChainFetchedAt();
+    expect(first).toBeGreaterThanOrEqual(before);
+
+    // The cached read keeps the original fetch time rather than restamping it.
+    await client.getCurrentChain();
+    expect(client.getCurrentChainFetchedAt()).toBe(first);
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+  });
+});

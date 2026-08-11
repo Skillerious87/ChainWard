@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { roleLabel } from "@/lib/auth/authorization";
 import { getCurrentActor } from "@/lib/auth/current-actor";
-import { revokeFactionAccess, setFactionAccess, setFactionAccessBatch } from "@/lib/auth/faction-access-store";
-import { isPlatformOwner } from "@/lib/auth/platform-owner";
+import { getFactionAccessWorkspace, revokeFactionAccess, setFactionAccess, setFactionAccessBatch } from "@/lib/auth/faction-access-store";
+import { isPlatformOwner, PLATFORM_OWNER } from "@/lib/auth/platform-owner";
+import { requireActiveFactionLicense } from "@/lib/licensing/guards";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
@@ -44,7 +46,7 @@ export async function removeFactionMemberAccess(input: unknown): Promise<Faction
   const parsed = revokeSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "The access removal request was invalid." };
   try {
-    const verified = await verifiedTarget(parsed.data.factionId, parsed.data.tornUserId);
+    const verified = await verifiedRevokeTarget(parsed.data.factionId, parsed.data.tornUserId);
     await revokeFactionAccess(verified.faction, verified.member, verified.actorTornUserId);
     revalidatePath("/faction");
     return { ok: true, message: `${verified.member.memberName}'s application access was revoked.` };
@@ -67,10 +69,13 @@ export async function updateFactionMemberAccessBatch(input: unknown): Promise<Fa
 }
 
 async function verifiedTarget(factionId: number, tornUserId: number) {
+  rejectOwnerTarget(tornUserId);
   const [actor, telemetry, roster] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getFactionRoster()]);
   if (!isPlatformOwner(actor)) throw new Error("Only the platform owner can change application access in this release.");
   if (telemetry.source !== "live" || !telemetry.faction || telemetry.faction.id !== factionId) throw new Error("The connected faction could not be verified for this request.");
-  const rosterMember = roster.available ? roster.data.find((member) => member.tornId === tornUserId) : null;
+  await requireActiveFactionLicense(telemetry.faction.id);
+  if (!roster.available) throw new Error("The verified faction roster could not be read, so access was not changed.");
+  const rosterMember = roster.data.find((member) => member.tornId === tornUserId);
   if (!rosterMember) throw new Error("The selected player is not in the current verified faction roster.");
   return {
     actorTornUserId: actor.tornUserId,
@@ -79,10 +84,35 @@ async function verifiedTarget(factionId: number, tornUserId: number) {
   };
 }
 
-async function verifiedTargets(factionId: number, tornUserIds: number[]) {
+/**
+ * Revocation deliberately does not require current roster membership. Removing
+ * a stale assignment is most necessary precisely when the member has left the
+ * faction, and requiring them to still be on the roster made those rows
+ * permanent.
+ */
+async function verifiedRevokeTarget(factionId: number, tornUserId: number) {
+  rejectOwnerTarget(tornUserId);
   const [actor, telemetry, roster] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getFactionRoster()]);
   if (!isPlatformOwner(actor)) throw new Error("Only the platform owner can change application access in this release.");
   if (telemetry.source !== "live" || !telemetry.faction || telemetry.faction.id !== factionId) throw new Error("The connected faction could not be verified for this request.");
+  await requireActiveFactionLicense(telemetry.faction.id);
+  const access = await getFactionAccessWorkspace(telemetry.faction.id);
+  const assignment = access.assignments.find((item) => item.tornUserId === tornUserId);
+  if (!assignment) throw new Error("This player does not have an application access assignment to revoke.");
+  const rosterMember = roster.available ? roster.data.find((member) => member.tornId === tornUserId) : null;
+  return {
+    actorTornUserId: actor.tornUserId,
+    faction: { id: telemetry.faction.id, name: telemetry.faction.name, tag: telemetry.faction.tag },
+    member: { tornUserId, memberName: rosterMember?.name ?? assignment.memberName },
+  };
+}
+
+async function verifiedTargets(factionId: number, tornUserIds: number[]) {
+  for (const tornUserId of tornUserIds) rejectOwnerTarget(tornUserId);
+  const [actor, telemetry, roster] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getFactionRoster()]);
+  if (!isPlatformOwner(actor)) throw new Error("Only the platform owner can change application access in this release.");
+  if (telemetry.source !== "live" || !telemetry.faction || telemetry.faction.id !== factionId) throw new Error("The connected faction could not be verified for this request.");
+  await requireActiveFactionLicense(telemetry.faction.id);
   if (!roster.available) throw new Error("The current faction roster could not be verified.");
   const rosterById = new Map(roster.data.map((member) => [member.tornId, member]));
   const members = tornUserIds.map((tornUserId) => rosterById.get(tornUserId));
@@ -94,8 +124,16 @@ async function verifiedTargets(factionId: number, tornUserIds: number[]) {
   };
 }
 
-function roleLabel(role: "ADMINISTRATOR" | "CHAIN_MANAGER" | "VIEWER"): string {
-  return role === "ADMINISTRATOR" ? "Administrator" : role === "CHAIN_MANAGER" ? "Chain manager" : "Viewer";
+/**
+ * The role policy screen states that owner access cannot be assigned,
+ * suspended, or revoked. Enforce that here rather than relying on the interface
+ * to hide the control: a stored `Skillerious — Viewer — Suspended` row would
+ * contradict the access the owner actually keeps through `isPlatformOwner`.
+ */
+function rejectOwnerTarget(tornUserId: number): void {
+  if (tornUserId === PLATFORM_OWNER.tornUserId) {
+    throw new Error("Platform owner access is intrinsic and cannot be assigned, suspended, or revoked.");
+  }
 }
 
 function safeMessage(error: unknown): string {

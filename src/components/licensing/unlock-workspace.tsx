@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, MessageCircleQuestion, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, BarChart3, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { submitAccessRequest } from "@/app/(platform)/licensing/actions";
@@ -65,6 +65,11 @@ function InactiveAccess({ factionId, factionName }: { factionId: number | null; 
       <span><Sparkles size={21} /><strong>Complete access</strong><small>One faction · all approved members</small></span>
     </header>
 
+    <section className="unlock-lock-notice" aria-label="Locked feature status">
+      <span><LockKeyhole size={21} /></span><div><p className="eyebrow">Workspace status · locked</p><h2>Connection verified. Operational features are still protected.</h2><p>Direct URLs, the logo, shortcuts, and saved bookmarks all enforce the same server-side licence check. Active access unlocks the complete faction workspace.</p></div>
+      <ul><li><BarChart3 size={14} />Dashboard & analytics</li><li><History size={14} />Live & historic chains</li><li><Users size={14} />Members & faction access</li><li><WalletCards size={14} />Rewards & payouts</li></ul>
+    </section>
+
     <div className="unlock-main-grid">
       <aside className="unlock-benefits">
         <span className="unlock-benefits__icon"><Crown size={23} /></span>
@@ -109,7 +114,7 @@ function PendingAccess({ access, factionName }: { access: FactionAccessSummary; 
     catch { notify({ title: "Copy was blocked", description: `Select and copy ${access.reference} manually.`, tone: "warning" }); }
   }
   return <div className="unlock-workspace unlock-state-page">
-    <header className="unlock-state-hero unlock-state-hero--pending"><span><Clock3 size={25} /></span><div><p className="eyebrow">Manual owner review</p><h1>{access.label}</h1><p>{factionName ?? "Your faction"} has one stored request. A duplicate request cannot be created while this review is open.</p></div></header>
+    <header className="unlock-state-hero unlock-state-hero--pending"><span><Clock3 size={25} /></span><div><p className="eyebrow">Manual owner review · workspace locked</p><h1>{access.label}</h1><p>{factionName ?? "Your faction"} has one stored request. Operational features remain locked until approval, and a duplicate request cannot be created while this review is open.</p></div></header>
     {access.message && <section className="unlock-review-message"><MessageCircleQuestion size={18} /><div><strong>Information requested by Skillerious</strong><p>{access.message}</p></div></section>}
     <section className="unlock-status-card"><header><div><small>Reserved plan</small><strong>{access.plan ?? "Faction access"}</strong></div><span>Submitted {access.startedAt ? new Date(access.startedAt).toLocaleString("en-GB") : "recently"}</span></header><div className="unlock-status-reference"><Fingerprint size={18} /><p><small>Payment reference</small><code>{access.reference ?? "Unavailable"}</code></p><button disabled={!access.reference} onClick={() => void copy()}>{copied ? <CircleCheckBig size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button></div><ol><li className="unlock-status-step--done"><span><Check size={14} /></span><p><strong>Request stored</strong><small>Faction, term, purchaser, and reference are reserved.</small></p></li><li><span>2</span><p><strong>Send {access.payment ?? "the displayed items"}</strong><small>Transfer to Skillerious with the exact reference.</small></p></li><li><span>3</span><p><strong>Owner verification</strong><small>The protected access state appears here after approval.</small></p></li></ol><footer><a className="button button--secondary" href={licensePayment.profileUrl} target="_blank" rel="noreferrer">Open Skillerious profile <ExternalLink size={13} /></a></footer></section>
   </div>;

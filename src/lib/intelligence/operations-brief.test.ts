@@ -16,7 +16,7 @@ function telemetry(timeoutSeconds = 300): WorkspaceTelemetry {
       maximum: 1_000,
       timeoutSeconds,
       modifier: 1.5,
-      cooldownAt: 0,
+      cooldownSeconds: 0, timeoutAt: 0, cooldownAt: 0,
       startedAt: 1_754_733_000,
       endedAt: 0,
       state: "active",

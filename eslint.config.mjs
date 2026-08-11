@@ -5,5 +5,7 @@ import nextTypescript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "coverage/**", "src/generated/prisma/**"]),
+  // `.next-*` covers the throwaway build directories used by
+  // `npm run verify:offline`, which runs beside an open development server.
+  globalIgnores([".next/**", ".next-*/**", "coverage/**", "src/generated/prisma/**"]),
 ]);

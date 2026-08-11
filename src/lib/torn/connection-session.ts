@@ -40,7 +40,12 @@ export function readConnectionSession(value: string | undefined): ConnectionSess
 
 export function connectionEncryptionSecret(): string {
   const configured = process.env.SESSION_SECRET?.trim();
-  if (configured) return createHash("sha256").update(configured).digest("base64");
+  if (configured) {
+    if (process.env.NODE_ENV === "production" && Buffer.byteLength(configured, "utf8") < 32) {
+      throw new Error("SESSION_SECRET must contain at least 32 bytes in production.");
+    }
+    return createHash("sha256").update(configured).digest("base64");
+  }
   if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET must be configured before accepting Torn API connections.");
   globalSession.chainwardEphemeralSessionSecret ??= readOrCreateLocalSecret();
   return globalSession.chainwardEphemeralSessionSecret;

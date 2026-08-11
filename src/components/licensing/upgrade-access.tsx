@@ -11,7 +11,7 @@ export function UpgradeAccess({ access }: { access: FactionAccessSummary }) {
     aria-label={active ? "View Chainward faction access" : pending ? "View pending Chainward access request" : "Unlock Chainward features"}
   >
     <span className={`topbar-upgrade__icon${active ? " topbar-upgrade__icon--secured" : ""}`}>{pending ? <Clock3 size={16} /> : <Crown size={16} />}{active && <ShieldCheck size={10} />}</span>
-    <span className="topbar-upgrade__copy"><strong>{active ? "Chainward protected" : pending ? "Request pending" : "Unlock Chainward"}</strong><small>{access.label}</small></span>
+    <span className="topbar-upgrade__copy"><strong>{active ? "Chainward protected" : pending ? "Request pending · locked" : "Workspace locked"}</strong><small>{active ? access.label : "Unlock complete access"}</small></span>
     {(active || pending) && <span className="topbar-upgrade__status"><Check size={11} /></span>}
   </Link>;
 }

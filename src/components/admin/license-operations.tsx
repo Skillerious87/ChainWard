@@ -24,14 +24,31 @@ export function LicenseRegistry({ licenses }: { licenses: ActiveLicenseView[] })
 
 export function AccessAuditTimeline({ events }: { events: AccessAuditView[] }) {
   return <section className="panel access-audit-panel">
-    <div className="section-heading"><div><h2>Recent access audit</h2><p>Immutable purchase and review events</p></div><History size={17} /></div>
-    {events.length ? <div className="access-audit-list">{events.map((event) => <div key={event.id}>
-      <span>{auditIcon(event.action)}</span>
-      <p><strong>{event.action}</strong><small>{event.reference ?? "No payment reference"}</small></p>
-      <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString("en-GB")}</time>
-      {event.actor ? <TornUserName name={event.actor.name} tornUserId={event.actor.tornUserId} /> : <em>System</em>}
-    </div>)}</div> : <div className="table-empty">No access audit events have been recorded yet.</div>}
+    <div className="section-heading"><div><h2>Recent access audit</h2><p>Immutable purchase and review events</p></div><span className="analytics-panel-icon"><History size={17} /></span></div>
+    {events.length ? <ol className="access-audit-list">{events.map((event) => (
+      <li key={event.id} className={`access-audit-event access-audit-event--${auditTone(event.action)}`}>
+        <span className="access-audit-event__icon">{auditIcon(event.action)}</span>
+        <div className="access-audit-event__body">
+          <p className="access-audit-event__headline">
+            <strong>{event.action}</strong>
+            <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
+          </p>
+          <p className="access-audit-event__meta">
+            <code>{event.reference ?? "No payment reference"}</code>
+            {event.actor
+              ? <TornUserName name={event.actor.name} tornUserId={event.actor.tornUserId} />
+              : <em>System</em>}
+          </p>
+        </div>
+      </li>
+    ))}</ol> : <div className="table-empty">No access audit events have been recorded yet.</div>}
   </section>;
+}
+
+function auditTone(action: string): "approved" | "pending" | "neutral" {
+  if (action === "Approved") return "approved";
+  if (action === "Information requested" || action === "Submitted") return "pending";
+  return "neutral";
 }
 
 function auditIcon(action: string) {

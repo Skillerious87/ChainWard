@@ -1,0 +1,352 @@
+/* ---------------------------------------------------------------------------
+   Owner administration, access audit, and role policy.
+
+   Loaded after polish.css, so this file supersedes the earlier `.access-audit-*`
+   and `.role-policy-*` rules. Two problems it fixes: the audit row declared a
+   three-column grid but rendered four children, so the reviewer name wrapped
+   into the 32px icon column and overflowed to the left of the panel; and the
+   supporting text across this screen sat at 7–9.5px in the display face, which
+   is well below a readable size for dense records.
+   --------------------------------------------------------------------------- */
+
+.admin-page { --admin-line: #29323a; }
+
+/* Every small label on this screen uses the interface face, which stays legible
+   at the sizes these dense records need. */
+.admin-page small,
+.admin-page em,
+.admin-page code,
+.admin-page time,
+.access-audit-list small,
+.access-audit-list time,
+.role-policy-list small,
+.role-policy-list li {
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+}
+
+.admin-grid,
+.admin-records-grid { gap: 16px; }
+
+/* Access audit -------------------------------------------------------------- */
+.access-audit-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+.access-audit-event {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 11px 10px;
+  border-radius: 9px;
+  transition: background 150ms ease;
+}
+.access-audit-event + .access-audit-event { box-shadow: 0 -1px 0 var(--admin-line); }
+.access-audit-event:hover { background: rgba(255, 255, 255, .018); }
+.access-audit-event__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-muted);
+}
+.access-audit-event--approved .access-audit-event__icon { border-color: rgba(103, 211, 145, .26); background: rgba(103, 211, 145, .07); color: var(--success); }
+.access-audit-event--pending .access-audit-event__icon { border-color: rgba(98, 184, 232, .24); background: rgba(98, 184, 232, .06); color: var(--info); }
+
+.access-audit-event__body { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.access-audit-event__headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+.access-audit-event__headline strong { color: #e6ebed; font-size: 12.5px !important; font-weight: 640; }
+.access-audit-event__headline time { flex: 0 0 auto; color: var(--text-muted); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.access-audit-event__meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+}
+.access-audit-event__meta code {
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .02);
+  color: #a9b4bb;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: .2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.access-audit-event__meta .torn-user-name { min-width: 0; }
+.access-audit-event__meta .torn-user-name strong { overflow: hidden; color: #93a09a; font-size: 11px !important; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.access-audit-event__meta em { color: var(--text-muted); font-size: 11px; font-style: normal; }
+
+/* Role policy --------------------------------------------------------------- */
+.role-policy-list { display: grid; gap: 8px; padding: 12px; }
+.role-policy-card {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0e1216;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.role-policy-card:last-child { border-bottom: 1px solid var(--border); }
+.role-policy-card:hover { border-color: var(--border-strong); background: #11161a; }
+.role-policy-card--assigned { border-color: rgba(var(--accent-rgb), .22); background: linear-gradient(120deg, rgba(var(--accent-rgb), .045), transparent 55%), #0e1216; }
+.role-policy-card__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-secondary);
+}
+.role-policy-card--assigned .role-policy-card__icon { border-color: rgba(var(--accent-rgb), .26); background: rgba(var(--accent-rgb), .07); color: var(--accent); }
+.role-policy-card__body { display: flex; min-width: 0; flex-direction: column; gap: 9px; }
+.role-policy-card__heading strong { color: #e9eef0; font-size: 13.5px; font-weight: 650; }
+.role-policy-card__heading p { margin-top: 3px; color: var(--text-secondary); font-size: 12px !important; line-height: 1.5; }
+.role-policy-card__permissions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.role-policy-card__permissions li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .015);
+  color: #9aa7a0;
+  font-size: 11px !important;
+  font-weight: 550;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.role-policy-card__permissions li svg { flex: 0 0 auto; color: var(--accent); }
+.role-policy-card__count {
+  display: flex;
+  width: auto;
+  min-width: 54px;
+  height: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .015);
+  color: #d5dce0;
+  font-size: 17px;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+}
+.role-policy-card__count small { color: var(--text-muted); font-size: 10.5px !important; font-weight: 640; letter-spacing: .5px; text-transform: uppercase; }
+.role-policy-card--assigned .role-policy-card__count { border-color: rgba(var(--accent-rgb), .26); background: rgba(var(--accent-rgb), .06); color: var(--accent); }
+
+.access-policy-panel > footer { display: flex; align-items: center; gap: 9px; padding: 13px 16px; border-top: 1px solid var(--admin-line); color: var(--text-muted); }
+.access-policy-panel > footer svg { flex: 0 0 auto; color: var(--accent); }
+.access-policy-panel > footer span { font-size: 12px !important; line-height: 1.5; }
+.access-policy-panel > footer strong { color: #c3ccd1; font-weight: 650; }
+
+/* The faction-side audit list is structurally sound but was set at 7–9.5px. */
+.faction-access-audit-list article { min-height: 66px; padding: 11px 16px; }
+.faction-access-audit-list article > span { width: 30px; height: 30px; border-radius: 9px; }
+.faction-access-audit-list strong { font-size: 12.5px; }
+.faction-access-audit-list p { color: var(--text-secondary); font-size: 11.5px !important; line-height: 1.45; }
+.faction-access-audit-list em,
+.faction-access-audit-list .torn-user-name strong { color: var(--text-muted); font-size: 11px !important; font-weight: 600; }
+.faction-access-audit-list .torn-user-name small { color: var(--text-muted); font-size: 10.5px !important; }
+.faction-access-audit-list time { margin-top: 4px; color: var(--text-muted); font-size: 10.5px !important; font-variant-numeric: tabular-nums; }
+.access-audit-empty strong { font-size: 12.5px; }
+.access-audit-empty small { font-size: 11.5px !important; }
+
+/* Faction access workspace --------------------------------------------------
+   Same treatment as the audit list: the structure was sound, the type was not.
+   Labels sat at 7.5–8.5px in the display face across the whole screen. */
+.faction-access-workspace small,
+.faction-access-workspace em,
+.faction-access-workspace time,
+.faction-access-workspace dt { font-family: var(--font-inter), Inter, "Segoe UI", sans-serif; }
+
+/* Verified faction card. The identity block and the four facts were set at
+   8–10px, which is smaller than the data they label. */
+.faction-command-hero { gap: 18px; padding: 20px 22px; }
+.faction-command-hero__mark { width: 58px; height: 58px; border-radius: 12px; font-size: 16px; }
+.faction-command-hero__identity .eyebrow { font-size: 10.5px !important; letter-spacing: .8px; }
+.faction-command-hero__identity h2 { margin-top: 4px; font-size: 21px; font-weight: 660; letter-spacing: -.5px; }
+.faction-command-hero__identity a { margin-top: 6px; font-size: 11.5px; font-weight: 550; transition: color 150ms ease, gap 150ms ease; }
+.faction-command-hero__identity a:hover { gap: 6px; }
+.faction-command-hero dl > div { min-height: 52px; padding: 6px 18px; }
+.faction-command-hero dt {
+  color: var(--text-muted);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px !important;
+  font-weight: 640;
+  letter-spacing: .5px;
+}
+.faction-command-hero dd { margin-top: 5px; color: #e6ebed; font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.faction-command-hero__state {
+  min-height: 30px;
+  gap: 7px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+
+/* Roster view filters. */
+.roster-view-tabs { gap: 6px; padding: 11px 18px; }
+.roster-view-tabs button {
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+.roster-view-tabs button:hover { border-color: var(--border-strong); background: rgba(255, 255, 255, .02); color: var(--text); }
+.roster-view-tabs button span { min-width: 22px; height: 20px; border-radius: 999px; font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.access-stat-grid article { min-height: 92px; padding: 14px 17px; }
+.access-stat-grid article > span { width: 36px; height: 36px; border-radius: 9px; }
+.access-stat-grid small { color: var(--text-muted); font-size: 10.5px !important; letter-spacing: .55px; }
+.access-stat-grid strong { margin-top: 3px; font-size: 22px; font-weight: 660; letter-spacing: -.5px; }
+.access-stat-grid p { margin-top: 2px; color: var(--text-muted); font-size: 11px !important; }
+
+.access-workspace-nav button { min-height: 74px; gap: 11px; padding: 12px 15px; transition: background 150ms ease, color 150ms ease; }
+.access-workspace-nav button > span { width: 36px; height: 36px; border-radius: 9px; }
+.access-workspace-nav button strong { font-size: 12.5px; font-weight: 640; }
+.access-workspace-nav button small { color: var(--text-muted); font-size: 11px !important; }
+.access-workspace-nav button em { min-width: 26px; height: 25px; border-radius: 999px; font-size: 10.5px !important; font-weight: 660; }
+
+.registry-state { min-height: 28px; padding: 0 10px; border-radius: 999px; font-size: 10.5px !important; letter-spacing: .4px; }
+
+.access-assignment-list { padding: 8px 12px 12px; }
+.access-assignment-list article {
+  min-height: 62px;
+  grid-template-columns: 34px minmax(130px, 1fr) minmax(120px, .55fr) 112px auto;
+  gap: 12px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--admin-line);
+  border-radius: 8px;
+  transition: background 150ms ease;
+}
+.access-assignment-list article:hover { background: rgba(255, 255, 255, .016); }
+.access-assignment-list article > div strong,
+.access-assignment-list .torn-user-name strong { font-size: 12.5px !important; font-weight: 620; }
+.access-assignment-list article > div small,
+.access-assignment-list .torn-user-name small { color: var(--text-muted); font-size: 10.5px !important; }
+.access-assignment--stale { background: rgba(245, 185, 76, .035); }
+.access-assignment--stale:hover { background: rgba(245, 185, 76, .06); }
+.access-assignment--stale .torn-user-name small { color: var(--warning) !important; }
+
+.access-role { padding: 4px 9px; border-radius: 999px; font-size: 10.5px !important; font-weight: 650; letter-spacing: .2px; }
+.access-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px !important; font-style: normal; }
+.access-status--stale { color: var(--warning); }
+
+/* Assignments held by people who have left the faction. */
+.access-stale-banner {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  margin: 12px 18px 0;
+  padding: 14px 15px;
+  border: 1px solid rgba(245, 185, 76, .28);
+  border-radius: 10px;
+  background: linear-gradient(140deg, rgba(245, 185, 76, .07), rgba(245, 185, 76, .015));
+}
+.access-stale-banner > span { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(245, 185, 76, .28); border-radius: 9px; background: rgba(245, 185, 76, .07); color: var(--warning); }
+.access-stale-banner strong { color: #f2d59a; font-size: 12.5px; font-weight: 650; }
+.access-stale-banner p { margin-top: 4px; color: var(--text-secondary); font-size: 11.5px !important; line-height: 1.5; text-wrap: pretty; }
+.access-stale-banner ul { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; grid-column: 2; list-style: none; }
+.access-stale-banner li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(245, 185, 76, .18);
+  border-radius: 8px;
+  background: rgba(10, 13, 15, .45);
+}
+.access-stale-banner li .torn-user-name strong { font-size: 12px !important; font-weight: 620; }
+.access-stale-banner li .button { min-height: 32px; }
+
+.access-registry-empty strong { font-size: 13px; }
+.access-registry-empty p { font-size: 12px !important; line-height: 1.55; }
+.access-owner-note { font-size: 12px !important; }
+
+.role-policy-footer { display: grid; gap: 9px; padding: 14px 16px; border-top: 1px solid var(--admin-line); }
+.role-policy-footer p { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 9px; margin: 0; color: var(--text-muted); font-size: 12px !important; line-height: 1.5; }
+.role-policy-footer svg { margin-top: 2px; color: var(--accent); }
+.role-policy-footer strong { color: #c6ced3; font-weight: 650; }
+
+.revoke-access-warning--stale { border-color: rgba(245, 185, 76, .28) !important; background: rgba(245, 185, 76, .05) !important; color: var(--warning); }
+.revoke-access-warning--stale svg { color: var(--warning); }
+
+@media (max-width: 1180px) {
+  .access-workspace-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .access-workspace-nav button:nth-child(2) { border-right: 0; }
+  .access-workspace-nav button:nth-child(-n+2) { border-bottom: 1px solid #2c353c; }
+}
+
+@media (max-width: 760px) {
+  .access-stat-grid { grid-template-columns: 1fr 1fr; }
+  .access-stat-grid article:nth-child(2) { border-right: 0; }
+  .access-stat-grid article:nth-child(-n+2) { border-bottom: 1px solid #2d363e; }
+  .access-workspace-nav { grid-template-columns: 1fr; }
+  .access-workspace-nav button { border-right: 0; border-bottom: 1px solid #2c353c; }
+  .access-assignment-list article { grid-template-columns: 34px minmax(0, 1fr); row-gap: 8px; }
+  .access-assignment-list article > .access-role,
+  .access-assignment-list article > .access-status,
+  .access-assignment-list article > .button { grid-column: 2; }
+  .access-stale-banner { grid-template-columns: 1fr; }
+  .access-stale-banner ul { grid-column: 1; }
+  .access-stale-banner li { grid-template-columns: 1fr; row-gap: 8px; }
+}
+
+/* Owner console supporting surfaces ----------------------------------------- */
+.admin-owner-banner small { font-size: 11.5px !important; line-height: 1.5; }
+.admin-procedure ol small { font-size: 11.5px !important; line-height: 1.55; }
+.admin-procedure ol strong { font-size: 12.5px; }
+.license-register-list article > div strong { font-size: 12.5px; }
+.license-register-list article small { font-size: 11px !important; line-height: 1.45; }
+.license-register-list code {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .02);
+  color: #a9b4bb;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  font-size: 10.5px;
+}
+
+@media (max-width: 760px) {
+  .access-audit-event { padding: 10px 8px; }
+  .access-audit-event__headline { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .role-policy-card { grid-template-columns: 38px minmax(0, 1fr); row-gap: 12px; }
+  .role-policy-card__count { flex-direction: row; grid-column: 2; gap: 6px; width: fit-content; align-items: baseline; }
+  .role-policy-list { padding: 10px; }
+}

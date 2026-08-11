@@ -6,6 +6,7 @@ import { ChainPaymentControl } from "@/components/chain/chain-payment-control";
 import { ContributionTable } from "@/components/chain/contribution-table";
 import { ExportButton } from "@/components/ui/action-controls";
 import { calculateChainRewardPreview, getChainSettlement } from "@/lib/rewards/chain-settlement";
+import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getRewardWorkspace } from "@/lib/rewards/reward-store";
 import { getChainReportView } from "@/lib/torn/workspace-data-service";
 
@@ -14,6 +15,7 @@ interface ChainReportPageProps { params: Promise<{ chainId: string }>; }
 export async function generateMetadata({ params }: ChainReportPageProps): Promise<Metadata> { const { chainId } = await params; return { title: `Chain ${chainId}` }; }
 
 export default async function ChainReportPage({ params }: ChainReportPageProps) {
+  await requireLicensedPage();
   const { chainId } = await params;
   const id = Number.parseInt(chainId, 10);
   if (!Number.isSafeInteger(id) || id <= 0 || String(id) !== chainId) notFound();

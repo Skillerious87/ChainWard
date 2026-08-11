@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
-import { PageHeader } from "@/components/ui/page-header";
 import { accentOptions, saveAppearancePreferences, useAppearancePreferences, type AccentOption } from "@/lib/appearance-preferences";
 import { notify } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
@@ -158,17 +157,23 @@ export function WorkspaceSettings({ telemetry, database }: { telemetry: Workspac
     }
   }
 
-  return <div className="page-stack settings-workspace-page">
-    <PageHeader eyebrow="Workspace" title="Settings" description="Manage one area at a time with clear, device-safe controls." />
+  // The page header and the "Workspace settings 1 of 6" panel title were both
+  // restating the navigation immediately beneath them, so the console now opens
+  // straight into the sections and fills the view.
+  return <div className="settings-console">
     <div className="professional-settings-layout">
       <aside className="professional-settings-nav">
-        <header><span><SlidersHorizontal size={18} /></span><div><strong>Workspace settings</strong><small>{activeIndex + 1} of {views.length}</small></div></header>
         <nav aria-label="Settings sections">{views.map((view, index) => { const Icon = view.icon; return <button key={view.id} className={activeView === view.id ? "professional-settings-nav__active" : undefined} onClick={() => setActiveView(view.id)} aria-current={activeView === view.id ? "page" : undefined}><span><Icon size={17} /></span><p><strong>{view.label}</strong><small>{view.description}</small></p><em>{index + 1}</em></button>; })}</nav>
-        <footer><ShieldCheck size={15} /><span><strong>Safe settings</strong><small>Actions describe exactly what changes.</small></span></footer>
+        <footer><ShieldCheck size={15} /><span><strong>Safe settings</strong><small>Every action describes exactly what it changes.</small></span></footer>
       </aside>
 
       <main className="professional-settings-view">
-        <header className="professional-settings-view__header"><div><p className="eyebrow">{active.label}</p><h2>{active.label}</h2><p>{active.description}</p></div><span><ActiveIcon size={21} /></span></header>
+        <header className="professional-settings-view__header">
+          <span><ActiveIcon size={20} /></span>
+          <div><h2>{active.label}</h2><p>{active.description}</p></div>
+          <em className="settings-view-step">{activeIndex + 1} <i>/</i> {views.length}</em>
+        </header>
+        <div className="professional-settings-view__scroll">
 
         {activeView === "connection" && <section className="settings-view-content">
           <div className="settings-status-hero"><span><KeyRound size={22} /></span><div><p className="eyebrow">Verified identity boundary</p><h3>{telemetry.source === "live" ? "Torn API connected" : "Connection required"}</h3><p>No credential value or guessed permission level is exposed here.</p></div><em className={`connection-pill connection-pill--${telemetry.source}`}><i />{telemetry.source === "live" ? "Verified" : "Not connected"}</em></div>
@@ -216,6 +221,7 @@ export function WorkspaceSettings({ telemetry, database }: { telemetry: Workspac
           <div className="privacy-control-grid"><article><span><KeyRound size={18} /></span><h3>Torn API key</h3><strong>Encrypted server-side</strong><p>Remembered credentials are encrypted at rest. This browser holds only a random HTTP-only session token, and credentials are never included in backups.</p></article><article><span><Database size={18} /></span><h3>Local records</h3><strong>Created by deliberate actions</strong><p>Reward schemes and PAID acknowledgements are stored only after an explicit save or confirmation.</p></article><article><span><Download size={18} /></span><h3>Portable backups</h3><strong>No credentials included</strong><p>Configuration exports exclude API keys, cached Torn responses, and private licence review information.</p></article></div>
         </section>}
 
+        </div>
         <footer className="settings-cycle"><button className="button button--quiet" disabled={activeIndex === 0} onClick={() => cycle(-1)}><ChevronLeft size={15} /> Previous</button><div><span>{activeIndex + 1} / {views.length}</span><strong>{active.label}</strong></div><button className="button button--secondary" disabled={activeIndex === views.length - 1} onClick={() => cycle(1)}>Next section <ChevronRight size={15} /></button></footer>
       </main>
     </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { developmentRewardScheme } from "./default-scheme";
 import {
+  analyzeRewardCoverage,
   calculateRewards,
   createRewardSnapshot,
   InvalidRewardSchemeError,
@@ -69,5 +70,54 @@ describe("reward calculation", () => {
 
     expect(snapshot.members[0]?.rewards[0]?.amount).toBe(5);
     expect(snapshot.scheme.version).toBe(1);
+  });
+});
+
+describe("reward coverage", () => {
+  it("reports no gaps for a scheme that starts at zero and ends unlimited", () => {
+    const coverage = analyzeRewardCoverage(developmentRewardScheme.tiers);
+
+    expect(coverage.gaps).toEqual([]);
+    expect(coverage.coversUnlimited).toBe(true);
+    expect(coverage.enabledTierCount).toBe(6);
+  });
+
+  it("reports the hit counts left between two enabled tiers", () => {
+    const tiers = developmentRewardScheme.tiers.map((tier) => ({ ...tier }));
+    tiers[1] = { ...tiers[1]!, minimumHits: 9 };
+
+    expect(analyzeRewardCoverage(tiers).gaps).toEqual([{ fromHits: 6, toHits: 8 }]);
+  });
+
+  it("reports an opening gap when the lowest tier does not start at zero", () => {
+    const tiers = developmentRewardScheme.tiers.map((tier) => ({ ...tier }));
+    tiers[0] = { ...tiers[0]!, minimumHits: 2 };
+
+    expect(analyzeRewardCoverage(tiers).gaps).toEqual([{ fromHits: 0, toHits: 1 }]);
+  });
+
+  it("reports an open upper gap when every enabled tier is bounded", () => {
+    const tiers = developmentRewardScheme.tiers.map((tier) => ({ ...tier }));
+    tiers[5] = { ...tiers[5]!, maximumHits: 90 };
+    const coverage = analyzeRewardCoverage(tiers);
+
+    expect(coverage.coversUnlimited).toBe(false);
+    expect(coverage.gaps).toEqual([{ fromHits: 91, toHits: null }]);
+    expect(coverage.highestCoveredHits).toBe(90);
+  });
+
+  it("ignores disabled tiers when measuring coverage", () => {
+    const tiers = developmentRewardScheme.tiers.map((tier) => ({ ...tier }));
+    tiers[2] = { ...tiers[2]!, enabled: false };
+
+    expect(analyzeRewardCoverage(tiers).gaps).toEqual([{ fromHits: 16, toHits: 25 }]);
+    expect(analyzeRewardCoverage(tiers).enabledTierCount).toBe(5);
+  });
+
+  it("treats an empty scheme as covering nothing", () => {
+    const coverage = analyzeRewardCoverage([]);
+
+    expect(coverage.gaps).toEqual([{ fromHits: 0, toHits: null }]);
+    expect(coverage.enabledTierCount).toBe(0);
   });
 });

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
+import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 import { createLocalDatabase, localDatabaseExists, localDatabaseInfo } from "@/lib/data/local-database";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
   const actor = await getCurrentActor();
   if (!actor.tornUserId) return NextResponse.json({ error: "Connect a verified Torn API key before creating workspace storage." }, { status: 401 });
   if (!isPlatformOwner(actor)) return NextResponse.json({ error: "Only the platform owner can create a server-side local database." }, { status: 403 });

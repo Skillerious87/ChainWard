@@ -4,6 +4,7 @@ import { getCurrentActor } from "@/lib/auth/current-actor";
 import { getFactionAccessWorkspace } from "@/lib/auth/faction-access-store";
 import { hasPermission } from "@/lib/auth/authorization";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
+import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getMemberActivityWorkspace } from "@/lib/members/member-activity-store";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
@@ -11,6 +12,7 @@ import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 export const metadata: Metadata = { title: "Member Activity" };
 
 export default async function MembersPage() {
+  await requireLicensedPage();
   const [roster, telemetry, actor] = await Promise.all([getFactionRoster(), getWorkspaceTelemetry(), getCurrentActor()]);
   const factionId = telemetry.faction?.id ?? null;
   const [activity, access] = await Promise.all([getMemberActivityWorkspace(factionId), getFactionAccessWorkspace(factionId)]);

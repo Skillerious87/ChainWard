@@ -8,8 +8,13 @@ import { getConfiguredTornClient } from "./server-client";
 import type { ChainOperationalState, WorkspaceTelemetry } from "./telemetry-types";
 
 interface TelemetryClient {
+  dataMode?: "torn" | "offline";
   getFactionBasic(factionId?: number, options?: TornRequestOptions): Promise<FactionBasicResponse>;
   getCurrentChain(factionId?: number, options?: TornRequestOptions): Promise<OngoingChainResponse>;
+  /** Milliseconds at which Torn answered the chain request now in hand. */
+  getCurrentChainFetchedAt?(): number | null;
+  /** Offset between Torn's clock and this machine's, in milliseconds. */
+  getClockSkewMs?(): number;
 }
 
 export const getWorkspaceTelemetry = cache(async (): Promise<WorkspaceTelemetry> => {
@@ -42,7 +47,9 @@ export async function loadWorkspaceTelemetry(
       client.getFactionBasic(undefined, requestOptions),
       client.getCurrentChain(undefined, requestOptions),
     ]);
-    return mapTornTelemetry(faction, chain, now ?? new Date());
+    const chainFetchedAt = client.getCurrentChainFetchedAt?.() ?? null;
+    const clockSkewMs = client.getClockSkewMs?.() ?? 0;
+    return mapTornTelemetry(faction, chain, now ?? new Date(), client.dataMode ?? "torn", chainFetchedAt, clockSkewMs);
   } catch (error: unknown) {
     const message = error instanceof TornApiError
       ? userFacingTornError(error)
@@ -55,11 +62,20 @@ export function mapTornTelemetry(
   factionResponse: FactionBasicResponse,
   chainResponse: OngoingChainResponse,
   checkedAt: Date,
+  mode: "torn" | "offline" = "torn",
+  chainFetchedAtMs: number | null = null,
+  clockSkewMs = 0,
 ): WorkspaceTelemetry {
   const { basic } = factionResponse;
   const { chain } = chainResponse;
+  // Countdowns are anchored to the moment Torn answered — not to render time,
+  // which would restart the clock whenever a cached response was reused — and
+  // are expressed on Torn's clock so no machine's local drift enters the sum.
+  const anchorSeconds = Math.floor(((chainFetchedAtMs ?? checkedAt.getTime()) + clockSkewMs) / 1_000);
   return {
+    clockAt: checkedAt.getTime() + clockSkewMs,
     source: "live",
+    mode,
     checkedAt: checkedAt.toISOString(),
     faction: { id: basic.id, name: basic.name, tag: basic.tag, members: basic.members },
     chain: {
@@ -68,21 +84,37 @@ export function mapTornTelemetry(
       maximum: chain.max,
       timeoutSeconds: chain.timeout,
       modifier: chain.modifier,
-      cooldownAt: chain.cooldown,
+      cooldownSeconds: chain.cooldown,
       startedAt: chain.start,
       endedAt: chain.end,
-      state: operationalState(chain, Math.floor(checkedAt.getTime() / 1_000)),
+      timeoutAt: chain.timeout > 0 ? anchorSeconds + chain.timeout : 0,
+      cooldownAt: chain.cooldown > 0 ? anchorSeconds + chain.cooldown : 0,
+      state: operationalState(chain),
     },
-    message: "Verified Torn API data. Automatic updates respect Torn's service cache; Sync now requests an uncached snapshot.",
+    message: mode === "offline"
+      ? "Offline test fixture. No request was sent to Torn and no values on this screen are live."
+      : "Verified Torn API data. Automatic updates respect Torn's service cache; Sync now requests an uncached snapshot.",
   };
 }
 
-function operationalState(chain: OngoingChainResponse["chain"], nowSeconds: number): ChainOperationalState {
-  if (chain.cooldown > nowSeconds) return "cooldown";
-  if (chain.current > 0 && chain.end === 0) return "active";
+/**
+ * Torn reports `timeout` and `cooldown` as seconds remaining, not as unix
+ * timestamps. Comparing `cooldown` against the current epoch second — as this
+ * did — is always false, so the cooldown state could never be reached.
+ *
+ * `timeout` is the only unambiguous liveness signal: it is the countdown to the
+ * chain dropping, so it is above zero while and only while a chain is running.
+ * `end` is deliberately not used to decide this. It was previously treated as
+ * "zero until the chain finishes", and a live chain that already carried an end
+ * timestamp was therefore reported as idle while its hit count kept climbing.
+ */
+function operationalState(chain: OngoingChainResponse["chain"]): ChainOperationalState {
+  const running = chain.id > 0 && chain.timeout > 0;
+  if (running && chain.current > 0) return "active";
+  if (chain.cooldown > 0) return "cooldown";
   return "idle";
 }
 
 function unavailableTelemetry(now: Date, message: string): WorkspaceTelemetry {
-  return { source: "unavailable", checkedAt: now.toISOString(), faction: null, chain: null, message };
+  return { source: "unavailable", mode: "torn", checkedAt: now.toISOString(), faction: null, chain: null, message };
 }

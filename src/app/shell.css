@@ -1,0 +1,358 @@
+/* ---------------------------------------------------------------------------
+   Shell motion layer: route handoff, rail feedback, and the observed service
+   state drawer. Loaded after polish.css, so this file is the final word on
+   shell chrome. Keep new shell rules here rather than growing polish.css.
+   --------------------------------------------------------------------------- */
+
+/* Route handoff: a fixed-height indeterminate bar that only becomes visible if
+   the navigation actually takes time, then always plays a completion sweep. */
+.route-progress {
+  position: relative;
+  z-index: 39;
+  height: 2px;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+}
+.route-progress::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), .35) 30%, var(--accent) 50%, rgba(var(--accent-rgb), .35) 70%, transparent);
+  content: "";
+  opacity: 0;
+  transform: translateX(-100%);
+}
+.route-progress[data-phase="running"]::after {
+  opacity: 1;
+  animation: route-progress-sweep 1.1s cubic-bezier(.4, 0, .2, 1) 120ms infinite;
+}
+.route-progress[data-phase="finishing"]::after {
+  opacity: 1;
+  animation: route-progress-finish 320ms cubic-bezier(.2, .8, .2, 1) forwards;
+}
+@keyframes route-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes route-progress-finish { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(60%); } }
+
+/* The collapsed-rail hover label is positioned outside the item, which made it
+   part of the scrollable overflow of `.sidebar__nav` and produced a permanent
+   horizontal scrollbar in the expanded rail. It only exists while collapsed. */
+.nav-item::after { content: none; }
+:root[data-sidebar="collapsed"] .nav-item::after { content: attr(data-label); }
+.sidebar__nav { overflow-x: clip; }
+:root[data-sidebar="collapsed"] .sidebar__nav { overflow: visible; }
+
+/* Per-destination feedback while a route resolves. Fixed size, so it can never
+   move the label it sits beside. */
+.nav-item__pending {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  left: 10px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0;
+  transform: scaleX(.35);
+}
+.nav-item__pending[data-pending="true"] {
+  animation: nav-pending-in 220ms ease 110ms forwards, nav-pending-pulse 1s ease-in-out 110ms infinite;
+}
+@keyframes nav-pending-in { to { opacity: .9; transform: scaleX(1); } }
+@keyframes nav-pending-pulse { 50% { opacity: .35; } }
+:root[data-sidebar="collapsed"] .nav-item__pending { right: 18px; left: 18px; }
+
+/* Route handoff.
+   There is deliberately no route-level `loading.tsx`: replacing the whole page
+   with placeholder blocks on every navigation is what made view switching read
+   as a browser reload. The current view stays on screen and settles instead,
+   then the incoming view rises into place.
+
+   The enter animation avoids `filter: blur()`, which forces an expensive
+   offscreen composite of the entire page on every navigation. */
+.platform-route-stage {
+  min-width: 0;
+  animation: platform-route-enter 300ms cubic-bezier(.22, .82, .28, 1) both;
+}
+@keyframes platform-route-enter {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Applied ~140ms into a navigation, so an instant one never flickers. */
+.page-content {
+  transition: opacity 220ms ease, transform 220ms cubic-bezier(.22, .82, .28, 1), filter 220ms ease;
+}
+:root[data-navigating="true"] .page-content {
+  opacity: .42;
+  transform: translate3d(0, -3px, 0);
+  pointer-events: none;
+}
+/* The rail and top chrome stay fully present so the shell never appears to
+   reload — only the view being replaced recedes. */
+:root[data-navigating="true"] .sidebar,
+:root[data-navigating="true"] .topbar { opacity: 1; }
+
+/* Application shell scrolling -----------------------------------------------
+   The document itself no longer scrolls. The shell fills the viewport, the top
+   bar and provenance banner are fixed rows, and only the workspace beneath them
+   scrolls — so the scrollbar starts under the banner instead of running the
+   full height of the window behind fixed chrome. */
+/* Scoped to the platform shell so public pages keep ordinary document
+   scrolling. */
+html:has(.app-shell),
+body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; overscroll-behavior: none; }
+.app-shell { height: 100dvh; overflow: hidden; }
+.app-main {
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+}
+.topbar, .data-source-banner, .route-progress { flex: 0 0 auto; }
+.topbar { position: relative; }
+.app-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+/* Top bar -------------------------------------------------------------------
+   Every control in the bar previously set its own height, radius, border, and
+   hover treatment — 38, 42, 44, 46, and 48px sat side by side. They now share
+   one set of tokens so the bar reads as a single piece of chrome. */
+:root {
+  --control-height: 40px;
+  --control-radius: 9px;
+  --control-surface: #0e1317;
+  --control-surface-hover: #141b20;
+  --control-border: #2a333a;
+  --control-border-hover: #3b4750;
+}
+
+.topbar {
+  height: var(--topbar-height);
+  gap: 16px;
+  padding-inline: 20px;
+  border-bottom: 1px solid #232b31;
+  background: rgba(8, 11, 13, .92);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .014);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+.topbar__left, .topbar__right { gap: 8px; }
+.topbar__separator { height: 24px; margin-inline: 4px; background: #262f35; }
+
+/* One shared control shape. */
+.faction-selector,
+.chain-state,
+.topbar-command,
+.data-status-control,
+.notification-button,
+.user-menu,
+.topbar-upgrade {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  box-sizing: border-box;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: var(--control-surface);
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+.faction-selector:hover,
+.faction-selector[aria-expanded="true"],
+.chain-state:hover,
+.topbar-command:hover,
+.data-status-control:hover:not(:disabled),
+.notification-button:hover,
+.user-menu:hover,
+.user-menu[aria-expanded="true"] {
+  border-color: var(--control-border-hover);
+  background: var(--control-surface-hover);
+}
+
+.faction-selector { gap: 9px; padding: 0 9px 0 4px; }
+.faction-monogram, .user-menu__avatar { width: 30px; height: 30px; border-radius: 7px; font-size: 10.5px; }
+.faction-selector__copy strong, .user-menu__copy strong { font-size: 12px !important; }
+.faction-selector__copy small, .user-menu__copy small { font-size: 10.5px !important; }
+.faction-selector > svg:last-child, .user-menu > svg:last-child { color: var(--text-muted); }
+
+.chain-state { min-width: 162px; gap: 9px; padding: 0 10px; }
+.chain-state--active { border-color: rgba(var(--accent-rgb), .24); background: rgba(var(--accent-rgb), .05); }
+.chain-state--active:hover { border-color: rgba(var(--accent-rgb), .4); background: rgba(var(--accent-rgb), .085); }
+.chain-state__copy small { font-size: 10.5px !important; }
+.chain-state__copy strong { font-size: 12px; }
+.chain-state > i { min-width: 38px; padding: 2px 5px; font-size: 10.5px !important; }
+
+.topbar-command { min-width: 132px; padding: 0 10px; gap: 8px; color: var(--text-muted); font-size: 11.5px !important; }
+.topbar-command kbd { border-color: #333d44; background: #161d22; color: #7a858c; }
+
+.data-status-control { min-width: 146px; height: var(--control-height); padding: 0 9px 0 11px; }
+.data-status-control strong { font-size: 11px; }
+.data-status-control small { font-size: 10.5px !important; }
+
+.notification-button { width: var(--control-height); }
+.notification-button__badge { top: -5px; right: -5px; border-color: #0a0d0f; }
+
+.user-menu { gap: 9px; padding: 0 9px 0 4px; }
+
+/* The licence control keeps its own accent but adopts the shared geometry. */
+.topbar-upgrade { gap: 9px; padding: 0 11px 0 4px; }
+.topbar-upgrade__icon { width: 30px; height: 30px; border-radius: 7px; }
+.topbar-upgrade__copy strong { font-size: 11px; }
+.topbar-upgrade__copy small { font-size: 10.5px; }
+
+@media (max-width: 1180px) {
+  .chain-state { min-width: 0; }
+  .chain-state__copy { display: none; }
+  .chain-state > i { min-width: 0; }
+}
+
+/* Observed service state ---------------------------------------------------- */
+.service-drawer { position: fixed; inset: 0; z-index: 120; }
+.service-drawer__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(4, 6, 8, .62);
+  cursor: pointer;
+  animation: service-scrim-in 220ms ease both;
+  backdrop-filter: blur(3px);
+}
+@keyframes service-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+.service-drawer__panel {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  display: flex;
+  width: min(432px, 100vw);
+  height: 100%;
+  flex-direction: column;
+  border-left: 1px solid #2c3740;
+  background: linear-gradient(180deg, #101519, #0c1013 42%);
+  animation: service-panel-in 320ms cubic-bezier(.22, .82, .28, 1) both;
+  box-shadow: -26px 0 80px rgba(0, 0, 0, .5);
+}
+@keyframes service-panel-in { from { opacity: .4; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+
+.service-drawer__header {
+  display: flex;
+  min-height: 72px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #232c33;
+}
+.service-drawer__header > div { min-width: 0; flex: 1; }
+.service-drawer__header h2 { margin-top: 2px; font-size: 17px; font-weight: 640; letter-spacing: -.3px; }
+.service-drawer__header .eyebrow { font-size: 10.5px; }
+.service-drawer__glyph { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text-secondary); }
+.service-drawer__glyph--ok { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .07); color: var(--success); }
+.service-drawer__glyph--attention { border-color: rgba(245, 185, 76, .3); background: rgba(245, 185, 76, .07); color: var(--warning); }
+
+.service-drawer__body { min-height: 0; flex: 1; overflow-y: auto; padding: 18px; }
+
+.service-summary { padding: 16px 17px; border: 1px solid var(--border); border-radius: 12px; }
+.service-summary--ok { border-color: rgba(103, 211, 145, .22); background: linear-gradient(150deg, rgba(103, 211, 145, .075), rgba(103, 211, 145, .02)); }
+.service-summary--attention { border-color: rgba(245, 185, 76, .24); background: linear-gradient(150deg, rgba(245, 185, 76, .08), rgba(245, 185, 76, .02)); }
+.service-summary--test { border-color: rgba(98, 184, 232, .24); background: linear-gradient(150deg, rgba(98, 184, 232, .07), rgba(98, 184, 232, .02)); }
+.service-summary__top { display: flex; align-items: center; gap: 10px; }
+.service-summary__top strong { flex: 1; font-size: 21px; font-weight: 650; letter-spacing: -.5px; }
+.service-summary__top em { color: var(--text-muted); font-size: 10.5px; font-style: normal; font-weight: 600; }
+.service-summary--ok .service-summary__top strong { color: #b7ecca; }
+.service-summary--attention .service-summary__top strong { color: #f2d59a; }
+.service-summary--test .service-summary__top strong { color: #b6ddf3; }
+.service-summary__pulse { position: relative; width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: currentcolor; }
+.service-summary--ok .service-summary__pulse { color: var(--success); }
+.service-summary--attention .service-summary__pulse { color: var(--warning); }
+.service-summary--test .service-summary__pulse { color: var(--info); }
+.service-summary__pulse::after {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid currentcolor;
+  border-radius: 50%;
+  content: "";
+  opacity: .35;
+  animation: service-pulse 2.4s ease-out infinite;
+}
+@keyframes service-pulse { 0% { opacity: .4; transform: scale(.7); } 70%, 100% { opacity: 0; transform: scale(1.25); } }
+.service-summary > p { margin-top: 8px; color: var(--text-secondary); font-size: 12px; line-height: 1.55; text-wrap: pretty; }
+.service-summary__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 15px 0 0; padding-top: 13px; border-top: 1px solid rgba(255, 255, 255, .065); }
+.service-summary__facts > div { min-width: 0; }
+.service-summary__facts dt { color: var(--text-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+.service-summary__facts dd { display: flex; align-items: center; gap: 4px; margin: 4px 0 0; overflow: hidden; color: #dbe2e5; font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.service-summary__facts dd svg { flex: 0 0 auto; color: var(--text-muted); }
+
+.service-check-list { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.service-check {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0e1216;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.service-check:hover { border-color: var(--border-strong); background: #11161a; }
+.service-check__icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); }
+.service-check--ok .service-check__icon { border-color: rgba(103, 211, 145, .22); background: rgba(103, 211, 145, .06); color: var(--success); }
+.service-check--attention .service-check__icon { border-color: rgba(245, 185, 76, .24); background: rgba(245, 185, 76, .06); color: var(--warning); }
+.service-check__copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.service-check__copy strong { color: #e7ecee; font-size: 12.5px; font-weight: 620; }
+.service-check__copy small { color: var(--text-muted); font-size: 11px; line-height: 1.45; text-wrap: pretty; }
+.service-check__state {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 4px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 680;
+  white-space: nowrap;
+}
+.service-check--ok .service-check__state { border-color: rgba(103, 211, 145, .26); background: rgba(103, 211, 145, .07); color: var(--success); }
+.service-check--attention .service-check__state { border-color: rgba(245, 185, 76, .28); background: rgba(245, 185, 76, .07); color: var(--warning); }
+.service-drawer__note { margin-top: 14px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255, 255, 255, .015); color: var(--text-muted); font-size: 11px; line-height: 1.5; text-wrap: pretty; }
+
+.service-drawer__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid #232c33;
+  background: rgba(6, 9, 11, .5);
+}
+.service-drawer__footer .button { min-height: 38px; }
+.service-drawer__footer time { margin-left: auto; color: var(--text-muted); font-size: 10.5px; white-space: nowrap; }
+
+@media (max-width: 520px) {
+  .service-drawer__panel { width: 100vw; }
+  .service-summary__facts { grid-template-columns: 1fr 1fr; }
+  .service-drawer__footer { flex-wrap: wrap; }
+  .service-drawer__footer time { width: 100%; margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-progress[data-phase="running"]::after,
+  .route-progress[data-phase="finishing"]::after,
+  .nav-item__pending[data-pending="true"],
+  .service-summary__pulse::after { animation: none; }
+  .nav-item__pending[data-pending="true"] { opacity: .9; transform: scaleX(1); }
+  .platform-route-stage,
+  .service-drawer__panel,
+  .service-drawer__scrim { animation: none; }
+  .page-content { transition: opacity 120ms ease; }
+  :root[data-navigating="true"] .page-content { transform: none; }
+}
+:root.reduced-motion .route-progress::after,
+:root.reduced-motion .nav-item__pending,
+:root.reduced-motion .service-summary__pulse::after { animation: none; }
+:root.reduced-motion .platform-route-stage { animation: none; }
+:root.reduced-motion[data-navigating="true"] .page-content { transform: none; }

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
+import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
+import { consumeGlobalRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { MissingTornSelectionsError, validateTornConnection } from "@/lib/torn/connection-service";
 import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession } from "@/lib/torn/connection-session";
 import { TornApiError, userFacingTornError } from "@/lib/torn/errors";
@@ -13,7 +16,14 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
+  const rateLimit = consumeRateLimit("onboarding-key", request, { limit: 8, windowMs: 10 * 60_000 });
+  const globalRateLimit = consumeGlobalRateLimit("onboarding-key", { limit: 120, windowMs: 10 * 60_000 });
+  if (!rateLimit.allowed || !globalRateLimit.allowed) return errorResponse("Too many connection attempts. Wait before trying again.", "RATE_LIMITED", 429, Math.max(rateLimit.retryAfterSeconds, globalRateLimit.retryAfterSeconds));
+  let input: unknown;
+  try { input = await readLimitedJson(request, 2_048); }
+  catch (error) { return errorResponse(error instanceof RequestBodyTooLargeError ? error.message : "The request could not be read.", "INVALID_FORMAT", 413); }
+  const parsed = requestSchema.safeParse(input);
   if (!parsed.success) {
     return errorResponse("Enter the 16-character API key from Torn Settings, not the key name or your password.", "INVALID_FORMAT", 400);
   }
@@ -61,12 +71,12 @@ export async function POST(request: Request) {
         || error.category === "INSUFFICIENT_PERMISSION" ? 200 : 502;
       return errorResponse(userFacingTornError(error), error.category, status);
     }
-    return errorResponse(error instanceof Error ? error.message : "The Torn connection could not be validated.", "VALIDATION_FAILED", 400);
+    return errorResponse("The Torn connection could not be validated safely. Check the key and try again.", "VALIDATION_FAILED", 400);
   }
 }
 
-function errorResponse(message: string, code: string, status: number) {
-  return NextResponse.json({ connected: false, error: message, code }, { status, headers: { "cache-control": "no-store" } });
+function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number) {
+  return NextResponse.json({ connected: false, error: message, code }, { status, headers: { "cache-control": "no-store", ...(retryAfterSeconds ? { "retry-after": String(retryAfterSeconds) } : {}) } });
 }
 
 function normalizeApiKey(value: string): string {

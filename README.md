@@ -10,14 +10,35 @@ not fall back to demonstration records.
 ## Run locally
 
 1. Run `npm install`.
-2. Copy `.env.example` to `.env.local`. `TORN_API_KEY` is optional because the
-   in-app connection screen validates a restricted key directly. A production
-   deployment must replace `SESSION_SECRET`; local development can leave it
-   empty and use the stable machine-private secret in AppData.
+2. Copy `.env.example` to `.env.local`. The in-app connection screen validates
+   a restricted key directly; a shared server-wide Torn key is deliberately
+   never accepted as a browser identity. A production
+   deployment must set separate `SESSION_SECRET` and
+   `API_KEY_ENCRYPTION_SECRET` values; local development can leave both empty
+   and use stable, separate machine-private secrets in AppData.
 3. Run `npm run dev`.
 4. Open `http://localhost:3000/dashboard`.
 5. Connect the Torn API. The temporary testing database is created
    automatically in the project when PostgreSQL is not configured.
+
+### Fully offline test mode
+
+After dependencies are installed, Chainward can exercise its complete local
+connection, licence, navigation, chain, member, reward, and payout flows without
+internet access or a Torn key:
+
+1. Run `npm run dev:offline`.
+2. Open `http://localhost:3000/connect`.
+3. Choose **Faction tester** to submit an unlock request.
+4. Disconnect, return to the offline test panel, and choose **Owner reviewer**
+   to approve that request in Administration.
+5. Reconnect as **Faction tester**. The previously locked operational pages are
+   now available with deterministic, clearly labelled fixture data.
+
+Offline identity buttons exist only in the development server. A production
+build ignores `CHAINWARD_OFFLINE_TEST_MODE`, so the fixture cannot become an
+authentication or owner-access bypass after deployment. No Google-hosted font
+or other runtime asset is required for local rendering.
 
 Local test mode creates a real SQLite file at `data/chainward-local.sqlite` by
 default. Set `CHAINWARD_LOCAL_DB_PATH` to choose another location. No Docker
@@ -28,7 +49,7 @@ stores the encrypted key in `%LOCALAPPDATA%\Chainward\credentials.sqlite`, not
 inside the repository. The browser receives only a random, HTTP-only, SameSite
 session token. Users can opt into a temporary 12-hour session instead, and
 **Disconnect Torn API** revokes remembered sessions and credentials. Never
-prefix `SESSION_SECRET` or `TORN_API_KEY` with `NEXT_PUBLIC_`, and never commit
+prefix `SESSION_SECRET` or `API_KEY_ENCRYPTION_SECRET` with `NEXT_PUBLIC_`, and never commit
 `.env.local`.
 
 ## Storage and backups
@@ -75,12 +96,26 @@ supplied.
 ## Quality checks
 
 ```bash
-npm run check
+npm run check           # lint, TypeScript, unit tests, production build
+npm run verify:offline  # 41 end-to-end assertions with no network access
+npm run check:full      # both of the above
 ```
+
+`npm run verify:offline` starts its own development server on port 3123 in a
+separate build directory, so it can run while `npm run dev` is already open. It
+opens offline member and owner sessions, checks that the licence gate blocks an
+unlicensed faction, grants access through the real licensing store, then
+requests every operational route and asserts the offline data labelling,
+telemetry API, and request hardening. It resets only the fixture faction's
+records, so a connected real faction is untouched.
 
 Architecture and current Torn API findings are documented in
 [`docs/architecture.md`](docs/architecture.md) and
 [`docs/torn-api.md`](docs/torn-api.md). The complete licensing and reward-payment
 procedure is in [`docs/owner-operations.md`](docs/owner-operations.md). The
 local-to-release unlock walkthrough is in
-[`docs/unlock-release-walkthrough.md`](docs/unlock-release-walkthrough.md).
+[`docs/unlock-release-walkthrough.md`](docs/unlock-release-walkthrough.md), and
+the latest security findings and residual risks are in
+[`docs/security-audit.md`](docs/security-audit.md). The API, efficiency, and
+interface review is in
+[`docs/api-and-efficiency-audit.md`](docs/api-and-efficiency-audit.md).

@@ -1,0 +1,261 @@
+/* ---------------------------------------------------------------------------
+   Connect experience. Loaded after polish.css and shell.css, so this file is
+   the final word on the first-run onboarding screen.
+
+   Two problems this layer fixes: the entry card reserved a fixed 570px so the
+   confirmation view would not shift the layout, which left a large empty well
+   under the submit button; and the supporting copy sat at 8-9px, far below a
+   comfortable reading size. The card is now sized by its own content, and the
+   handoff is stabilised by a shared minimum instead of a magic number.
+   --------------------------------------------------------------------------- */
+
+/* Explicit areas let the intro, the form, and the supporting steps re-order for
+   a narrow viewport without changing the desktop two-column reading order. */
+.onboarding-hero {
+  grid-template-columns: minmax(0, 1.04fr) minmax(432px, .74fr);
+  grid-template-areas:
+    "intro form"
+    "support form";
+  align-content: center;
+  gap: clamp(28px, 3vw, 44px) clamp(48px, 5.4vw, 88px);
+  padding: clamp(44px, 5vw, 70px) 0 clamp(52px, 6vw, 78px);
+}
+.onboarding-intro { grid-area: intro; align-self: end; }
+.onboarding-form-shell { grid-area: form; align-self: center; }
+.onboarding-support { position: relative; z-index: 1; grid-area: support; min-width: 0; align-self: start; }
+
+/* The full-width hairline under the constrained topbar tracked a fixed 81px
+   offset, which drifts as soon as the bar changes height. */
+.onboarding-topbar { position: relative; }
+.onboarding-topbar::after {
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: -1px;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+}
+
+.onboarding-intro__badge { margin-bottom: 26px; padding: 7px 12px; color: #b3c1b7; font-size: 11px; }
+.onboarding-intro h1 {
+  max-width: 15ch;
+  color: #f1f5f2;
+  font-size: clamp(42px, 4.4vw, 60px);
+  font-weight: 640;
+  letter-spacing: -2.4px;
+  line-height: 1.02;
+}
+.onboarding-intro h1 span { display: block; color: #9ee969; }
+/* The element selector matches the specificity of the page-wide `p` override in
+   polish.css so this size is the one that applies. */
+p.onboarding-intro__lede {
+  max-width: 56ch;
+  margin-top: 20px;
+  color: #97a49c;
+  font-size: 15px !important;
+  line-height: 1.62;
+  text-wrap: pretty;
+}
+
+/* The three steps read as a sequence rather than three competing cards, which
+   also lets the column height track the form card instead of overshooting it. */
+/* The page-scoped prefix keeps the single-column rhythm through the older
+   breakpoint rules in polish.css, which still switch this block to a grid. */
+.onboarding-page .onboarding-journey {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: 1fr;
+  list-style: none;
+}
+.onboarding-journey > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 15px 0;
+  border: 0;
+  background: none;
+  min-height: 0;
+}
+.onboarding-journey > li + li { border-top: 1px solid rgba(255, 255, 255, .06); }
+.onboarding-journey > li::after {
+  position: absolute;
+  top: 50px;
+  left: 17px;
+  width: 1px;
+  height: calc(100% - 36px);
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), .28), transparent);
+  content: "";
+}
+.onboarding-journey > li:first-child { padding-top: 0; }
+.onboarding-journey > li:last-child::after { display: none; }
+.onboarding-journey__marker {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), .2);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), .05);
+  color: var(--accent);
+}
+.onboarding-journey > li > div { display: flex; min-width: 0; flex-direction: column; }
+.onboarding-journey small {
+  margin-top: 1px;
+  color: #6c7a72 !important;
+  font-size: 10.5px !important;
+  font-weight: 740;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+.onboarding-journey strong { margin-top: 4px; color: #dee6e0; font-size: 13.5px; font-weight: 640; }
+.onboarding-journey p { margin-top: 4px; color: #7d8a82; font-size: 12px !important; line-height: 1.55; text-wrap: pretty; }
+
+.onboarding-intro__footer { margin-top: 26px; padding-top: 22px; }
+.onboarding-intro__footer strong { color: #cad4ce; font-size: 12px; }
+.onboarding-intro__footer small { color: #6f7c75 !important; font-size: 10.5px !important; }
+.onboarding-intro__footer > a { font-size: 11.5px; }
+
+/* Form card ---------------------------------------------------------------- */
+.onboarding-form-shell { border-radius: 16px; }
+.onboarding-form-shell__topline { min-height: 46px; padding-inline: 26px; }
+.onboarding-form-shell__topline > span { font-size: 10.5px; }
+.onboarding-form-shell__topline em { font-size: 10.5px; }
+
+/* Sized by content. The shared minimum keeps the entry and confirmation views
+   close enough that the switch never jumps the page. */
+.onboarding-form-shell .connect-form { min-height: 0; padding: 26px 26px 24px; }
+.connect-stage--entry, .connection-confirmation { min-height: 430px; }
+.connection-confirmation { min-height: 430px; }
+
+.onboarding-form-shell .connect-form__heading { gap: 13px; padding-bottom: 20px; }
+.onboarding-form-shell .connect-form__heading > span { width: 42px; height: 42px; }
+.onboarding-form-shell .connect-form__heading > div > small { font-size: 10.5px !important; letter-spacing: .8px; }
+.onboarding-form-shell .connect-form__heading h2 { margin-top: 3px; font-size: 19px; letter-spacing: -.4px; }
+.onboarding-form-shell .connect-form__heading p { max-width: 40ch; margin-top: 5px; color: #838f88; font-size: 12px !important; line-height: 1.5; }
+
+.onboarding-form-shell .api-key-field { margin-top: 20px; }
+.onboarding-form-shell .api-key-field__label strong { font-size: 12px; }
+.onboarding-form-shell .api-key-field__label small { color: #6b7871 !important; font-size: 10.5px !important; }
+.onboarding-form-shell .api-key-field > div { height: 54px; border-radius: 10px; }
+/* polish.css sets `input { font-size: 12.5px !important }` globally, so the key
+   field needs the same weight to reach a comfortable size. */
+.onboarding-form-shell .api-key-field input { font-size: 14px !important; letter-spacing: .3px; }
+.onboarding-form-shell .api-key-field > small { margin-top: 9px; font-size: 11px !important; }
+
+.onboarding-form-shell .remember-connection { margin-top: 15px; padding: 13px 14px; border-radius: 10px; }
+.onboarding-form-shell .remember-connection strong { font-size: 12.5px; }
+.onboarding-form-shell .remember-connection small { color: #808d85 !important; font-size: 11px !important; line-height: 1.45; }
+
+.onboarding-form-shell .connect-submit { min-height: 52px; margin-top: 17px; border-radius: 10px; font-size: 13px; font-weight: 660; }
+
+/* Replaces the empty well that the old fixed card height produced with the one
+   thing a first-time user actually needs at this moment. */
+.connect-requirements { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.connect-requirements > p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #78857d !important;
+  font-size: 10.5px !important;
+  font-weight: 700;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+}
+.connect-requirements > p svg { color: #77c64b; }
+.connect-requirements ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 11px 0 0; padding: 0; list-style: none; }
+.connect-requirements li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid #2b3730;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .022);
+  color: #93a099;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  font-size: 10.5px;
+}
+.connect-requirements li svg { color: #6fae46; }
+
+.onboarding-form-shell > footer { padding: 14px 26px 16px; }
+.onboarding-form-shell > footer strong { color: #aeb9b1; font-size: 10.5px; }
+.onboarding-form-shell > footer small { max-width: 46ch; margin-top: 3px; color: #6d7a72 !important; font-size: 10.5px !important; line-height: 1.45; }
+
+/* Offline test entry ------------------------------------------------------- */
+.offline-test-entry { margin-top: 16px; }
+.offline-test-entry > header strong { font-size: 12px; }
+.offline-test-entry > header small { font-size: 10.5px !important; line-height: 1.45; }
+.offline-test-entry button { min-height: 56px; }
+.offline-test-entry button strong { font-size: 11px; }
+.offline-test-entry button small { font-size: 10.5px !important; }
+
+/* Confirmation ------------------------------------------------------------- */
+.connection-confirmation__hero h2 { font-size: 25px; }
+.connection-confirmation__hero > p:last-child { max-width: 44ch; font-size: 12px; line-height: 1.55; }
+.connection-confirmation__eyebrow { font-size: 10.5px !important; letter-spacing: .9px; }
+.connection-confirmation__identity dt { font-size: 10.5px; letter-spacing: .7px; }
+.connection-confirmation__identity dd { font-size: 11.5px; }
+.connection-confirmation__identity dd small { font-size: 10.5px; }
+.connection-confirmation__capabilities > span { min-height: 44px; }
+.connection-confirmation__capabilities strong { font-size: 10.5px; }
+.connection-confirmation__capabilities small { font-size: 10.5px; }
+.connection-confirmation__session strong { font-size: 11px; }
+.connection-confirmation__session small { font-size: 10.5px !important; }
+.connection-confirmation__actions .button { font-size: 12px; }
+.connection-confirmation__reset { font-size: 11px; }
+
+/* Steps rail and disclosure ------------------------------------------------ */
+.onboarding-steps { gap: 12px; font-size: 10.5px; }
+.onboarding-steps b { font-size: 10.5px; }
+.onboarding-topbar__trust strong { font-size: 10.5px; }
+.onboarding-topbar__trust small { color: #6a776f !important; font-size: 10.5px !important; }
+
+.onboarding-disclosure { padding: clamp(56px, 6vw, 78px) 0 clamp(52px, 5vw, 70px); }
+.onboarding-disclosure__heading p:last-child { font-size: 12.5px !important; }
+.onboarding-privacy-grid > div { min-height: 0; padding: 22px; }
+.onboarding-privacy-grid h3 { margin-top: 24px; font-size: 10.5px; letter-spacing: .6px; }
+.onboarding-privacy-grid strong { font-size: 13px; }
+.onboarding-privacy-grid p { margin-top: 9px; font-size: 11.5px !important; line-height: 1.6; }
+.onboarding-disclosure > footer { font-size: 11.5px; }
+.onboarding-disclosure > footer span { color: #7f8b84; font-size: 11.5px; }
+.onboarding-footer { font-size: 10.5px; }
+.onboarding-footer a { font-size: 11px; }
+
+@media (max-width: 1180px) {
+  .onboarding-hero { grid-template-columns: 1fr minmax(400px, .84fr); column-gap: 44px; }
+  .onboarding-page .onboarding-journey { grid-template-columns: 1fr; }
+  .onboarding-page .onboarding-journey > li { display: grid; grid-template-columns: 34px minmax(0, 1fr); min-height: 0; }
+  .onboarding-page .onboarding-journey small { margin-top: 1px; }
+}
+
+@media (max-width: 960px) {
+  .onboarding-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "intro" "form" "support";
+    justify-items: center;
+  }
+  .onboarding-intro,
+  .onboarding-support { width: min(560px, 100%); align-self: auto; }
+  .onboarding-page .onboarding-journey { grid-template-columns: 1fr; }
+  .onboarding-page .onboarding-journey > li { display: grid; min-height: 0; }
+  .onboarding-page .onboarding-journey small { margin-top: 1px; }
+  .onboarding-form-shell { width: min(560px, 100%); justify-self: center; }
+}
+
+@media (max-width: 680px) {
+  .onboarding-page .onboarding-journey { grid-template-columns: 1fr; }
+  .onboarding-page .onboarding-journey > li { display: grid; grid-template-columns: 34px minmax(0, 1fr); min-height: 0; }
+  .onboarding-page .onboarding-journey small { margin-top: 1px; }
+}
+
+@media (max-width: 520px) {
+  .onboarding-form-shell .connect-form { min-height: 0; padding-inline: 20px; }
+  .connect-stage--entry, .connection-confirmation { min-height: 0; }
+  .onboarding-intro h1 { letter-spacing: -1.6px; }
+  .connect-requirements li { font-size: 10.5px; }
+}

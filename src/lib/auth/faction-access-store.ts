@@ -96,7 +96,10 @@ function getLocalWorkspace(factionId: number): FactionAccessWorkspace {
   const database = openLocalDatabase();
   if (!database) return empty(false, false, "The local database file is unavailable.");
   try {
-    const assignments = (database.prepare("SELECT * FROM faction_access_assignments WHERE faction_id = ? AND status != 'REMOVED' ORDER BY role, member_name").all(factionId) as unknown as LocalAssignmentRow[]).map(mapLocalAssignment);
+    // `role NOT IN ('OWNER')` mirrors the PostgreSQL path: owner access is
+    // intrinsic to the verified platform identity and is never a stored,
+    // editable assignment row.
+    const assignments = (database.prepare("SELECT * FROM faction_access_assignments WHERE faction_id = ? AND status != 'REMOVED' AND role != 'OWNER' ORDER BY role, member_name").all(factionId) as unknown as LocalAssignmentRow[]).filter((row) => isManagedRole(row.role)).map(mapLocalAssignment);
     const audit = (database.prepare("SELECT * FROM faction_access_audit WHERE faction_id = ? ORDER BY created_at DESC, id DESC LIMIT 20").all(factionId) as unknown as LocalAuditRow[]).map(mapLocalAudit);
     return {
       databaseConfigured: true,

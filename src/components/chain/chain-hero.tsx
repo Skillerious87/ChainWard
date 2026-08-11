@@ -4,6 +4,7 @@ import { Activity, Clock3, Crosshair, Expand, RefreshCw, TrendingUp, Users, X } 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { notify } from "@/lib/client-actions";
+import { observeTornClock, recordClockSample, tornNow } from "@/lib/torn/chain-clock";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 interface ChainHeroProps {
@@ -11,10 +12,33 @@ interface ChainHeroProps {
   detailed?: boolean;
 }
 
+/**
+ * Torn awards a flat respect bonus at thirteen fixed chain lengths. Torn's
+ * `max` field reports the next of these, not a faction ceiling, so the gauge
+ * measures progress to the next bonus and this ladder gives that number its
+ * context. The values are a documented game rule, not derived data.
+ * https://wiki.torn.com/wiki/Chain
+ */
+const CHAIN_BONUS_MILESTONES = [10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000] as const;
+
+/** Torn's standard chain timeout, used until a wider one is observed. */
+const DEFAULT_TIMEOUT_WINDOW = 300;
+
+/** The milestones worth showing around the current target. */
+function milestoneWindow(target: number): number[] {
+  const index = CHAIN_BONUS_MILESTONES.findIndex((value) => value >= target);
+  if (index < 0) return [...CHAIN_BONUS_MILESTONES].slice(-4);
+  return [...CHAIN_BONUS_MILESTONES].slice(Math.max(0, index - 1), index + 3);
+}
+
 export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
   const [snapshotOverride, setSnapshotOverride] = useState<WorkspaceTelemetry | null>(null);
   const snapshot = newestTelemetry(telemetry, snapshotOverride);
-  const [seconds, setSeconds] = useState(() => snapshotTimeout(telemetry));
+  // Ticking a stored counter down by one each second drifts whenever the tab is
+  // throttled or the machine sleeps. The countdown is derived from a wall-clock
+  // deadline instead, so it is correct the moment the tab becomes visible again.
+  const [now, setNow] = useState(() => tornNow());
+  const seconds = remainingSeconds(snapshot, now);
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
@@ -26,19 +50,32 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
       const next = (event as CustomEvent<WorkspaceTelemetry>).detail;
       if (!isWorkspaceTelemetry(next)) return;
       setSnapshotOverride(next);
-      setSeconds(snapshotTimeout(next));
+      setNow(tornNow());
     }
     window.addEventListener("chainward:telemetry", receiveTelemetry);
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
   }, []);
 
   useEffect(() => {
-    const interval = window.setInterval(
-      () => setSeconds((value) => Math.max(0, value - 1)),
-      1_000,
-    );
-    return () => window.clearInterval(interval);
+    function tick(): void { setNow(tornNow()); }
+    // Four times a second: the label still reads whole seconds, but the ring
+    // sweeps continuously instead of stepping once per second.
+    const interval = window.setInterval(tick, 250);
+    // A hidden tab is throttled, so re-read the clock as soon as it returns.
+    document.addEventListener("visibilitychange", tick);
+    // Re-read immediately when the measured offset from Torn's clock changes.
+    const stopObserving = observeTornClock(tick);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+      stopObserving();
+    };
   }, []);
+
+  // Torn restarts the countdown on every hit, so the largest figure it has
+  // reported is the real width of the window. Deriving it keeps the ring honest
+  // for a faction whose timer runs longer than the standard five minutes.
+  const timeoutWindow = Math.max(DEFAULT_TIMEOUT_WINDOW, snapshot.chain?.timeoutSeconds ?? 0, seconds);
 
   useEffect(() => {
     if (!focus) return;
@@ -67,16 +104,18 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
     if (syncing) return;
     setSyncing(true);
     try {
+      const startedAt = Date.now();
       const response = await fetch("/api/telemetry/live-chain?fresh=1", {
         headers: { accept: "application/json" },
         cache: "no-store",
       });
       const payload: unknown = await response.json();
+      if (isWorkspaceTelemetry(payload)) recordClockSample(payload.clockAt, startedAt, Date.now());
       if (!response.ok || !isWorkspaceTelemetry(payload)) {
         throw new Error("The telemetry response was invalid.");
       }
       setSnapshotOverride(payload);
-      setSeconds(snapshotTimeout(payload));
+      setNow(tornNow());
       window.dispatchEvent(new CustomEvent<WorkspaceTelemetry>("chainward:telemetry", { detail: payload }));
       notify({
         title: payload.source === "live" ? "Torn telemetry checked" : "Telemetry unavailable",
@@ -118,7 +157,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
     const StateIcon = cooldown ? Clock3 : Activity;
     const stateTitle = cooldown ? "Chain cooldown in progress" : "No active chain";
     const stateDescription = cooldown
-      ? `Torn reports a cooldown until ${formatTornTime(chain.cooldownAt)}. Active progress will return automatically when the next chain starts.`
+      ? `Torn reports ${formatDuration(seconds)} of cooldown remaining. Live progress returns automatically when the next chain starts.`
       : "Torn reports that the faction is idle. Last-chain fields are kept separate from live progress to avoid presenting stale values as current.";
 
     return (
@@ -147,7 +186,9 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
 
   const progress = chain.maximum > 0 ? Math.min(100, (chain.current / chain.maximum) * 100) : 0;
   const remaining = Math.max(0, chain.maximum - chain.current);
-  const elapsedSeconds = Math.max(0, Math.floor(Date.parse(snapshot.checkedAt) / 1_000) - chain.startedAt);
+  // Runtime is measured against the live clock, not the snapshot, so it keeps
+  // moving between polls instead of freezing for the refresh interval.
+  const elapsedSeconds = chain.startedAt > 0 ? Math.max(0, Math.floor(now / 1_000) - chain.startedAt) : 0;
   const factionMembers = snapshot.faction?.members ?? 0;
 
   return (
@@ -176,23 +217,47 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
         <div className="chain-console__primary">
           <span className="chain-console__kicker">Current progress</span>
           <div className="chain-count" aria-live="polite"><strong>{chain.current.toLocaleString()}</strong><span><i>/</i>{chain.maximum.toLocaleString()}</span></div>
-          <div className="chain-progress chain-progress--console" aria-label={`${progress.toFixed(1)}% chain progress`}>
-            <div className="chain-progress__track"><div className="chain-progress__fill" style={{ width: `${progress}%` }} />{[25, 50, 75].map((value) => <i key={value} style={{ left: `${value}%` }} />)}</div>
-            <div className="chain-progress__labels"><span><b>{progress.toFixed(1)}%</b> complete</span><span>{remaining.toLocaleString()} hits to target</span></div>
+          {/* Endpoints are read from Torn's `current` and `max`, so the scale
+              re-derives itself whenever the faction's target changes. */}
+          <div
+            className={`chain-gauge${progress >= 100 ? " chain-gauge--complete" : ""}`}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={chain.maximum || undefined}
+            aria-valuenow={chain.current}
+            aria-valuetext={`${chain.current.toLocaleString()} of ${chain.maximum.toLocaleString()} hits`}
+          >
+            <div className="chain-gauge__track">
+              <div className="chain-gauge__fill" style={{ width: `${progress}%` }}><span className="chain-gauge__sheen" aria-hidden="true" /></div>
+              {[25, 50, 75].map((value) => <i key={value} className="chain-gauge__tick" style={{ left: `${value}%` }} aria-hidden="true" />)}
+              <span className="chain-gauge__marker" style={{ left: `${progress}%` }} aria-hidden="true"><b>{chain.current.toLocaleString()}</b></span>
+            </div>
+            <div className="chain-gauge__scale" aria-hidden="true">
+              <span>0</span>
+              <span className="chain-gauge__scale-mid"><b>{progress.toFixed(1)}%</b> to the next bonus · {remaining.toLocaleString()} hit{remaining === 1 ? "" : "s"} to go</span>
+              <span>{chain.maximum.toLocaleString()}</span>
+            </div>
+            <ol className="chain-milestones" aria-label="Torn chain bonus milestones">
+              {milestoneWindow(chain.maximum).map((milestone) => {
+                const reached = chain.current >= milestone;
+                const target = milestone === chain.maximum;
+                return <li key={milestone} className={`chain-milestone${reached ? " chain-milestone--reached" : ""}${target ? " chain-milestone--target" : ""}`}>
+                  <i aria-hidden="true" />
+                  <b>{milestone.toLocaleString()}</b>
+                  {target && <em>next bonus</em>}
+                </li>;
+              })}
+            </ol>
           </div>
           <div className="chain-console__pace"><TrendingUp size={14} /><span>Torn chain modifier</span><strong>{chain.modifier.toFixed(2)}×</strong><em>Live member totals require a matching chain report</em></div>
         </div>
 
-        <div className={`timeout-orbit${seconds < 90 ? " timeout-orbit--risk" : ""}`} style={{ "--timeout": `${Math.min(100, (seconds / 300) * 100)}%` } as React.CSSProperties}>
-          <div className="timeout-orbit__ring"><div><Clock3 size={17} /><strong>{formatTime(seconds)}</strong><span>timeout</span></div></div>
-          <p><i /> {seconds < 90 ? "Critical window" : "Watch window"}</p>
-          <small>Official timeout, counting down locally</small>
-        </div>
+        <TimeoutRing seconds={seconds} windowSeconds={timeoutWindow} deadline={chain.timeoutAt} />
       </div>
 
       <div className="chain-console__metrics">
         <div><span><Users size={17} /></span><small>Faction members</small><strong>{factionMembers || "—"}</strong><p>From faction basic endpoint</p></div>
-        <div><span><Crosshair size={17} /></span><small>Maximum chain</small><strong>{chain.maximum.toLocaleString()}<em> hits</em></strong><p>Returned by Torn</p></div>
+        <div><span><Crosshair size={17} /></span><small>Next bonus at</small><strong>{chain.maximum.toLocaleString()}<em> hits</em></strong><p>Torn chain bonus target</p></div>
         <div><span><Activity size={17} /></span><small>Elapsed runtime</small><strong>{formatDuration(elapsedSeconds)}</strong><p>Started {formatTornTime(chain.startedAt)}</p></div>
         <div><span className="chain-metric__symbol">✓</span><small>Data provenance</small><strong>Live<em> API</em></strong><p>Validated server-side</p></div>
       </div>
@@ -200,14 +265,64 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
   );
 }
 
-function snapshotTimeout(telemetry: WorkspaceTelemetry): number {
-  if (!telemetry.chain) return 0;
-  if (telemetry.chain.state === "cooldown") {
-    return Math.max(0, telemetry.chain.cooldownAt - Math.floor(Date.now() / 1_000));
-  }
-  if (telemetry.chain.state !== "active") return 0;
-  const ageSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(telemetry.checkedAt)) / 1_000));
-  return Math.max(0, telemetry.chain.timeoutSeconds - ageSeconds);
+/**
+ * Torn's `timeout` and `cooldown` are seconds remaining at the moment of the
+ * check, so the live value is that figure minus however long ago the snapshot
+ * was taken.
+ */
+/**
+ * The countdown ring. The sweep is driven by `stroke-dashoffset`, which the
+ * browser interpolates natively, so it glides rather than stepping once a
+ * second, and the scale comes from the widest timeout Torn has reported for
+ * this chain rather than an assumed window.
+ */
+function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; windowSeconds: number; deadline: number }) {
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = windowSeconds > 0 ? Math.max(0, Math.min(1, seconds / windowSeconds)) : 0;
+  const tone = seconds <= 0 ? "expired" : seconds < 60 ? "critical" : seconds < 120 ? "warning" : "safe";
+  const label = tone === "expired" ? "Chain dropped" : tone === "critical" ? "Act now" : tone === "warning" ? "Watch window" : "Healthy";
+
+  return (
+    <aside className={`timeout-ring timeout-ring--${tone}`} aria-label="Chain timeout">
+      <header className="timeout-ring__header">
+        <span><Clock3 size={14} aria-hidden="true" /> Chain timeout</span>
+        <em className="timeout-ring__badge">{label}</em>
+      </header>
+
+      <div className="timeout-ring__dial">
+        <svg viewBox="0 0 128 128" aria-hidden="true">
+          <circle className="timeout-ring__track" cx="64" cy="64" r={radius} />
+          <circle
+            className="timeout-ring__sweep"
+            cx="64"
+            cy="64"
+            r={radius}
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - fraction)}
+          />
+        </svg>
+        <div className="timeout-ring__readout" role="timer" aria-live="off">
+          <strong>{formatTime(seconds)}</strong>
+          <span>remaining</span>
+        </div>
+      </div>
+
+      <dl className="timeout-ring__facts">
+        <div><dt>Drops at</dt><dd>{deadline > 0 ? formatTornTime(deadline) : "—"}</dd></div>
+        <div><dt>Window</dt><dd>{formatDuration(windowSeconds)}</dd></div>
+      </dl>
+      <small>Anchored to Torn&apos;s clock and re-synced every 10 seconds while a chain runs. Each hit restarts the window.</small>
+    </aside>
+  );
+}
+
+function remainingSeconds(telemetry: WorkspaceTelemetry, nowMs: number): number {
+  const chain = telemetry.chain;
+  if (!chain) return 0;
+  const deadline = chain.state === "cooldown" ? chain.cooldownAt : chain.state === "active" ? chain.timeoutAt : 0;
+  if (deadline <= 0) return 0;
+  return Math.max(0, deadline - Math.floor(nowMs / 1_000));
 }
 
 function formatCheckedTime(value: string): string {

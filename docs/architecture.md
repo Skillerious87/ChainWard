@@ -80,10 +80,12 @@ cascade through finalized payouts.
 
 ## Data-integrity mode
 
-There is no demonstration-data fallback. A validated connection session or the
-server-only `TORN_API_KEY` fallback activates the data-access layer. Missing,
-invalid, paused, insufficient, or failed connections return an unavailable
-state with empty data collections.
+There is no silent demonstration-data fallback. Only a validated, encrypted
+connection session activates browser-request data access; a shared server-wide
+Torn key is never treated as a visitor identity. Missing, invalid, paused,
+insufficient, or failed connections return an unavailable state with empty
+data collections. An explicitly enabled development-only offline fixture is
+visually labelled on every workspace screen and is disabled in production.
 Safe DTOs contain only mapped Torn fields and derived values whose inputs are
 explicitly present in the API response. API keys and raw payloads never cross
 the server/client boundary.
@@ -94,8 +96,9 @@ opaque session record are stored in the operating-system AppData directory,
 separate from the project SQLite database. In hosted mode they are stored in
 PostgreSQL. The browser receives only a random, HTTP-only, SameSite token whose
 hash is stored server-side. A user can choose a temporary encrypted 12-hour
-session instead. Disconnect revokes the remembered session and credential,
-while `TORN_API_KEY` remains a deployment fallback.
+session instead. Disconnect revokes the remembered session and credential.
+There is no deployment-key authentication fallback because it would give every
+visitor the same player's faction and platform privileges.
 
 ## Delivery status
 

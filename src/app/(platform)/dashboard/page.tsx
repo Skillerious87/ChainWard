@@ -7,12 +7,14 @@ import { OperationsBrief } from "@/components/dashboard/operations-brief";
 import { StatStrip } from "@/components/dashboard/stat-strip";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { buildOperationsBrief } from "@/lib/intelligence/operations-brief";
+import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getCompletedChainHistory, getCurrentChainReportView, getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
+  await requireLicensedPage();
   const [telemetry, currentReportResult, historyResult, rosterResult, actor] = await Promise.all([
     getWorkspaceTelemetry(),
     getCurrentChainReportView(),

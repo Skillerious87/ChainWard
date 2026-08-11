@@ -4,12 +4,14 @@ import { PayoutLedger } from "@/components/rewards/payout-ledger";
 import { ExportButton } from "@/components/ui/action-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { getPayoutLedger } from "@/lib/rewards/payout-store";
+import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 export const metadata: Metadata = { title: "Payouts" };
 
 export default async function PayoutsPage() {
+  await requireLicensedPage();
   const [telemetry, roster] = await Promise.all([getWorkspaceTelemetry(), getFactionRoster()]);
   const knownNames = Object.fromEntries(roster.data.map((member) => [member.tornId, member.name]));
   const ledger = await getPayoutLedger(telemetry.faction?.id ?? null, knownNames);

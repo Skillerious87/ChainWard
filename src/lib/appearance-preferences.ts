@@ -77,6 +77,9 @@ export function applyAppearancePreferences(preferences: AppearancePreferences): 
   root.classList.toggle("density-compact", preferences.compact);
   root.classList.toggle("high-contrast", preferences.highContrast);
   root.classList.toggle("reduced-motion", preferences.reducedEffects);
+  // The rail width is resolved from this attribute so the pre-hydration paint
+  // in `AppearanceBootScript` and the hydrated shell always agree.
+  root.dataset.sidebar = preferences.sidebarCollapsed ? "collapsed" : "expanded";
   root.style.setProperty("--accent", preferences.accent);
   root.style.setProperty("--accent-strong", preferences.accent);
   root.style.setProperty("--accent-rgb", rgb);

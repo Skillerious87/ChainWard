@@ -4,11 +4,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ExportButton } from "@/components/ui/action-controls";
 import { getCompletedChainHistory } from "@/lib/torn/workspace-data-service";
 import { getChainSettlementSummaries } from "@/lib/rewards/chain-settlement";
+import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 
 export const metadata: Metadata = { title: "Chain History" };
 
 export default async function ChainHistoryPage() {
+  await requireLicensedPage();
   const [result, telemetry] = await Promise.all([getCompletedChainHistory(), getWorkspaceTelemetry()]);
   const chains = result.data;
   const settlements = telemetry.faction ? await getChainSettlementSummaries(telemetry.faction.id, chains.map((chain) => chain.id)) : {};

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, CircleCheckBig, ExternalLink, KeyRound, L
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import { ConnectForm } from "@/components/onboarding/connect-form";
+import { offlineTestModeEnabled } from "@/lib/torn/offline-fixture";
 
 export const metadata: Metadata = { title: "Connect Your Faction" };
 
@@ -14,37 +15,50 @@ export default function ConnectPage() {
       <header className="connect-topbar onboarding-topbar">
         <Link href="/" aria-label="Chainward home"><BrandMark /></Link>
         <nav className="onboarding-steps" aria-label="Onboarding progress">
-          <span className="onboarding-steps__active"><b>01</b> Connect</span><i />
+          <span><b>01</b> Connect</span><i />
           <span><b>02</b> Verify</span><i />
           <span><b>03</b> Workspace</span>
         </nav>
-        <div className="onboarding-topbar__trust"><ShieldCheck size={14} /><span><strong>Private by design</strong><small>Independent Torn community tool</small></span></div>
+        <div className="onboarding-topbar__trust"><ShieldCheck size={15} /><span><strong>Private by design</strong><small>Independent Torn community tool</small></span></div>
       </header>
 
+      {/* The supporting steps are a sibling of the form rather than a child of
+          the intro so that a narrow viewport can show headline → form → detail
+          without burying the key field below a screen of explanation. */}
       <section className="onboarding-hero">
         <div className="connect-intro onboarding-intro">
           <div className="onboarding-intro__badge"><Sparkles size={13} /><span>Secure setup in about two minutes</span></div>
-          <p className="eyebrow">Welcome to Chainward</p>
           <h1>Your faction’s command centre <span>starts here.</span></h1>
-          <p>Connect a restricted Torn API key and we’ll build a verified workspace around your faction—clear, calm, and ready for the next chain.</p>
-
-          <div className="onboarding-journey" aria-label="Three-step connection process">
-            <article><span><KeyRound size={16} /></span><div><small>01 · Connect</small><strong>Paste a restricted key</strong><p>Limited Access is enough. Your Torn password is never needed.</p></div></article>
-            <article><span><CircleCheckBig size={16} /></span><div><small>02 · Verify</small><strong>We confirm everything</strong><p>Your identity, faction, and required selections are checked with Torn.</p></div></article>
-            <article><span><ArrowRight size={16} /></span><div><small>03 · Enter</small><strong>Your workspace opens</strong><p>Only verified operational data appears in Chainward.</p></div></article>
-          </div>
-
-          <div className="onboarding-intro__footer">
-            <p><ShieldCheck size={15} /><span><strong>No password. No guesswork.</strong><small>Your raw key never returns to browser code.</small></span></p>
-            <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Open Torn API settings <ExternalLink size={14} /></a>
-          </div>
+          <p className="onboarding-intro__lede">Connect a restricted Torn API key and Chainward builds a verified workspace around your faction — clear, calm, and ready for the next chain.</p>
         </div>
 
         <aside className="onboarding-form-shell" aria-label="Secure Torn connection">
-          <div className="onboarding-form-shell__topline"><span>Step 1 of 3</span><em><LockKeyhole size={12} /> Secure connection</em></div>
-          <ConnectForm />
-          <footer><Server size={14} /><p><strong>Validated server-side</strong><small>The key is sent directly to Chainward over your secure connection, then used only with Torn.</small></p></footer>
+          <div className="onboarding-form-shell__topline"><span>Secure faction onboarding</span><em><LockKeyhole size={12} /> Protected connection</em></div>
+          <ConnectForm offlineEnabled={offlineTestModeEnabled()} />
+          <footer><Server size={15} /><p><strong>Validated server-side</strong><small>The key is sent directly to Chainward over your secure connection, then used only with Torn.</small></p></footer>
         </aside>
+
+        <div className="onboarding-support">
+          <ol className="onboarding-journey" aria-label="Three-step connection process">
+            <li>
+              <span className="onboarding-journey__marker"><KeyRound size={15} /></span>
+              <div><small>Step 01</small><strong>Paste a restricted key</strong><p>Limited Access is enough. Your Torn password is never needed and never asked for.</p></div>
+            </li>
+            <li>
+              <span className="onboarding-journey__marker"><CircleCheckBig size={15} /></span>
+              <div><small>Step 02</small><strong>Chainward verifies it</strong><p>Your identity, faction, and every required API selection are confirmed with Torn before anything opens.</p></div>
+            </li>
+            <li>
+              <span className="onboarding-journey__marker"><ArrowRight size={15} /></span>
+              <div><small>Step 03</small><strong>Your workspace opens</strong><p>Only verified operational data is shown. Nothing is estimated and nothing is invented.</p></div>
+            </li>
+          </ol>
+
+          <div className="onboarding-intro__footer">
+            <p><ShieldCheck size={16} /><span><strong>No password. No guesswork.</strong><small>Your raw key never returns to browser code.</small></span></p>
+            <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Open Torn API settings <ExternalLink size={14} /></a>
+          </div>
+        </div>
       </section>
 
       <section className="privacy-disclosure onboarding-disclosure">

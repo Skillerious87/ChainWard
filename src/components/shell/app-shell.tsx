@@ -13,6 +13,7 @@ import {
   History,
   KeyRound,
   LayoutDashboard,
+  LockKeyhole,
   LogOut,
   Menu,
   MonitorCog,
@@ -35,12 +36,17 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
+  useTransition,
   type ReactNode,
 } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { UpgradeAccess } from "@/components/licensing/upgrade-access";
+import { NavigationBeacon, publishNavigationState, RouteProgress } from "@/components/shell/route-progress";
+import { ServiceStateDrawer } from "@/components/shell/service-state-drawer";
 import { StatusDot } from "@/components/ui/status-dot";
+import { recordClockSample } from "@/lib/torn/chain-clock";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { notify, type ToastDetail, type ToastTone } from "@/lib/client-actions";
@@ -55,6 +61,8 @@ interface NavigationItem {
   icon: LucideIcon;
   badge?: string;
   shortcut?: string;
+  requiresLicense?: boolean;
+  locked?: boolean;
 }
 
 interface NavigationGroup {
@@ -63,27 +71,27 @@ interface NavigationGroup {
 }
 
 const navigation: NavigationGroup[] = [
-  { items: [{ label: "Overview", href: "/dashboard", icon: LayoutDashboard, shortcut: "G D" }] },
+  { items: [{ label: "Overview", href: "/dashboard", icon: LayoutDashboard, shortcut: "G D", requiresLicense: true }] },
   {
     label: "Chain operations",
     items: [
-      { label: "Live chain", href: "/live-chain", icon: Activity, shortcut: "G L" },
-      { label: "Members", href: "/members", icon: Users, shortcut: "G M" },
-      { label: "Chain history", href: "/chains", icon: History, shortcut: "G H" },
-      { label: "Analytics", href: "/analytics", icon: BarChart3, shortcut: "G A" },
+      { label: "Live chain", href: "/live-chain", icon: Activity, shortcut: "G L", requiresLicense: true },
+      { label: "Members", href: "/members", icon: Users, shortcut: "G M", requiresLicense: true },
+      { label: "Chain history", href: "/chains", icon: History, shortcut: "G H", requiresLicense: true },
+      { label: "Analytics", href: "/analytics", icon: BarChart3, shortcut: "G A", requiresLicense: true },
     ],
   },
   {
     label: "Reward operations",
     items: [
-      { label: "Reward schemes", href: "/rewards", icon: CircleDollarSign, shortcut: "G R" },
-      { label: "Payout ledger", href: "/payouts", icon: WalletCards, shortcut: "G P" },
+      { label: "Reward schemes", href: "/rewards", icon: CircleDollarSign, shortcut: "G R", requiresLicense: true },
+      { label: "Payout ledger", href: "/payouts", icon: WalletCards, shortcut: "G P", requiresLicense: true },
     ],
   },
   {
     label: "Workspace",
     items: [
-      { label: "Faction access", href: "/faction", icon: ShieldCheck, shortcut: "G F" },
+      { label: "Faction access", href: "/faction", icon: ShieldCheck, shortcut: "G F", requiresLicense: true },
       { label: "Settings", href: "/settings", icon: SlidersHorizontal, shortcut: "G S" },
     ],
   },
@@ -130,7 +138,12 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       : checkedTimeLabel(liveTelemetry.checkedAt);
   const systemNotifications: SystemNotification[] = [];
   if (liveTelemetry.source === "unavailable") systemNotifications.push({ id: 1, title: "Torn API connection required", detail: liveTelemetry.message, tone: "warning", unread: true });
-  if (liveTelemetry.chain?.state === "active" && liveTelemetry.chain.timeoutSeconds < preferences.chainWarningSeconds) systemNotifications.push({ id: 2, title: "Live chain timeout warning", detail: `${liveTelemetry.chain.timeoutSeconds} seconds remained at the last API check.`, tone: "warning", unread: true, href: "/live-chain" });
+  // Measured against the deadline as of this snapshot. Render stays pure: the
+  // live second-by-second countdown belongs to the chain console.
+  const chainTimeoutRemaining = liveTelemetry.chain?.timeoutAt
+    ? Math.max(0, liveTelemetry.chain.timeoutAt - Math.floor(Date.parse(liveTelemetry.checkedAt) / 1_000))
+    : liveTelemetry.chain?.timeoutSeconds ?? 0;
+  if (liveTelemetry.chain?.state === "active" && chainTimeoutRemaining < preferences.chainWarningSeconds) systemNotifications.push({ id: 2, title: "Live chain timeout warning", detail: `${chainTimeoutRemaining} seconds remained at the last Torn check.`, tone: "warning", unread: true, href: "/live-chain" });
   if (memberActivityAlert?.attentionCount) {
     const names = memberActivityAlert.memberNames.join(", ");
     systemNotifications.push({
@@ -146,15 +159,23 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const faction = liveTelemetry.faction;
   const chain = liveTelemetry.chain;
+  const offlineMode = liveTelemetry.mode === "offline";
+  const workspaceLocked = access.state !== "active";
   const ownerAccess = currentUser.isPlatformAdmin && currentUser.tornUserId === PLATFORM_OWNER.tornUserId;
   const visibleNavigation = navigation
     .filter((group) => group.label !== "Platform" || ownerAccess)
     .map((group) => ({ ...group, items: group.items.map((item) => {
+      if (workspaceLocked && item.requiresLicense) return { ...item, locked: true, badge: "Locked" };
       if (item.href === "/live-chain") return { ...item, badge: chain ? chain.current.toLocaleString() : "—" };
       if (item.href === "/members" && memberActivityAlert?.attentionCount) return { ...item, badge: memberActivityAlert.attentionCount.toLocaleString() };
       return item;
     }) }));
   const searchableItems = visibleNavigation.flatMap((group) => group.items);
+  // Keyboard shortcuts must not resubscribe on every render, so the latest
+  // destinations are read through a ref instead of an effect dependency.
+  const searchableItemsRef = useRef(searchableItems);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [navigating, startNavigation] = useTransition();
   const initials = currentUser.name.slice(0, 2).toUpperCase();
   const syncing = syncLabel.startsWith("Syncing");
   const chainActive = chain?.state === "active";
@@ -181,6 +202,16 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     applyAppearancePreferences(preferences);
   }, [preferences]);
 
+  useEffect(() => {
+    searchableItemsRef.current = searchableItems;
+  }, [searchableItems]);
+
+  // Next restores scroll on the document, which no longer scrolls. Without this
+  // a new route would open at the previous view's scroll offset.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+
   const publishTelemetry = useCallback((next: WorkspaceTelemetry) => {
     setTelemetryOverride(next);
     setSyncState(null);
@@ -198,18 +229,28 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
   }, []);
 
+  // Torn resets a chain's timeout on every hit, so a 30-120s cadence can show a
+  // countdown far lower than reality while a chain is running. The saved
+  // preference still governs the idle workspace.
+  const chainRunning = liveTelemetry.chain?.state === "active";
+  const pollSeconds = chainRunning ? Math.min(preferences.refreshIntervalSeconds, 10) : preferences.refreshIntervalSeconds;
+
   useEffect(() => {
     if (!preferences.autoRefresh) return;
     let stopped = false;
+    let lastPollAt = Date.now();
 
     async function pollTelemetry(): Promise<void> {
       if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      lastPollAt = Date.now();
       try {
+        const startedAt = Date.now();
         const response = await fetch("/api/telemetry/live-chain", {
           headers: { accept: "application/json" },
           cache: "no-store",
         });
         const payload: unknown = await response.json();
+        if (isWorkspaceTelemetry(payload)) recordClockSample(payload.clockAt, startedAt, Date.now());
         if (!response.ok || !isWorkspaceTelemetry(payload) || stopped) return;
         publishTelemetry(payload);
       } catch {
@@ -217,12 +258,24 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       }
     }
 
-    const interval = window.setInterval(() => void pollTelemetry(), preferences.refreshIntervalSeconds * 1_000);
+    // Returning to a tab that was hidden longer than one interval otherwise
+    // shows a stale chain count until the next tick fires.
+    function refreshOnFocus(): void {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastPollAt < pollSeconds * 1_000) return;
+      void pollTelemetry();
+    }
+
+    const interval = window.setInterval(() => void pollTelemetry(), pollSeconds * 1_000);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    window.addEventListener("online", refreshOnFocus);
     return () => {
       stopped = true;
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+      window.removeEventListener("online", refreshOnFocus);
     };
-  }, [preferences.autoRefresh, preferences.refreshIntervalSeconds, publishTelemetry]);
+  }, [preferences.autoRefresh, pollSeconds, publishTelemetry]);
 
   useEffect(() => {
     let navigationPrefix = false;
@@ -243,12 +296,12 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       if (target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.tagName === "SELECT") return;
       const key = event.key.toLowerCase();
       if (navigationPrefix) {
-        const destination = searchableItems.find((item) => item.shortcut?.toLowerCase() === `g ${key}`);
+        const destination = searchableItemsRef.current.find((item) => item.shortcut?.toLowerCase() === `g ${key}`);
         navigationPrefix = false;
         if (prefixTimer) window.clearTimeout(prefixTimer);
         if (destination) {
           event.preventDefault();
-          router.push(destination.href);
+          router.push(destination.locked ? "/unlock" : destination.href);
         }
         return;
       }
@@ -262,7 +315,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       if (prefixTimer) window.clearTimeout(prefixTimer);
       window.removeEventListener("keydown", openCommand);
     };
-  }, [router, searchableItems]);
+  }, [router]);
 
   useEffect(() => {
     function receiveToast(event: Event): void {
@@ -281,7 +334,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
   function goTo(item: NavigationItem): void {
     setCommandOpen(false);
     setCommandQuery("");
-    router.push(item.href);
+    startNavigation(() => router.push(item.locked ? "/unlock" : item.href));
   }
 
   function handleCommandKey(event: React.KeyboardEvent<HTMLInputElement>): void {
@@ -303,11 +356,13 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     if (syncing) return;
     setSyncState("syncing");
     try {
+      const startedAt = Date.now();
       const response = await fetch("/api/telemetry/live-chain?fresh=1", {
         headers: { accept: "application/json" },
         cache: "no-store",
       });
       const payload: unknown = await response.json();
+      if (isWorkspaceTelemetry(payload)) recordClockSample(payload.clockAt, startedAt, Date.now());
       if (!response.ok || !isWorkspaceTelemetry(payload)) throw new Error("Telemetry sync failed");
       publishTelemetry(payload);
       router.refresh();
@@ -352,11 +407,15 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     saveAppearancePreferences({ sidebarCollapsed: !collapsed });
   }
 
+  useEffect(() => {
+    publishNavigationState("command-palette", navigating);
+  }, [navigating]);
+
   return (
-    <div className={`app-shell${collapsed ? " app-shell--collapsed" : ""}`}>
+    <div className="app-shell">
       <aside className={`sidebar${mobileOpen ? " sidebar--mobile-open" : ""}`}>
         <div className="sidebar__brand-row">
-          <Link href="/dashboard" className="sidebar__brand-link"><BrandMark /></Link>
+          <Link href={workspaceLocked ? "/unlock" : "/dashboard"} className="sidebar__brand-link" aria-label={workspaceLocked ? "Chainward workspace locked — view unlock status" : "Chainward overview"}><BrandMark /></Link>
           <button className="icon-button sidebar__mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={19} /></button>
         </div>
 
@@ -376,8 +435,10 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
                 const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
                 const Icon = item.icon;
                 return (
-                  <Link href={item.href} key={item.href} className={`nav-item${active ? " nav-item--active" : ""}`} title={collapsed ? item.label : undefined} onClick={() => setMobileOpen(false)}>
-                    <Icon size={17} strokeWidth={1.8} /><span>{item.label}</span>{item.badge && <em>{item.badge}</em>}
+                  <Link href={item.locked ? "/unlock" : item.href} key={item.href} data-label={item.label} aria-current={active ? "page" : undefined} className={`nav-item${active ? " nav-item--active" : ""}${item.locked ? " nav-item--locked" : ""}`} /* The collapsed rail shows the label through the styled hover card in
+                     shell.css, so a native tooltip here would double up. */
+                    title={item.locked ? `${item.label} — unlock Chainward to open` : undefined} aria-label={item.locked ? `${item.label}, locked until Chainward is unlocked` : undefined} onClick={() => setMobileOpen(false)}>
+                    <Icon size={17} strokeWidth={1.8} /><span>{item.label}</span>{item.locked && <LockKeyhole className="nav-item__lock" size={12} />}{item.badge && <em>{item.badge}</em>}<NavigationBeacon id={item.href} />
                   </Link>
                 );
               })}
@@ -388,7 +449,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
         <div className="sidebar__footer">
           <button className="sidebar__health" onClick={() => setOpenPanel("health")}>
             <span className="sidebar__health-icon"><Activity size={16} /></span>
-            <span className="sidebar__health-copy"><strong>{liveTelemetry.source === "live" ? "Torn API verified" : "Connection required"}</strong><small>{liveTelemetry.source === "live" ? "Server-side API check" : "No live telemetry"}</small></span>
+            <span className="sidebar__health-copy"><strong>{offlineMode ? "Offline fixture active" : liveTelemetry.source === "live" ? "Torn API verified" : "Connection required"}</strong><small>{offlineMode ? "No Torn network requests" : liveTelemetry.source === "live" ? "Server-side API check" : "No live telemetry"}</small></span>
             <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live"} />
           </button>
         </div>
@@ -402,7 +463,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
             <button className="icon-button topbar__menu" onClick={() => { saveAppearancePreferences({ sidebarCollapsed: false }); setMobileOpen(true); }} aria-label="Open navigation"><Menu size={20} /></button>
             <div className="topbar-faction-wrap">
               <button className="faction-selector" aria-label="Change faction" aria-expanded={openPanel === "faction"} onClick={() => setOpenPanel(openPanel === "faction" ? null : "faction")}>
-                <span className="faction-monogram">{faction?.tag?.slice(0, 2).toUpperCase() || "—"}</span><span className="faction-selector__copy"><strong>{faction?.name ?? "Faction unavailable"}</strong><small>{liveTelemetry.source === "live" ? `${faction?.tag ?? "Faction"} · Torn ID ${faction?.id ?? "—"}` : "Connection required"}</small></span><ChevronDown size={15} />
+                <span className="faction-monogram">{faction?.tag?.slice(0, 2).toUpperCase() || "—"}</span><span className="faction-selector__copy"><strong>{faction?.name ?? "Faction unavailable"}</strong><small>{offlineMode ? `Offline fixture · ID ${faction?.id ?? "—"}` : liveTelemetry.source === "live" ? `${faction?.tag ?? "Faction"} · Torn ID ${faction?.id ?? "—"}` : "Connection required"}</small></span><ChevronDown size={15} />
               </button>
               {openPanel === "faction" && (
                 <TopbarPopover className="topbar-popover--faction" close={() => setOpenPanel(null)}>
@@ -413,7 +474,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
               )}
             </div>
             <div className="topbar__separator" />
-            <Link href="/live-chain" className={`chain-state chain-state--${chain?.state ?? "unavailable"}`}>
+            <Link href={workspaceLocked ? "/unlock" : "/live-chain"} aria-label={workspaceLocked ? "Live chain is locked until Chainward is unlocked" : undefined} className={`chain-state chain-state--${chain?.state ?? "unavailable"}`}>
               <StatusDot tone={chainActive ? "success" : chain ? "muted" : "warning"} pulse={chainActive} />
               <span className="chain-state__copy"><small>{chainStatusDetail}</small><strong>{chainStatusLabel}</strong></span>
               {chainActive && chain.maximum > 0 && <i>{((chain.current / chain.maximum) * 100).toFixed(1)}%</i>}
@@ -423,9 +484,9 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
           <div className="topbar__right">
             <UpgradeAccess access={access} />
             <button className="topbar-command" onClick={() => setCommandOpen(true)}><Command size={14} /><span>Quick find</span><kbd>⌘K</kbd></button>
-            <button className={`data-status-control data-status-control--${liveTelemetry.source}`} onClick={() => void syncWorkspace()} disabled={syncing} title={`Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
+            <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => void syncWorkspace()} disabled={syncing || workspaceLocked} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
               <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live" && !syncing} />
-              <span><strong>{liveTelemetry.source === "live" ? "Torn API" : "API attention"}</strong><small>{syncLabel}</small></span>
+              <span><strong>{offlineMode ? "Offline fixture" : liveTelemetry.source === "live" ? "Torn API" : "API attention"}</strong><small>{syncLabel}</small></span>
               <RefreshCw className={syncing ? "spin" : undefined} size={14} aria-hidden="true" />
             </button>
             <div className="topbar-popover-wrap">
@@ -462,15 +523,24 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
           </div>
         </header>
 
-        <div className={`data-source-banner data-source-banner--${liveTelemetry.source}`} role="status"><span>{liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>{liveTelemetry.message}</div>
-        <main className="page-content">{children}</main>
+        <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status"><span>{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>{liveTelemetry.message}</div>
+        <RouteProgress />
+        {/* The workspace scrolls inside this element rather than the document,
+            so the top bar and the provenance banner stay fixed and the
+            scrollbar spans only the content beneath them. */}
+        <div className="app-scroll" ref={scrollRef}>
+          <main className="page-content">{children}</main>
+        </div>
       </div>
 
       {openPanel === "health" && (
-        <div className="health-drawer" role="dialog" aria-modal="true" aria-label="System health">
-          <button className="drawer-scrim" onClick={() => setOpenPanel(null)} aria-label="Close system health" />
-          <aside><header><span><Activity size={17} /></span><div><p className="eyebrow">Observed service state</p><h2>Data connection</h2></div><button className="icon-button" onClick={() => setOpenPanel(null)} aria-label="Close"><X size={18} /></button></header><div className="health-drawer__score"><strong>{liveTelemetry.source === "live" && database.available ? "Operational" : "Attention"}</strong><span>{liveTelemetry.source === "live" ? database.message : liveTelemetry.message}</span></div>{[["Torn API", liveTelemetry.source === "live" ? "Responded" : "No verified response", liveTelemetry.source === "live" ? "Verified" : "Attention"], ["Application database", database.message, database.available ? "Ready" : database.configured ? "Attention" : "Not configured"], ["Background jobs", "No background worker is configured", "Not configured"], ["Credential", liveTelemetry.source === "live" ? "Server-side configured" : "Missing or invalid", liveTelemetry.source === "live" ? "Configured" : "Attention"]].map(([name, detail, state]) => <div className="health-drawer__row" key={name}><span><i />{name}</span><small>{detail}</small><strong>{state}</strong></div>)}<footer>API check: {new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}</footer></aside>
-        </div>
+        <ServiceStateDrawer
+          telemetry={liveTelemetry}
+          database={database}
+          syncing={syncing}
+          onSync={() => void syncWorkspace()}
+          onClose={() => setOpenPanel(null)}
+        />
       )}
 
       {commandOpen && (
