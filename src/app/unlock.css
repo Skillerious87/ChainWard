@@ -398,3 +398,14 @@
   .access-review-facts > div:last-child { border-bottom: 0; }
   .access-review-identity { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; padding: 15px; }
 }
+
+/* Inside the status card the notice sits between two ruled rows, so it takes
+   the card's own edges rather than floating as a separate block. */
+.unlock-reference-notice--inline {
+  margin: 0;
+  padding: 12px 19px;
+  border: 0;
+  border-bottom: 1px solid #29342f;
+  border-radius: 0;
+  background: rgba(245, 185, 76, .04);
+}
