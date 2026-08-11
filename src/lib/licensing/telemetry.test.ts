@@ -8,7 +8,7 @@ const telemetry: WorkspaceTelemetry = {
   mode: "offline",
   checkedAt: "2026-08-11T00:00:00.000Z",
   faction: { id: 98_765, name: "Fixture", tag: "TEST", members: 6 },
-  chain: { id: 7_000_004, current: 742, maximum: 1_000, timeoutSeconds: 238, modifier: 1.5, cooldownSeconds: 0, timeoutAt: 0, cooldownAt: 0, startedAt: 1, endedAt: 0, state: "active" },
+  chain: { id: 7_000_004, current: 742, maximum: 1_000, timeoutSeconds: 238, modifier: 1.5, cooldownSeconds: 0, startedAt: 1, endedAt: 0, state: "active" },
   message: "Fixture values",
 };
 

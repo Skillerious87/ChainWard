@@ -1,0 +1,400 @@
+/* ---------------------------------------------------------------------------
+   Faction-wide access. Loaded last, so this file is the final word on the
+   unlock workspace.
+
+   This is the only screen a locked faction sees, and it has two jobs at once:
+   explain calmly why the workspace is protected, and make choosing a term feel
+   considered rather than transactional. It is treated as a composed page —
+   one editorial column, one decision column — instead of a stack of panels.
+   --------------------------------------------------------------------------- */
+
+.unlock-workspace { width: min(100%, 1180px); }
+
+/* Masthead ------------------------------------------------------------------ */
+.unlock-hero {
+  position: relative;
+  align-items: center;
+  gap: 40px;
+  padding: 34px 0 38px;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.unlock-hero::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), .5), rgba(var(--accent-rgb), .06) 42%, transparent 70%);
+  content: "";
+}
+.unlock-hero .eyebrow { font-size: 11px !important; letter-spacing: 1.4px; }
+.unlock-hero h1 {
+  max-width: 17ch;
+  margin-top: 14px;
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 640;
+  letter-spacing: -2px;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+.unlock-hero > div > p:last-child { max-width: 60ch; margin-top: 18px; color: #93a09a; font-size: 14px !important; line-height: 1.65; text-wrap: pretty; }
+.unlock-hero > span {
+  min-width: 230px;
+  gap: 12px;
+  padding: 15px 17px;
+  border-radius: 13px;
+  background: linear-gradient(150deg, rgba(var(--accent-rgb), .08), rgba(var(--accent-rgb), .015));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .04);
+}
+.unlock-hero > span strong { font-size: 12.5px; font-weight: 650; }
+.unlock-hero > span small { color: #7d8b83 !important; font-size: 11.5px !important; }
+
+/* Locked notice — the reassurance, not an alarm. */
+.unlock-lock-notice {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1px solid rgba(245, 185, 76, .22);
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(245, 185, 76, .07), transparent 58%),
+    linear-gradient(180deg, #12110c, #0d0f0c);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .03);
+}
+.unlock-lock-notice > span:first-child {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(245, 185, 76, .3);
+  border-radius: 13px;
+  background: rgba(245, 185, 76, .08);
+  color: var(--warning);
+}
+.unlock-lock-notice .eyebrow { color: var(--warning) !important; font-size: 10.5px !important; letter-spacing: 1.2px; }
+.unlock-lock-notice strong { display: block; margin-top: 5px; color: #f0e4c8; font-size: 15px; font-weight: 640; }
+.unlock-lock-notice p { margin-top: 6px; max-width: 66ch; color: #93968a; font-size: 12.5px !important; line-height: 1.6; text-wrap: pretty; }
+.unlock-lock-notice ul,
+.unlock-lock-notice > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin: 0; padding-left: 22px; border-left: 1px solid rgba(245, 185, 76, .16); list-style: none; }
+.unlock-lock-notice li,
+.unlock-lock-notice > div:last-child > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b9b8a4;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.unlock-lock-notice li svg,
+.unlock-lock-notice > div:last-child svg { flex: 0 0 auto; color: var(--warning); opacity: .85; }
+
+/* Two-column body ----------------------------------------------------------- */
+.unlock-main-grid { align-items: start; gap: 18px; }
+
+.unlock-benefits {
+  padding: 24px;
+  border: 1px solid #2b3630;
+  border-radius: 14px;
+  background:
+    radial-gradient(100% 70% at 0% 0%, rgba(var(--accent-rgb), .06), transparent 60%),
+    linear-gradient(180deg, #0f1513, #0b0f0e);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .03);
+}
+.unlock-benefits__icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(var(--accent-rgb), .26);
+  border-radius: 13px;
+  background: rgba(var(--accent-rgb), .07);
+  color: var(--accent);
+}
+.unlock-benefits .eyebrow { font-size: 10.5px !important; letter-spacing: 1.2px; }
+.unlock-benefits h2 { margin-top: 9px; font-size: 24px; font-weight: 640; letter-spacing: -1px; line-height: 1.12; text-wrap: balance; }
+.unlock-benefits > p { margin-top: 12px; color: #8d9a93; font-size: 13px !important; line-height: 1.65; text-wrap: pretty; }
+.unlock-benefits ul { display: grid; gap: 0; margin: 22px 0 0; padding: 0; list-style: none; }
+.unlock-benefits li {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  padding: 12px 0;
+  color: #adb9b2;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.unlock-benefits li + li { border-top: 1px solid rgba(255, 255, 255, .05); }
+.unlock-benefits li svg { margin-top: 2px; color: var(--accent); }
+
+/* Term selection ------------------------------------------------------------ */
+.unlock-plans { padding: 22px 22px 24px; border: 1px solid #2b343c; border-radius: 14px; background: linear-gradient(180deg, #0f1418, #0b0e11); }
+.unlock-plans .eyebrow { font-size: 10.5px !important; letter-spacing: 1.2px; }
+.unlock-plans h2 { margin-top: 8px; font-size: 21px; font-weight: 645; letter-spacing: -.7px; }
+.unlock-plans > p { margin-top: 6px; color: var(--text-muted); font-size: 12.5px !important; }
+
+.licence-tier-list--page { display: grid; gap: 10px; margin-top: 20px; }
+.licence-tier-list--page > button,
+.licence-tier-list--page > label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(150px, .8fr) minmax(0, 1.5fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 17px 19px;
+  border: 1px solid #2c353d;
+  border-radius: 13px;
+  background: linear-gradient(150deg, #11161a, #0d1114);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+.licence-tier-list--page > button:hover,
+.licence-tier-list--page > label:hover { border-color: #3f4a53; background: #131a1f; transform: translateY(-1px); }
+.licence-tier-list--page > button[aria-checked="true"],
+.licence-tier-list--page > .licence-tier-card--selected,
+.licence-tier-list--page > label:has(input:checked) {
+  border-color: rgba(var(--accent-rgb), .5);
+  background:
+    radial-gradient(110% 130% at 0% 50%, rgba(var(--accent-rgb), .1), transparent 62%),
+    linear-gradient(150deg, #121a14, #0d1210);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .08), 0 12px 34px rgba(0, 0, 0, .28);
+}
+
+.licence-tier-card__selector { display: grid; width: 24px; height: 24px; place-items: center; }
+.licence-tier-card__identity strong { display: block; color: #e9eeea; font-size: 14.5px; font-weight: 645; letter-spacing: -.2px; }
+.licence-tier-card__identity small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11.5px !important; }
+.licence-tier-card__description { min-width: 0; color: #93a09a; font-size: 12.5px !important; line-height: 1.5; }
+.licence-tier-card__description strong { color: #c2ccc6; font-weight: 620; }
+.licence-tier-card__price { text-align: right; white-space: nowrap; }
+.licence-tier-card__price strong,
+.licence-tier-card__price b {
+  display: block;
+  color: #f2f7f3;
+  font-size: 30px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1.4px;
+  line-height: 1;
+}
+.licence-tier-card__price small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 11.5px !important; font-weight: 600; }
+
+/* Reservation and status ---------------------------------------------------- */
+.unlock-reservation { margin-top: 18px; padding: 18px 19px; border: 1px solid #2b343c; border-radius: 13px; background: rgba(255, 255, 255, .012); }
+.unlock-reservation .eyebrow { font-size: 10.5px !important; }
+.unlock-reservation__reference code { font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace; font-size: 12px; letter-spacing: .3px; }
+
+.unlock-status-card,
+.unlock-active-grid,
+.unlock-included-panel { border-radius: 14px; }
+.unlock-status-card > header strong { font-size: 15px; }
+.unlock-active-grid article { min-height: 100px; padding: 18px 20px; }
+.unlock-active-grid small { font-size: 10.5px !important; letter-spacing: .7px; }
+.unlock-active-grid strong { margin-top: 8px; font-size: 14px; font-weight: 645; }
+.unlock-included-panel { padding: 26px; }
+.unlock-included-panel h2 { font-size: 22px; font-weight: 640; letter-spacing: -.8px; }
+.unlock-included-panel li { font-size: 12.5px; line-height: 1.5; }
+
+@media (max-width: 1080px) {
+  .unlock-hero { grid-template-columns: 1fr; gap: 22px; }
+  .unlock-hero > span { width: fit-content; }
+  .unlock-lock-notice { grid-template-columns: 46px minmax(0, 1fr); row-gap: 16px; }
+  .unlock-lock-notice ul,
+  .unlock-lock-notice > div:last-child { grid-column: 1 / -1; padding-left: 0; border-left: 0; border-top: 1px solid rgba(245, 185, 76, .16); padding-top: 15px; }
+}
+
+@media (max-width: 760px) {
+  .unlock-hero { padding: 24px 0 26px; }
+  .unlock-hero h1 { letter-spacing: -1.2px; }
+  .unlock-benefits, .unlock-plans { padding: 18px; }
+  .licence-tier-list--page > button,
+  .licence-tier-list--page > label { grid-template-columns: 24px minmax(0, 1fr) auto; row-gap: 10px; padding: 15px 16px; }
+  .licence-tier-card__description { grid-column: 2 / -1; }
+  .licence-tier-card__price strong,
+  .licence-tier-card__price b { font-size: 25px; }
+  .unlock-lock-notice ul,
+  .unlock-lock-notice > div:last-child { grid-template-columns: 1fr; }
+  .unlock-lock-notice li,
+  .unlock-lock-notice > div:last-child > span { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .licence-tier-list--page > button:hover,
+  .licence-tier-list--page > label:hover { transform: none; }
+}
+
+/* Reference safety ----------------------------------------------------------
+   The reference is the only thing tying a Torn transfer to a faction, so the
+   warning sits directly beneath it rather than in small print. */
+.unlock-reference-notice {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  margin: 12px 0 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(245, 185, 76, .24);
+  border-radius: 11px;
+  background: linear-gradient(140deg, rgba(245, 185, 76, .06), transparent 62%);
+  color: #a9a692;
+  font-size: 12px !important;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.unlock-reference-notice svg { margin-top: 2px; color: var(--warning); }
+.unlock-reference-notice strong { color: #f0dfb4; font-weight: 650; }
+
+/* Owner payment review ------------------------------------------------------
+   The one screen where a real transfer is matched to a licence, so each step
+   reads as a deliberate check rather than a form. */
+.dialog--access-review { width: min(760px, calc(100vw - 32px)); }
+.professional-access-review { display: flex; flex-direction: column; gap: 14px; }
+
+.access-review-identity {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: center;
+  gap: 15px;
+  padding: 17px 18px;
+  border: 1px solid rgba(242, 199, 102, .22);
+  border-radius: 13px;
+  background:
+    radial-gradient(110% 150% at 0% 0%, rgba(242, 199, 102, .07), transparent 58%),
+    linear-gradient(180deg, #12110c, #0d0f10);
+}
+.access-review-identity > span {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border: 1px solid rgba(242, 199, 102, .28);
+  border-radius: 13px;
+  background: rgba(242, 199, 102, .08);
+  color: var(--premium);
+}
+.access-review-identity .eyebrow { color: #b7a473 !important; font-size: 10.5px !important; letter-spacing: 1px; }
+.access-review-identity h3 { margin-top: 4px; color: #f1ede2; font-size: 19px; font-weight: 645; letter-spacing: -.5px; }
+.access-review-identity p:last-child { margin-top: 5px; color: var(--text-muted); font-size: 12px !important; }
+
+.access-review-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #0d1114;
+}
+.access-review-facts > div { min-width: 0; padding: 13px 15px; border-right: 1px solid var(--border); }
+.access-review-facts > div:last-child { border-right: 0; background: rgba(242, 199, 102, .03); }
+.access-review-facts dt {
+  color: var(--text-muted);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 680;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+}
+.access-review-facts dd { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; color: #e6ebe8; font-size: 13px; font-weight: 640; }
+.access-review-facts code {
+  overflow: hidden;
+  color: #f0dfb4;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  font-size: 12px !important;
+  font-weight: 650;
+  letter-spacing: .3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.access-review-facts dd button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .02);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 620;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+.access-review-facts dd button:hover { border-color: rgba(242, 199, 102, .4); background: rgba(242, 199, 102, .07); color: var(--premium); }
+
+.access-verification-checklist { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: #0d1114; }
+.access-verification-checklist > header { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: rgba(255, 255, 255, .012); }
+.access-verification-checklist > header svg { color: var(--accent); }
+.access-verification-checklist > header strong { color: #e2e8e4; font-size: 13px; font-weight: 645; }
+.access-verification-checklist > header small { display: block; margin-top: 2px; color: var(--text-muted); font-size: 11.5px !important; }
+.access-verification-checklist > label { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 12px; padding: 15px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.access-verification-checklist > label:last-child { border-bottom: 0; }
+.access-verification-checklist > label strong { color: #dfe5e2; font-size: 13px; font-weight: 620; }
+.access-verification-checklist > label small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11.5px !important; line-height: 1.5; }
+
+.reference-confirmation { display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 8px; background: rgba(242, 199, 102, .022); }
+.reference-confirmation > span { color: #b0bab5; font-size: 12px; font-weight: 620; }
+.reference-confirmation input {
+  width: 100%;
+  height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  outline: 0;
+  background: #0a0e11;
+  color: #f0dfb4;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  font-size: 13.5px !important;
+  letter-spacing: .6px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.reference-confirmation input:focus { border-color: rgba(242, 199, 102, .55); box-shadow: 0 0 0 3px rgba(242, 199, 102, .08); }
+.reference-confirmation > small { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11.5px !important; }
+.reference-confirmation > small svg { color: var(--success); }
+.reference-confirmation__mismatch { color: var(--danger) !important; }
+
+.access-review-note { display: flex; flex-direction: column; gap: 8px; }
+.access-review-note > span { color: #b0bab5; font-size: 12px; font-weight: 620; }
+.access-review-note textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 12px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  outline: 0;
+  background: #0a0e11;
+  color: #e2e8ea;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 12.5px !important;
+  line-height: 1.55;
+  resize: vertical;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.access-review-note textarea:focus { border-color: rgba(var(--accent-rgb), .45); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .07); }
+.access-review-note > small { align-self: flex-end; color: var(--text-muted); font-size: 11px !important; }
+
+.approval-check {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(103, 211, 145, .2);
+  border-radius: 12px;
+  background: rgba(103, 211, 145, .04);
+}
+.approval-check svg { margin-top: 1px; color: var(--success); }
+.approval-check strong { color: #c8e2d4; font-size: 12.5px; font-weight: 645; }
+.approval-check p { margin-top: 4px; color: #8b9d94; font-size: 12px !important; line-height: 1.55; text-wrap: pretty; }
+
+@media (max-width: 620px) {
+  .access-review-facts { grid-template-columns: 1fr; }
+  .access-review-facts > div { border-right: 0; border-bottom: 1px solid var(--border); }
+  .access-review-facts > div:last-child { border-bottom: 0; }
+  .access-review-identity { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; padding: 15px; }
+}

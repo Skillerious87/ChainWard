@@ -85,77 +85,48 @@ describe("chain operational state", () => {
   });
 });
 
-describe("chain countdown anchoring", () => {
-  const faction = { basic: { id: 51_393, name: "Verified faction", tag: "VF", members: 47 } };
-
-  it("anchors the timeout to when Torn answered, not to render time", async () => {
-    const fetchedAtMs = Date.parse("2026-08-08T17:00:00.000Z");
-    const client = {
-      getFactionBasic: vi.fn().mockResolvedValue(faction),
-      getCurrentChain: vi.fn().mockResolvedValue({ chain: { id: 9, current: 21, max: 25, timeout: 300, modifier: 1.09, cooldown: 0, start: 1_786_196_400, end: 0 } }),
-      getCurrentChainFetchedAt: () => fetchedAtMs,
-    };
-
-    // The same cached response rendered 25 seconds later must resolve to the
-    // same deadline; timing from render time restarted the clock on refresh.
-    const first = await loadWorkspaceTelemetry(client, new Date(fetchedAtMs));
-    const later = await loadWorkspaceTelemetry(client, new Date(fetchedAtMs + 25_000));
-
-    expect(first.chain?.timeoutAt).toBe(Math.floor(fetchedAtMs / 1_000) + 300);
-    expect(later.chain?.timeoutAt).toBe(first.chain?.timeoutAt);
-  });
-
-  it("falls back to the check time when the fetch time is unknown", async () => {
-    const checkedAt = new Date("2026-08-08T17:00:00.000Z");
-    const client = {
-      getFactionBasic: vi.fn().mockResolvedValue(faction),
-      getCurrentChain: vi.fn().mockResolvedValue({ chain: { id: 9, current: 21, max: 25, timeout: 300, modifier: 1, cooldown: 0, start: 1, end: 0 } }),
-    };
-    const result = await loadWorkspaceTelemetry(client, checkedAt);
-    expect(result.chain?.timeoutAt).toBe(Math.floor(checkedAt.getTime() / 1_000) + 300);
-  });
-
-  it("leaves both deadlines at zero when Torn reports no countdown", async () => {
-    const client = {
-      getFactionBasic: vi.fn().mockResolvedValue(faction),
-      getCurrentChain: vi.fn().mockResolvedValue({ chain: { id: 0, current: 0, max: 0, timeout: 0, modifier: 1, cooldown: 0, start: 0, end: 0 } }),
-    };
-    const result = await loadWorkspaceTelemetry(client, new Date("2026-08-08T17:00:00.000Z"));
-    expect(result.chain).toMatchObject({ timeoutAt: 0, cooldownAt: 0, state: "idle" });
-  });
-});
-
-describe("torn clock alignment", () => {
+describe("chain countdown staleness", () => {
   const faction = { basic: { id: 51_393, name: "Verified faction", tag: "VF", members: 47 } };
   const chain = { chain: { id: 9, current: 21, max: 25, timeout: 300, modifier: 1, cooldown: 0, start: 1, end: 0 } };
 
-  it("expresses the deadline on Torn's clock, not the local one", async () => {
-    const localNow = Date.parse("2026-08-08T17:00:00.000Z");
-    const skewMs = 45_000; // This machine's clock runs 45s behind Torn.
+  it("reports how stale Torn's reading already is", async () => {
+    const fetchedAtMs = Date.parse("2026-08-08T17:00:00.000Z");
     const client = {
       getFactionBasic: vi.fn().mockResolvedValue(faction),
       getCurrentChain: vi.fn().mockResolvedValue(chain),
-      getCurrentChainFetchedAt: () => localNow,
-      getClockSkewMs: () => skewMs,
+      getCurrentChainFetchedAt: () => fetchedAtMs,
     };
 
-    const result = await loadWorkspaceTelemetry(client, new Date(localNow));
+    // Rendered 4 seconds after Torn answered: the countdown must start 4s in.
+    const result = await loadWorkspaceTelemetry(client, new Date(fetchedAtMs + 4_000));
 
-    expect(result.chain?.timeoutAt).toBe(Math.floor((localNow + skewMs) / 1_000) + 300);
-    expect(result.clockAt).toBe(localNow + skewMs);
+    expect(result.dataAgeMs).toBe(4_000);
+    expect(result.chain?.timeoutSeconds).toBe(300);
   });
 
-  it("falls back to the local clock when Torn sends no usable date", async () => {
-    const localNow = Date.parse("2026-08-08T17:00:00.000Z");
+  it("measures staleness entirely within one clock, so a cached response never restarts the timer", async () => {
+    const fetchedAtMs = Date.parse("2026-08-08T17:00:00.000Z");
     const client = {
       getFactionBasic: vi.fn().mockResolvedValue(faction),
       getCurrentChain: vi.fn().mockResolvedValue(chain),
-      getCurrentChainFetchedAt: () => localNow,
+      getCurrentChainFetchedAt: () => fetchedAtMs,
     };
 
-    const result = await loadWorkspaceTelemetry(client, new Date(localNow));
+    const first = await loadWorkspaceTelemetry(client, new Date(fetchedAtMs + 1_000));
+    const later = await loadWorkspaceTelemetry(client, new Date(fetchedAtMs + 9_000));
 
-    expect(result.chain?.timeoutAt).toBe(Math.floor(localNow / 1_000) + 300);
-    expect(result.clockAt).toBe(localNow);
+    // Same cached reading, eight seconds apart: the remaining figure is
+    // unchanged and the age grows, so both resolve to the same instant.
+    expect(first.chain?.timeoutSeconds).toBe(later.chain?.timeoutSeconds);
+    expect(later.dataAgeMs! - first.dataAgeMs!).toBe(8_000);
+  });
+
+  it("treats an unknown fetch time as fresh rather than guessing", async () => {
+    const client = {
+      getFactionBasic: vi.fn().mockResolvedValue(faction),
+      getCurrentChain: vi.fn().mockResolvedValue(chain),
+    };
+    const result = await loadWorkspaceTelemetry(client, new Date("2026-08-08T17:00:00.000Z"));
+    expect(result.dataAgeMs).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BarChart3, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
+import { ArrowRight, BarChart3, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, Users, WalletCards, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { submitAccessRequest } from "@/app/(platform)/licensing/actions";
@@ -100,6 +100,12 @@ function InactiveAccess({ factionId, factionName }: { factionId: number | null; 
     <section className="unlock-reservation">
       <header><div><p className="eyebrow">Ready to reserve</p><h2>{selected.name} access</h2><p>{selected.price} for {selected.term.toLowerCase()} of complete faction-wide access.</p></div><strong>{selected.price}</strong></header>
       <div className="unlock-reservation__reference"><span><Fingerprint size={17} /></span><div><small>Unique payment reference</small><code>{reference ?? "Connect a verified faction to generate a reference"}</code></div><button disabled={!reference} onClick={() => void copyReference()}>{copied ? <CircleCheckBig size={15} /> : <Copy size={15} />}{copied ? "Copied" : "Copy reference"}</button></div>
+      {/* The reference is the only thing tying a Torn transfer to this faction,
+          so it is worth saying plainly that it should not be shared. */}
+      <p className="unlock-reference-notice">
+        <ShieldAlert size={15} />
+        <span><strong>Keep this reference to yourself.</strong> It is the single identifier that links your Torn transfer to this faction&apos;s access. Share it only inside the transfer itself — anyone who quotes it could claim your payment during review.</span>
+      </p>
       <ol><li><span>1</span><p><strong>Reserve the request</strong><small>The plan and reference are locked to this faction.</small></p></li><li><span>2</span><p><strong>Send {selected.price}</strong><small>Transfer to <TornUserName name={licensePayment.recipientName} tornUserId={licensePayment.recipientTornId} /> with the exact reference.</small></p></li><li><span>3</span><p><strong>Follow owner review</strong><small>This page becomes the live approval-status view.</small></p></li></ol>
       <footer><a href={licensePayment.profileUrl} target="_blank" rel="noreferrer">Open Skillerious profile <ExternalLink size={13} /></a><button className="button button--primary" disabled={!factionId || submitting} onClick={() => void submitRequest()}>{submitting ? "Reserving request…" : `Reserve ${selected.name} access`}<ArrowRight size={15} /></button></footer>
     </section>

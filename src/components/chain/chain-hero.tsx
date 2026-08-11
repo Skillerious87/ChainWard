@@ -2,9 +2,9 @@
 
 import { Activity, Clock3, Crosshair, Expand, RefreshCw, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { notify } from "@/lib/client-actions";
-import { observeTornClock, reconcileDeadline, recordClockSample, stabiliseRemaining, tornNow } from "@/lib/torn/chain-clock";
+import { anchorFromReading, createAnchor, displaySeconds, project, reconcileAnchor, type CountdownAnchor } from "@/lib/torn/chain-countdown";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 interface ChainHeroProps {
@@ -34,11 +34,8 @@ function milestoneWindow(target: number): number[] {
 export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
   const [snapshotOverride, setSnapshotOverride] = useState<WorkspaceTelemetry | null>(null);
   const snapshot = newestTelemetry(telemetry, snapshotOverride);
-  // Ticking a stored counter down by one each second drifts whenever the tab is
-  // throttled or the machine sleeps. The countdown is derived from a wall-clock
-  // deadline instead, so it is correct the moment the tab becomes visible again.
-  const seconds = useStableCountdown(deadlineMs(snapshot));
-  const nowSeconds = useTornSeconds();
+  const { seconds, applyReading } = useChainCountdown(snapshot);
+  const nowSeconds = useWallClockSeconds();
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
@@ -50,10 +47,13 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
       const next = (event as CustomEvent<WorkspaceTelemetry>).detail;
       if (!isWorkspaceTelemetry(next)) return;
       setSnapshotOverride(next);
+      // The shell measured its own round trip; half of it is already folded in
+      // by the time this event fires, so no further transit allowance is made.
+      applyReading(next, 0);
     }
     window.addEventListener("chainward:telemetry", receiveTelemetry);
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
-  }, []);
+  }, [applyReading]);
 
   // Torn restarts the countdown on every hit, so the largest figure it has
   // reported is the real width of the window. Deriving it keeps the ring honest
@@ -93,11 +93,12 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
         cache: "no-store",
       });
       const payload: unknown = await response.json();
-      if (isWorkspaceTelemetry(payload)) recordClockSample(payload.clockAt, startedAt, Date.now());
+      const transitMs = Math.max(0, (Date.now() - startedAt) / 2);
       if (!response.ok || !isWorkspaceTelemetry(payload)) {
         throw new Error("The telemetry response was invalid.");
       }
       setSnapshotOverride(payload);
+      applyReading(payload, transitMs);
       window.dispatchEvent(new CustomEvent<WorkspaceTelemetry>("chainward:telemetry", { detail: payload }));
       notify({
         title: payload.source === "live" ? "Torn telemetry checked" : "Telemetry unavailable",
@@ -234,7 +235,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
           <div className="chain-console__pace"><TrendingUp size={14} /><span>Torn chain modifier</span><strong>{chain.modifier.toFixed(2)}×</strong><em>Live member totals require a matching chain report</em></div>
         </div>
 
-        <TimeoutRing seconds={seconds} windowSeconds={timeoutWindow} deadline={chain.timeoutAt} />
+        <TimeoutRing seconds={seconds} windowSeconds={timeoutWindow} nowSeconds={nowSeconds} />
       </div>
 
       <div className="chain-console__metrics">
@@ -258,7 +259,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
  * second, and the scale comes from the widest timeout Torn has reported for
  * this chain rather than an assumed window.
  */
-function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; windowSeconds: number; deadline: number }) {
+function TimeoutRing({ seconds, windowSeconds, nowSeconds }: { seconds: number; windowSeconds: number; nowSeconds: number }) {
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
   const fraction = windowSeconds > 0 ? Math.max(0, Math.min(1, seconds / windowSeconds)) : 0;
@@ -332,7 +333,7 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
       </div>
 
       <dl className="timeout-ring__facts">
-        <div><dt>Drops at</dt><dd>{deadline > 0 ? formatTornTime(deadline) : "—"}</dd></div>
+        <div><dt>Drops at</dt><dd>{seconds > 0 ? formatTornTime(nowSeconds + seconds) : "—"}</dd></div>
         <div><dt>Window</dt><dd>{formatDuration(windowSeconds)}</dd></div>
       </dl>
       <small title="Torn reports seconds remaining at the moment it answers. Chainward anchors the deadline to Torn's own clock and re-syncs every 10 seconds while a chain runs.">
@@ -342,73 +343,109 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
   );
 }
 
-/** Torn-clock seconds, ticking once a second. Used for elapsed runtime. */
-function useTornSeconds(): number {
-  const [seconds, setSeconds] = useState(() => Math.floor(tornNow() / 1_000));
+/** Wall-clock seconds, for elapsed runtime against Torn's start timestamp. */
+function useWallClockSeconds(): number {
+  const [seconds, setSeconds] = useState(() => Math.floor(Date.now() / 1_000));
   useEffect(() => {
-    function tick(): void { setSeconds(Math.floor(tornNow() / 1_000)); }
+    function tick(): void { setSeconds(Math.floor(Date.now() / 1_000)); }
     const interval = window.setInterval(tick, 1_000);
     document.addEventListener("visibilitychange", tick);
-    const stopObserving = observeTornClock(tick);
     return () => {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", tick);
-      stopObserving();
     };
   }, []);
   return seconds;
 }
 
-/** The instant the current countdown ends, in local-clock milliseconds. */
-function deadlineMs(telemetry: WorkspaceTelemetry): number {
+/** Remaining seconds Torn reported for whichever countdown is running. */
+function reportedRemainingMs(telemetry: WorkspaceTelemetry): number {
   const chain = telemetry.chain;
   if (!chain) return 0;
-  const deadline = chain.state === "cooldown" ? chain.cooldownAt : chain.state === "active" ? chain.timeoutAt : 0;
-  return deadline > 0 ? deadline * 1_000 : 0;
+  if (chain.state === "cooldown") return chain.cooldownSeconds * 1_000;
+  if (chain.state === "active") return chain.timeoutSeconds * 1_000;
+  return 0;
 }
 
 /**
- * A countdown that stays still unless something really changed.
+ * The live chain countdown.
  *
- * Each sync recomputes the deadline from three jittery inputs — a
- * second-resolution `Date` header, Torn's own response cache, and a variable
- * round trip — so consecutive syncs disagree by up to a second or two even when
- * nothing has happened. Adopting every one of those made the timer visibly jump
- * on every sync. The deadline is held until it moves by more than the tolerance,
- * and the remainder is never allowed to step backwards by less than that, so a
- * hit restarting the window is adopted at once while noise is ignored.
+ * Every reading is converted to a remaining duration and pinned to
+ * `performance.now()`, a monotonic clock that cannot jump, run backwards, or be
+ * changed by the user. Nothing here compares this machine's clock with the
+ * server's or with Torn's, which is what made the timer leap on every refresh.
+ *
+ * `applyReading` folds a newly fetched payload in through `reconcileAnchor`,
+ * which adopts a real window reset immediately, ignores sub-second sync noise,
+ * and eases genuine drift in gradually.
  */
-function useStableCountdown(targetMs: number): number {
-  const [remainingMs, setRemainingMs] = useState(() => Math.max(0, targetMs - tornNow()));
-  const deadlineRef = useRef(targetMs);
+/**
+ * The live chain countdown.
+ *
+ * Every reading becomes a remaining duration pinned to `performance.now()`, a
+ * monotonic clock that cannot jump, run backwards, or be changed by the user.
+ * Nothing here compares this machine's clock against the server's or Torn's,
+ * which is precisely what made the timer leap on each refresh: the old model
+ * projected a Torn-clock deadline against an unadjusted browser clock, and only
+ * learned the offset between them after the first poll had landed.
+ *
+ * The anchor lives in a ref rather than state because only the projected value
+ * is rendered; re-anchoring is bookkeeping, not a render input.
+ */
+function useChainCountdown(snapshot: WorkspaceTelemetry): { seconds: number; applyReading: (telemetry: WorkspaceTelemetry, transitMs: number) => void } {
+  const chainKey = `${snapshot.chain?.id ?? 0}:${snapshot.chain?.state ?? "none"}`;
+
+  // On first paint the reading is already correct without any clock agreement:
+  // the server measured how stale Torn's response was, and `performance.now()`
+  // is how long this document has been loading, which is the transit time.
+  const [remainingMs, setRemainingMs] = useState(() => {
+    const loadedForMs = typeof performance === "undefined" ? 0 : performance.now();
+    return anchorFromReading(reportedRemainingMs(snapshot), snapshot.dataAgeMs ?? 0, loadedForMs, 0).remainingMs;
+  });
+  const stateRef = useRef<{ anchor: CountdownAnchor; key: string }>({
+    anchor: createAnchor(remainingMs, 0),
+    key: chainKey,
+  });
+  const pendingRef = useRef<{ key: string; remainingMs: number } | null>(null);
 
   useEffect(() => {
-    deadlineRef.current = reconcileDeadline(deadlineRef.current, targetMs);
-  }, [targetMs]);
+    // A chain ending, starting, or changing state is a different countdown, so
+    // it replaces the anchor outright instead of being reconciled against one
+    // that describes something else.
+    pendingRef.current = { key: chainKey, remainingMs: reportedRemainingMs(snapshot) };
+  }, [chainKey, snapshot]);
+
+  const applyReading = useCallback((telemetry: WorkspaceTelemetry, transitMs: number) => {
+    const nowPerf = performance.now();
+    const incoming = anchorFromReading(reportedRemainingMs(telemetry), telemetry.dataAgeMs ?? 0, transitMs, nowPerf);
+    const key = `${telemetry.chain?.id ?? 0}:${telemetry.chain?.state ?? "none"}`;
+    stateRef.current = key === stateRef.current.key
+      ? { anchor: reconcileAnchor(stateRef.current.anchor, incoming.remainingMs, nowPerf), key }
+      : { anchor: incoming, key };
+    setRemainingMs(project(stateRef.current.anchor, nowPerf));
+  }, []);
 
   useEffect(() => {
     function tick(): void {
-      const deadline = deadlineRef.current;
-      const raw = deadline > 0 ? Math.max(0, deadline - tornNow()) : 0;
-      setRemainingMs((current) => stabiliseRemaining(current, raw));
+      const nowPerf = performance.now();
+      const pending = pendingRef.current;
+      if (pending && pending.key !== stateRef.current.key) {
+        stateRef.current = { anchor: createAnchor(pending.remainingMs, nowPerf), key: pending.key };
+      }
+      pendingRef.current = null;
+      setRemainingMs(project(stateRef.current.anchor, nowPerf));
     }
-    // Four times a second: the label still reads whole seconds, but the ring
-    // sweeps continuously instead of stepping once per second.
+    // Four times a second: the label reads whole seconds while the ring sweeps
+    // continuously. A throttled tab simply resumes from the monotonic clock.
     const interval = window.setInterval(tick, 250);
-    // A hidden tab is throttled, so re-read the clock as soon as it returns.
     document.addEventListener("visibilitychange", tick);
-    // Re-read when the measured offset from Torn's clock actually moves.
-    const stopObserving = observeTornClock(tick);
     return () => {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", tick);
-      stopObserving();
     };
   }, []);
 
-  // Ceiling, so the display reaches zero exactly at the deadline and each
-  // whole second is shown for its full duration.
-  return Math.ceil(remainingMs / 1_000);
+  return { seconds: displaySeconds(remainingMs), applyReading };
 }
 
 function formatCheckedTime(value: string): string {

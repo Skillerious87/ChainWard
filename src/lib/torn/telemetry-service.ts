@@ -13,8 +13,6 @@ interface TelemetryClient {
   getCurrentChain(factionId?: number, options?: TornRequestOptions): Promise<OngoingChainResponse>;
   /** Milliseconds at which Torn answered the chain request now in hand. */
   getCurrentChainFetchedAt?(): number | null;
-  /** Offset between Torn's clock and this machine's, in milliseconds. */
-  getClockSkewMs?(): number;
 }
 
 export const getWorkspaceTelemetry = cache(async (): Promise<WorkspaceTelemetry> => {
@@ -48,8 +46,7 @@ export async function loadWorkspaceTelemetry(
       client.getCurrentChain(undefined, requestOptions),
     ]);
     const chainFetchedAt = client.getCurrentChainFetchedAt?.() ?? null;
-    const clockSkewMs = client.getClockSkewMs?.() ?? 0;
-    return mapTornTelemetry(faction, chain, now ?? new Date(), client.dataMode ?? "torn", chainFetchedAt, clockSkewMs);
+    return mapTornTelemetry(faction, chain, now ?? new Date(), client.dataMode ?? "torn", chainFetchedAt);
   } catch (error: unknown) {
     const message = error instanceof TornApiError
       ? userFacingTornError(error)
@@ -64,16 +61,15 @@ export function mapTornTelemetry(
   checkedAt: Date,
   mode: "torn" | "offline" = "torn",
   chainFetchedAtMs: number | null = null,
-  clockSkewMs = 0,
 ): WorkspaceTelemetry {
   const { basic } = factionResponse;
   const { chain } = chainResponse;
-  // Countdowns are anchored to the moment Torn answered — not to render time,
-  // which would restart the clock whenever a cached response was reused — and
-  // are expressed on Torn's clock so no machine's local drift enters the sum.
-  const anchorSeconds = Math.floor(((chainFetchedAtMs ?? checkedAt.getTime()) + clockSkewMs) / 1_000);
+  // How stale Torn's countdown already is. Both readings come from this
+  // machine's clock, so the subtraction is exact — unlike a deadline expressed
+  // on one clock and read against another.
+  const dataAgeMs = chainFetchedAtMs === null ? 0 : Math.max(0, checkedAt.getTime() - chainFetchedAtMs);
   return {
-    clockAt: checkedAt.getTime() + clockSkewMs,
+    dataAgeMs,
     source: "live",
     mode,
     checkedAt: checkedAt.toISOString(),
@@ -87,8 +83,6 @@ export function mapTornTelemetry(
       cooldownSeconds: chain.cooldown,
       startedAt: chain.start,
       endedAt: chain.end,
-      timeoutAt: chain.timeout > 0 ? anchorSeconds + chain.timeout : 0,
-      cooldownAt: chain.cooldown > 0 ? anchorSeconds + chain.cooldown : 0,
       state: operationalState(chain),
     },
     message: mode === "offline"

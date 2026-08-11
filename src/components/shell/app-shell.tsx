@@ -46,7 +46,6 @@ import { UpgradeAccess } from "@/components/licensing/upgrade-access";
 import { NavigationBeacon, publishNavigationState, RouteProgress } from "@/components/shell/route-progress";
 import { ServiceStateDrawer } from "@/components/shell/service-state-drawer";
 import { StatusDot } from "@/components/ui/status-dot";
-import { recordClockSample } from "@/lib/torn/chain-clock";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { notify, type ToastDetail, type ToastTone } from "@/lib/client-actions";
@@ -138,11 +137,9 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       : checkedTimeLabel(liveTelemetry.checkedAt);
   const systemNotifications: SystemNotification[] = [];
   if (liveTelemetry.source === "unavailable") systemNotifications.push({ id: 1, title: "Torn API connection required", detail: liveTelemetry.message, tone: "warning", unread: true });
-  // Measured against the deadline as of this snapshot. Render stays pure: the
-  // live second-by-second countdown belongs to the chain console.
-  const chainTimeoutRemaining = liveTelemetry.chain?.timeoutAt
-    ? Math.max(0, liveTelemetry.chain.timeoutAt - Math.floor(Date.parse(liveTelemetry.checkedAt) / 1_000))
-    : liveTelemetry.chain?.timeoutSeconds ?? 0;
+  // Torn reports seconds remaining at the moment it answered; the shell shows
+  // that figure rather than running its own countdown.
+  const chainTimeoutRemaining = liveTelemetry.chain?.timeoutSeconds ?? 0;
   if (liveTelemetry.chain?.state === "active" && chainTimeoutRemaining < preferences.chainWarningSeconds) systemNotifications.push({ id: 2, title: "Live chain timeout warning", detail: `${chainTimeoutRemaining} seconds remained at the last Torn check.`, tone: "warning", unread: true, href: "/live-chain" });
   if (memberActivityAlert?.attentionCount) {
     const names = memberActivityAlert.memberNames.join(", ");
@@ -244,13 +241,11 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       if (document.visibilityState !== "visible" || !navigator.onLine) return;
       lastPollAt = Date.now();
       try {
-        const startedAt = Date.now();
         const response = await fetch("/api/telemetry/live-chain", {
           headers: { accept: "application/json" },
           cache: "no-store",
         });
         const payload: unknown = await response.json();
-        if (isWorkspaceTelemetry(payload)) recordClockSample(payload.clockAt, startedAt, Date.now());
         if (!response.ok || !isWorkspaceTelemetry(payload) || stopped) return;
         publishTelemetry(payload);
       } catch {
@@ -356,13 +351,11 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     if (syncing) return;
     setSyncState("syncing");
     try {
-      const startedAt = Date.now();
       const response = await fetch("/api/telemetry/live-chain?fresh=1", {
         headers: { accept: "application/json" },
         cache: "no-store",
       });
       const payload: unknown = await response.json();
-      if (isWorkspaceTelemetry(payload)) recordClockSample(payload.clockAt, startedAt, Date.now());
       if (!response.ok || !isWorkspaceTelemetry(payload)) throw new Error("Telemetry sync failed");
       publishTelemetry(payload);
       router.refresh();
