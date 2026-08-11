@@ -16,6 +16,10 @@ afterAll(() => {
   rmSync(workspace, { recursive: true, force: true });
 });
 
+function correction(reason: string) {
+  return { reason, revertedAt: new Date().toISOString(), revertedByTornId: 3_212_954, revertedByName: "Skillerious" };
+}
+
 const FACTION_ID = 98_765;
 const CHAIN_ID = 7_000_003;
 
@@ -39,7 +43,7 @@ describe("withdrawing a payout acknowledgement", () => {
 
     expect(await getChainSettlement(FACTION_ID, CHAIN_ID)).toMatchObject({ status: "PAID", totalAmount: 4 });
 
-    await revertChainSettlement(FACTION_ID, CHAIN_ID);
+    await revertChainSettlement(FACTION_ID, CHAIN_ID, correction("Marked paid before the Xanax was sent."));
 
     // The chain reads as unsettled again, so the report falls back to a live
     // preview and the history screen counts it as outstanding.
@@ -58,7 +62,7 @@ describe("withdrawing a payout acknowledgement", () => {
         .run(12_345, CHAIN_ID, "scheme-1", "Other faction scheme", 1, "Xanax", 9, 1, "[]", new Date().toISOString(), new Date().toISOString(), 1, "Someone");
     } finally { database.close(); }
 
-    await revertChainSettlement(FACTION_ID, CHAIN_ID);
+    await revertChainSettlement(FACTION_ID, CHAIN_ID, correction("Marked paid before the Xanax was sent."));
 
     expect(await getChainSettlement(FACTION_ID, CHAIN_ID)).toBeNull();
     expect(await getChainSettlement(12_345, CHAIN_ID)).toMatchObject({ status: "PAID", totalAmount: 9 });
@@ -66,6 +70,32 @@ describe("withdrawing a payout acknowledgement", () => {
 
   it("is safe to run when no settlement is stored", async () => {
     const { revertChainSettlement } = await import("./chain-settlement");
-    await expect(revertChainSettlement(FACTION_ID, 999_999)).resolves.toBeUndefined();
+    await expect(revertChainSettlement(FACTION_ID, 999_999, correction("Nothing to withdraw here."))).resolves.toBeUndefined();
+  });
+});
+
+describe("payout withdrawal records", () => {
+  it("keeps the stated reason and the withdrawn amount", async () => {
+    const { getLocalPayoutReverts, revertChainSettlement } = await import("./chain-settlement");
+    await seedPaidSettlement();
+
+    await revertChainSettlement(FACTION_ID, CHAIN_ID, correction("Marked paid before the Xanax was actually sent."));
+
+    const [record] = getLocalPayoutReverts(FACTION_ID);
+    expect(record).toMatchObject({
+      chainId: CHAIN_ID,
+      reason: "Marked paid before the Xanax was actually sent.",
+      totalAmount: 4,
+      rewardUnit: "Xanax",
+      revertedByName: "Skillerious",
+    });
+  });
+
+  it("records a withdrawal even when the settlement row has already gone", async () => {
+    const { getLocalPayoutReverts, revertChainSettlement } = await import("./chain-settlement");
+    await revertChainSettlement(FACTION_ID, 424_242, correction("Cleaning up a duplicate record."));
+
+    const records = getLocalPayoutReverts(FACTION_ID);
+    expect(records.some((record) => record.chainId === 424_242 && record.reason === "Cleaning up a duplicate record.")).toBe(true);
   });
 });

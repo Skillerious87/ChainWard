@@ -227,6 +227,10 @@ async function run() {
 
     const settings = await getRoute("/settings", session.cookie);
     check("settings opens straight into its console", settings.html.includes("settings-console") && !settings.html.includes("Manage one area at a time"));
+    check("licence testing tools are hidden from a non-owner", !settings.html.includes("Developer tools"), "the controls that lock and unlock the workspace must be owner-only");
+    const ownerForSettings = await openOfflineSession("owner");
+    const ownerSettings = await getRoute("/settings", ownerForSettings.cookie);
+    check("licence testing tools are offered to the owner in local test mode", ownerSettings.html.includes("Developer tools"));
 
     console.log("\nPermission enforcement");
     const memberBackup = await fetch(`${ORIGIN}/api/data/backup`, { headers: { cookie: session.cookie } });

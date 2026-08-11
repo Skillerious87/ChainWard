@@ -463,3 +463,61 @@ function withReviewMessage(value: string | null, reviewMessage: string): string 
 function inactive(): FactionAccessSummary {
   return { state: "inactive", label: "Faction-wide licence", expiresAt: null, reference: null, startedAt: null, plan: null, payment: null, message: null };
 }
+
+/**
+ * Development-only helpers for exercising the locked workspace.
+ *
+ * Reviewing what an unlicensed faction actually sees is otherwise impossible
+ * without destroying real licence records by hand. These operate only on the
+ * local test database and are refused outside local test mode by their callers.
+ */
+export function clearLocalFactionLicensing(factionId: number, actor: PlatformActor): void {
+  const database = requiredDatabase();
+  const now = new Date().toISOString();
+  try {
+    transaction(database, () => {
+      upsertUser(database, actor, now);
+      database.prepare("DELETE FROM licensing_faction_licenses WHERE faction_id = ?").run(factionId);
+      database.prepare("DELETE FROM licensing_access_requests WHERE faction_id = ?").run(factionId);
+      insertAudit(database, {
+        factionId,
+        actorTornUserId: actor.tornUserId,
+        action: "ACCESS_TEST_LOCKED",
+        entityId: `test-lock-${factionId}`,
+        metadata: { reason: "Developer tools cleared licensing to review the locked workspace." },
+        createdAt: now,
+      });
+    });
+  } finally { database.close(); }
+}
+
+export function grantLocalTestLicense(factionId: number, faction: LocalFaction, actor: PlatformActor): string {
+  const database = requiredDatabase();
+  const now = new Date().toISOString();
+  const reference = `CW-${factionId}-DEVTEST`;
+  try {
+    transaction(database, () => {
+      upsertUser(database, actor, now);
+      database.prepare(`
+        INSERT INTO licensing_factions (faction_id, name, tag, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(faction_id) DO UPDATE SET name = excluded.name, tag = excluded.tag, updated_at = excluded.updated_at
+      `).run(factionId, faction.name, faction.tag, now);
+      database.prepare("DELETE FROM licensing_access_requests WHERE faction_id = ?").run(factionId);
+      database.prepare(`
+        INSERT INTO licensing_faction_licenses (id, faction_id, status, term, reference, issued_at, expires_at, approved_by_torn_id, payment_notes, internal_notes, created_at, updated_at)
+        VALUES (?, ?, 'ACTIVE', 'PERMANENT', ?, ?, NULL, ?, ?, ?, ?, ?)
+        ON CONFLICT(reference) DO UPDATE SET status = 'ACTIVE', issued_at = excluded.issued_at, expires_at = NULL, updated_at = excluded.updated_at
+      `).run(randomUUID(), factionId, reference, now, actor.tornUserId, "Developer tools test licence. No payment was matched.", "Restored from developer tools.", now, now);
+      insertAudit(database, {
+        factionId,
+        actorTornUserId: actor.tornUserId,
+        action: "ACCESS_TEST_UNLOCKED",
+        entityId: reference,
+        metadata: { reference, reason: "Developer tools restored access after reviewing the locked workspace." },
+        createdAt: now,
+      });
+    });
+  } finally { database.close(); }
+  return reference;
+}

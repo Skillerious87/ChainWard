@@ -31,11 +31,21 @@ export async function markChainPaid(input: unknown): Promise<{ chainId: number; 
  * who can record a payment can also withdraw one.
  */
 export async function revertChainPayment(input: unknown): Promise<{ chainId: number }> {
-  const { chainId } = z.object({ chainId: z.number().int().positive() }).parse(input);
-  const { faction } = await requireFactionPermission("payout:manage");
+  // A stated reason is required: a withdrawal that leaves no explanation is
+  // indistinguishable from tampering when the ledger is reviewed later.
+  const { chainId, reason } = z.object({
+    chainId: z.number().int().positive(),
+    reason: z.string().trim().min(8, "Describe why this payout is being withdrawn.").max(300),
+  }).parse(input);
+  const { actor, faction } = await requireFactionPermission("payout:manage");
   const existing = await getChainSettlement(faction.id, chainId);
   if (!existing || existing.status !== "PAID") throw new Error("This chain is not currently marked as paid.");
-  await revertChainSettlement(faction.id, chainId);
+  await revertChainSettlement(faction.id, chainId, {
+    reason,
+    revertedAt: new Date().toISOString(),
+    revertedByTornId: actor.tornUserId,
+    revertedByName: actor.name,
+  });
   revalidatePath("/chains");
   revalidatePath(`/chains/${chainId}`);
   revalidatePath("/payouts");

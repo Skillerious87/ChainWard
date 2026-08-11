@@ -1,17 +1,24 @@
 "use client";
 
-import { Activity, AlertTriangle, Check, ChevronLeft, ChevronRight, Clipboard, Clock3, Copy, Database, DatabaseBackup, Download, Eye, EyeOff, HardDrive, KeyRound, LoaderCircle, LockKeyhole, Palette, Play, RefreshCw, ServerCog, ShieldCheck, SlidersHorizontal, Upload, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, Check, ChevronLeft, ChevronRight, Clipboard, Clock3, Copy, Database, DatabaseBackup, Download, Eye, EyeOff, HardDrive, KeyRound, LoaderCircle, LockKeyhole, Palette, Play, RefreshCw, ServerCog, ShieldCheck, SlidersHorizontal, Unlock, Upload, FlaskConical, Lock, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
+import { lockWorkspaceForTesting, unlockWorkspaceForTesting } from "@/app/(platform)/settings/actions";
 import { accentOptions, saveAppearancePreferences, useAppearancePreferences, type AccentOption } from "@/lib/appearance-preferences";
 import { notify } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
-type SettingsView = "connection" | "operations" | "appearance" | "storage" | "postgresql" | "privacy";
-const views: { id: SettingsView; label: string; description: string; icon: LucideIcon }[] = [
+type SettingsView = "connection" | "operations" | "appearance" | "storage" | "postgresql" | "privacy" | "developer";
+
+export interface LicenceTestingContext {
+  locked: boolean;
+  label: string;
+  factionName: string | null;
+}
+const baseViews: { id: SettingsView; label: string; description: string; icon: LucideIcon }[] = [
   { id: "connection", label: "Torn connection", description: "Identity and API status", icon: KeyRound },
   { id: "operations", label: "Live operations", description: "Refresh and chain alerts", icon: Activity },
   { id: "appearance", label: "Appearance", description: "Density, contrast, and colour", icon: Palette },
@@ -19,6 +26,9 @@ const views: { id: SettingsView; label: string; description: string; icon: Lucid
   { id: "postgresql", label: "PostgreSQL", description: "Shared database setup", icon: ServerCog },
   { id: "privacy", label: "Data & privacy", description: "What Chainward stores", icon: ShieldCheck },
 ];
+
+/** Only appended when the licence testing controls are available. */
+const developerView = { id: "developer" as const, label: "Developer tools", description: "Review the locked workspace", icon: FlaskConical };
 
 interface PostgresForm {
   host: string;
@@ -36,10 +46,12 @@ interface PostgresTestResult {
   latencyMs: number;
 }
 
-export function WorkspaceSettings({ telemetry, database }: { telemetry: WorkspaceTelemetry; database: DatabaseStatus }) {
+export function WorkspaceSettings({ telemetry, database, licenceTesting = null }: { telemetry: WorkspaceTelemetry; database: DatabaseStatus; licenceTesting?: LicenceTestingContext | null }) {
   const router = useRouter();
   const preferences = useAppearancePreferences();
   const [activeView, setActiveView] = useState<SettingsView>("connection");
+  const [licenceWorking, setLicenceWorking] = useState(false);
+  const views = licenceTesting ? [...baseViews, developerView] : baseViews;
   const [storageWorking, setStorageWorking] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [postgres, setPostgres] = useState<PostgresForm>({ host: "localhost", port: "5432", database: "chainward", user: "chainward", password: "chainward", ssl: false });
@@ -63,6 +75,19 @@ export function WorkspaceSettings({ telemetry, database }: { telemetry: Workspac
   function updatePostgres<K extends keyof PostgresForm>(name: K, value: PostgresForm[K]): void {
     setPostgres((current) => ({ ...current, [name]: value }));
     setPostgresResult(null);
+  }
+
+  async function changeLicenceState(mode: "lock" | "unlock"): Promise<void> {
+    setLicenceWorking(true);
+    try {
+      const result = mode === "lock" ? await lockWorkspaceForTesting() : await unlockWorkspaceForTesting();
+      notify({
+        title: result.ok ? (mode === "lock" ? "Workspace locked for testing" : "Access restored") : "Licence state unchanged",
+        description: result.message,
+        tone: result.ok ? (mode === "lock" ? "warning" : "success") : "danger",
+      });
+      if (result.ok) router.refresh();
+    } finally { setLicenceWorking(false); }
   }
 
   function cycle(direction: -1 | 1): void {
@@ -213,6 +238,49 @@ export function WorkspaceSettings({ telemetry, database }: { telemetry: Workspac
               <div className="postgres-form-actions"><button className="button button--secondary" disabled={postgresWorking} onClick={() => void testPostgresConnection()}>{postgresWorking ? <LoaderCircle className="spin" size={15} /> : <Play size={15} />} Test connection</button><button className="button button--primary" disabled={!postgres.host || !postgres.port || !postgres.database || !postgres.user} onClick={() => void copyDatabaseUrl()}><Copy size={15} /> Copy DATABASE_URL</button></div>
             </div>
             <div className="postgres-steps-panel"><div className="settings-section-heading"><div><h3>Activate the database</h3><p>Local Docker and hosted PostgreSQL use the same Prisma schema.</p></div><span>3 steps</span></div><ol><li><span>1</span><div><strong>Start PostgreSQL</strong><p>For the included local container, run:</p><code>npm run db:local</code></div></li><li><span>2</span><div><strong>Set the environment</strong><p>Add the copied value to <code>.env.local</code> as <code>DATABASE_URL</code>.</p></div></li><li><span>3</span><div><strong>Create the schema</strong><p>Apply the current Chainward data model, then restart the app.</p><code>npm run db:push</code></div></li></ol><div className="postgres-setup-note"><ShieldCheck size={15} /><p><strong>Runtime boundary</strong><span>Chainward deliberately cannot rewrite server environment files from a browser request.</span></p></div></div>
+          </div>
+        </section>}
+
+        {activeView === "developer" && licenceTesting && <section className="settings-view-content">
+          <div className={`licence-test-hero licence-test-hero--${licenceTesting.locked ? "locked" : "active"}`}>
+            <span>{licenceTesting.locked ? <Lock size={22} /> : <Unlock size={22} />}</span>
+            <div>
+              <p className="eyebrow">Current licence state</p>
+              <h3>{licenceTesting.locked ? "Workspace locked" : licenceTesting.label}</h3>
+              <p>{licenceTesting.locked
+                ? "Every licensed screen should redirect to the unlock workspace, and shell telemetry should be redacted to faction identity only."
+                : `${licenceTesting.factionName ?? "This faction"} has active access, so the full workspace is available.`}</p>
+            </div>
+          </div>
+
+          <div className="licence-test-actions">
+            <button className="button button--secondary" disabled={licenceWorking || licenceTesting.locked} onClick={() => void changeLicenceState("lock")}>
+              {licenceWorking ? <LoaderCircle className="spin" size={15} /> : <Lock size={15} />} Remove licence and lock
+            </button>
+            <button className="button button--primary" disabled={licenceWorking || !licenceTesting.locked} onClick={() => void changeLicenceState("unlock")}>
+              {licenceWorking ? <LoaderCircle className="spin" size={15} /> : <Unlock size={15} />} Restore lifetime access
+            </button>
+          </div>
+
+          <div className="licence-test-guards">
+            <h4>Why this cannot ship to a paying workspace</h4>
+            <ul>
+              <li><Check size={13} />Refused in any production build, regardless of who is signed in.</li>
+              <li><Check size={13} />Requires local test mode, which only the offline dev script sets.</li>
+              <li><Check size={13} />Restricted to the verified platform owner identity.</li>
+              <li><Check size={13} />Refuses to run when PostgreSQL is configured, so shared data is never touched.</li>
+            </ul>
+            <p>Each check is repeated on the server when the action runs, not just here in the interface.</p>
+          </div>
+
+          <div className="licence-test-checklist">
+            <h4>What to review while locked</h4>
+            <ol>
+              <li><strong>Gated routes</strong><span>Overview, live chain, members, chain history, analytics, rewards, payouts, and faction access all redirect to the unlock workspace.</span></li>
+              <li><strong>Shell redaction</strong><span>The rail badge, chain state, and telemetry banner keep faction identity only — no chain counts.</span></li>
+              <li><strong>Telemetry API</strong><span>A direct request to the live-chain endpoint answers 403 rather than returning operational values.</span></li>
+              <li><strong>Mutations</strong><span>Reward and payout actions refuse with a licence error before touching storage.</span></li>
+            </ol>
           </div>
         </section>}
 

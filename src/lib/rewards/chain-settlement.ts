@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { Prisma } from "@/generated/prisma/client";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
 import { calculateRewards } from "./reward-engine";
@@ -147,13 +149,24 @@ export async function savePaidChainSettlement(settlement: ChainSettlement, repor
  * version, so releasing it here could silently rewrite another settled chain's
  * rules.
  */
-export async function revertChainSettlement(factionId: number, chainId: number): Promise<void> {
+export async function revertChainSettlement(factionId: number, chainId: number, correction: PayoutCorrection): Promise<void> {
   if (!process.env.DATABASE_URL) {
     if (!localDatabaseExists()) throw new Error("The local database is unavailable.");
     const database = openLocalDatabase();
     if (!database) throw new Error("The local database is unavailable.");
     try {
-      database.prepare("DELETE FROM chain_settlements WHERE faction_id = ? AND chain_id = ?").run(factionId, chainId);
+      const previous = database.prepare("SELECT scheme_name, scheme_version, reward_unit, total_amount, member_count, paid_at, paid_by_name FROM chain_settlements WHERE faction_id = ? AND chain_id = ?").get(factionId, chainId) as unknown as LocalRevertedRow | undefined;
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        database.prepare(`INSERT INTO chain_settlement_reverts (id, faction_id, chain_id, reason, scheme_name, scheme_version, reward_unit, total_amount, member_count, paid_at, paid_by_name, reverted_at, reverted_by_torn_id, reverted_by_name)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(randomUUID(), factionId, chainId, correction.reason, previous?.scheme_name ?? null, previous?.scheme_version ?? null, previous?.reward_unit ?? null, previous?.total_amount ?? null, previous?.member_count ?? null, previous?.paid_at ?? null, previous?.paid_by_name ?? null, correction.revertedAt, correction.revertedByTornId, correction.revertedByName);
+        database.prepare("DELETE FROM chain_settlements WHERE faction_id = ? AND chain_id = ?").run(factionId, chainId);
+        database.exec("COMMIT");
+      } catch (error) {
+        try { database.exec("ROLLBACK"); } catch { /* The transaction never began. */ }
+        throw error;
+      }
     } finally { database.close(); }
     return;
   }
@@ -170,7 +183,58 @@ export async function revertChainSettlement(factionId: number, chainId: number):
     await tx.memberPayout.deleteMany({ where: { snapshotId: { in: snapshotIds } } });
     await tx.chainRewardSnapshot.updateMany({ where: { id: { in: snapshotIds } }, data: { status: "SUPERSEDED", supersededAt: new Date() } });
     await tx.factionSetting.deleteMany({ where: { faction: { tornFactionId: factionId }, key: settlementKey(chainId) } });
+    const actor = await tx.user.upsert({ where: { tornUserId: correction.revertedByTornId }, update: { name: correction.revertedByName }, create: { tornUserId: correction.revertedByTornId, name: correction.revertedByName } });
+    await tx.auditLog.create({
+      data: {
+        factionId: chain.factionId,
+        actorId: actor.id,
+        action: "chain_payout.reverted",
+        entityType: "ChainRewardSnapshot",
+        entityId: snapshotIds[0]!,
+        metadata: { chainId, reason: correction.reason, revertedAt: correction.revertedAt },
+      },
+    });
   });
+}
+
+export interface PayoutCorrection {
+  /** The operator's stated reason, kept with the withdrawal record. */
+  reason: string;
+  revertedAt: string;
+  revertedByTornId: number;
+  revertedByName: string;
+}
+
+interface LocalRevertedRow {
+  scheme_name: string | null;
+  scheme_version: number | null;
+  reward_unit: string | null;
+  total_amount: number | null;
+  member_count: number | null;
+  paid_at: string | null;
+  paid_by_name: string | null;
+}
+
+export interface PayoutRevertRecord {
+  id: string;
+  chainId: number;
+  reason: string;
+  totalAmount: number | null;
+  rewardUnit: string | null;
+  revertedAt: string;
+  revertedByName: string;
+}
+
+/** Recent payout withdrawals, newest first. */
+export function getLocalPayoutReverts(factionId: number, limit = 10): PayoutRevertRecord[] {
+  if (process.env.DATABASE_URL || !localDatabaseExists()) return [];
+  const database = openLocalDatabase();
+  if (!database) return [];
+  try {
+    const rows = database.prepare("SELECT id, chain_id, reason, total_amount, reward_unit, reverted_at, reverted_by_name FROM chain_settlement_reverts WHERE faction_id = ? ORDER BY reverted_at DESC LIMIT ?").all(factionId, limit) as unknown as Array<{ id: string; chain_id: number; reason: string; total_amount: number | null; reward_unit: string | null; reverted_at: string; reverted_by_name: string }>;
+    return rows.map((row) => ({ id: row.id, chainId: row.chain_id, reason: row.reason, totalAmount: row.total_amount, rewardUnit: row.reward_unit, revertedAt: row.reverted_at, revertedByName: row.reverted_by_name }));
+  } catch { return []; }
+  finally { database.close(); }
 }
 
 export function settlementFromPreview(preview: ChainRewardPreview, factionId: number, chainId: number, paidByTornId: number, now = new Date()): ChainSettlement {

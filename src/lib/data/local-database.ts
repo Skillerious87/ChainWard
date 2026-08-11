@@ -107,6 +107,26 @@ function initializeSchema(database: DatabaseSync): void {
       PRIMARY KEY (faction_id, chain_id)
     );
 
+    /* Withdrawing a payout deletes its settlement row, so the correction is
+       recorded here with the operator's stated reason. Without it the ledger
+       would simply forget that a chain had ever been marked paid. */
+    CREATE TABLE IF NOT EXISTS chain_settlement_reverts (
+      id TEXT PRIMARY KEY,
+      faction_id INTEGER NOT NULL,
+      chain_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      scheme_name TEXT,
+      scheme_version INTEGER,
+      reward_unit TEXT,
+      total_amount REAL,
+      member_count INTEGER,
+      paid_at TEXT,
+      paid_by_name TEXT,
+      reverted_at TEXT NOT NULL,
+      reverted_by_torn_id INTEGER NOT NULL,
+      reverted_by_name TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS faction_settings (
       faction_id INTEGER NOT NULL,
       key TEXT NOT NULL,
@@ -215,6 +235,7 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS licensing_requests_faction ON licensing_access_requests(faction_id, status);
     CREATE INDEX IF NOT EXISTS licensing_licenses_faction ON licensing_faction_licenses(faction_id, status, expires_at);
     CREATE INDEX IF NOT EXISTS licensing_audit_recent ON licensing_audit(action, created_at DESC);
+    CREATE INDEX IF NOT EXISTS chain_settlement_reverts_recent ON chain_settlement_reverts(faction_id, reverted_at DESC);
   `);
   ensureColumn(database, "chain_settlements", "paid_by_name", "TEXT");
 }

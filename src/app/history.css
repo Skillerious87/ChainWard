@@ -234,16 +234,27 @@
    the position chips and the accent bars. Inside this chart the tiles are
    neutral, and only the leader is picked out in the accent. */
 .contributor-chart .avatar {
-  width: 30px;
-  height: 30px;
-  border-color: var(--border-strong) !important;
-  border-radius: 9px;
-  background: #131920 !important;
-  color: #97a3ac !important;
-  font-size: 10.5px;
+  display: flex !important;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-color: #2b343d !important;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #1b232b, #12181e) !important;
+  color: #9dabb4 !important;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: .2px;
+  /* The inherited 1.55 body line-height left the initials sitting high in the
+     tile; a unit line-height lets the flex centring actually take effect. */
+  line-height: 1;
+  letter-spacing: .3px;
+  text-indent: .3px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .05), 0 2px 6px rgba(0, 0, 0, .35);
+  transition: border-color 160ms ease, color 160ms ease;
 }
+.contributor-chart__row:hover .avatar { border-color: #3a4650 !important; color: #c3ced5 !important; }
 .contributor-chart__row--lead .avatar {
   border-color: rgba(var(--accent-rgb), .34) !important;
   background: rgba(var(--accent-rgb), .09) !important;
@@ -280,3 +291,64 @@
   color: var(--warning) !important;
 }
 .payment-confirmation--revert h3 { color: #f2d59a; }
+
+/* Withdrawal reason --------------------------------------------------------- */
+.payment-revert-reason { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.payment-revert-reason > span { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.payment-revert-reason strong { color: #d7dee2; font-size: 12.5px; font-weight: 640; }
+.payment-revert-reason > span small { color: var(--text-muted); font-size: 11px !important; }
+.payment-revert-reason textarea {
+  width: 100%;
+  min-height: 74px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  outline: 0;
+  background: #0a0e11;
+  color: #e2e8ea;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 12.5px !important;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.payment-revert-reason textarea:focus { border-color: rgba(245, 185, 76, .5); box-shadow: 0 0 0 3px rgba(245, 185, 76, .08); }
+.payment-revert-reason__count { align-self: flex-end; color: var(--text-muted); font-size: 11px !important; }
+.payment-revert-reason__count--ready { color: #8ca08a; }
+
+/* Licence testing tools ------------------------------------------------------
+   Development-only controls for reviewing the locked workspace. */
+.licence-test-hero {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 17px 18px;
+  border: 1px solid;
+  border-radius: 12px;
+}
+.licence-test-hero > span { display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid; border-radius: 12px; }
+.licence-test-hero h3 { margin-top: 3px; font-size: 18px; font-weight: 650; letter-spacing: -.4px; }
+.licence-test-hero p:last-child { margin-top: 5px; color: var(--text-secondary); font-size: 12.5px !important; line-height: 1.55; text-wrap: pretty; }
+.licence-test-hero--active { border-color: rgba(103, 211, 145, .24); background: linear-gradient(140deg, rgba(103, 211, 145, .06), transparent 60%); }
+.licence-test-hero--active > span { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .07); color: var(--success); }
+.licence-test-hero--active h3 { color: #bfeed3; }
+.licence-test-hero--locked { border-color: rgba(245, 185, 76, .28); background: linear-gradient(140deg, rgba(245, 185, 76, .07), transparent 60%); }
+.licence-test-hero--locked > span { border-color: rgba(245, 185, 76, .3); background: rgba(245, 185, 76, .08); color: var(--warning); }
+.licence-test-hero--locked h3 { color: #f4dca6; }
+
+.licence-test-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 15px; }
+.licence-test-actions .button { min-height: 44px; }
+
+.licence-test-guards,
+.licence-test-checklist { margin-top: 15px; padding: 16px 17px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, .012); }
+.licence-test-guards h4,
+.licence-test-checklist h4 { color: #dbe2e5; font-size: 13px; font-weight: 650; }
+.licence-test-guards ul { display: grid; gap: 7px; margin: 11px 0 0; padding: 0; list-style: none; }
+.licence-test-guards li { display: grid; grid-template-columns: 15px minmax(0, 1fr); align-items: start; gap: 9px; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.licence-test-guards li svg { margin-top: 3px; color: var(--success); }
+.licence-test-guards > p { margin-top: 12px; color: var(--text-muted); font-size: 11.5px !important; }
+.licence-test-checklist ol { display: grid; gap: 10px; margin: 12px 0 0; padding-left: 18px; }
+.licence-test-checklist li { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.licence-test-checklist strong { display: block; color: #dbe2e5; font-size: 12.5px; font-weight: 640; }
+.licence-test-checklist span { display: block; margin-top: 2px; text-wrap: pretty; }
