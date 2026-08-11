@@ -4,7 +4,7 @@ import { Activity, Clock3, Crosshair, Expand, RefreshCw, TrendingUp, Users, X } 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { notify } from "@/lib/client-actions";
-import { observeTornClock, recordClockSample, tornNow } from "@/lib/torn/chain-clock";
+import { observeTornClock, reconcileDeadline, recordClockSample, stabiliseRemaining, tornNow } from "@/lib/torn/chain-clock";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 interface ChainHeroProps {
@@ -37,8 +37,8 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
   // Ticking a stored counter down by one each second drifts whenever the tab is
   // throttled or the machine sleeps. The countdown is derived from a wall-clock
   // deadline instead, so it is correct the moment the tab becomes visible again.
-  const [now, setNow] = useState(() => tornNow());
-  const seconds = remainingSeconds(snapshot, now);
+  const seconds = useStableCountdown(deadlineMs(snapshot));
+  const nowSeconds = useTornSeconds();
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
@@ -50,26 +50,9 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
       const next = (event as CustomEvent<WorkspaceTelemetry>).detail;
       if (!isWorkspaceTelemetry(next)) return;
       setSnapshotOverride(next);
-      setNow(tornNow());
     }
     window.addEventListener("chainward:telemetry", receiveTelemetry);
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
-  }, []);
-
-  useEffect(() => {
-    function tick(): void { setNow(tornNow()); }
-    // Four times a second: the label still reads whole seconds, but the ring
-    // sweeps continuously instead of stepping once per second.
-    const interval = window.setInterval(tick, 250);
-    // A hidden tab is throttled, so re-read the clock as soon as it returns.
-    document.addEventListener("visibilitychange", tick);
-    // Re-read immediately when the measured offset from Torn's clock changes.
-    const stopObserving = observeTornClock(tick);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", tick);
-      stopObserving();
-    };
   }, []);
 
   // Torn restarts the countdown on every hit, so the largest figure it has
@@ -115,7 +98,6 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
         throw new Error("The telemetry response was invalid.");
       }
       setSnapshotOverride(payload);
-      setNow(tornNow());
       window.dispatchEvent(new CustomEvent<WorkspaceTelemetry>("chainward:telemetry", { detail: payload }));
       notify({
         title: payload.source === "live" ? "Torn telemetry checked" : "Telemetry unavailable",
@@ -188,7 +170,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
   const remaining = Math.max(0, chain.maximum - chain.current);
   // Runtime is measured against the live clock, not the snapshot, so it keeps
   // moving between polls instead of freezing for the refresh interval.
-  const elapsedSeconds = chain.startedAt > 0 ? Math.max(0, Math.floor(now / 1_000) - chain.startedAt) : 0;
+  const elapsedSeconds = chain.startedAt > 0 ? Math.max(0, nowSeconds - chain.startedAt) : 0;
   const factionMembers = snapshot.faction?.members ?? 0;
 
   return (
@@ -360,12 +342,73 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
   );
 }
 
-function remainingSeconds(telemetry: WorkspaceTelemetry, nowMs: number): number {
+/** Torn-clock seconds, ticking once a second. Used for elapsed runtime. */
+function useTornSeconds(): number {
+  const [seconds, setSeconds] = useState(() => Math.floor(tornNow() / 1_000));
+  useEffect(() => {
+    function tick(): void { setSeconds(Math.floor(tornNow() / 1_000)); }
+    const interval = window.setInterval(tick, 1_000);
+    document.addEventListener("visibilitychange", tick);
+    const stopObserving = observeTornClock(tick);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+      stopObserving();
+    };
+  }, []);
+  return seconds;
+}
+
+/** The instant the current countdown ends, in local-clock milliseconds. */
+function deadlineMs(telemetry: WorkspaceTelemetry): number {
   const chain = telemetry.chain;
   if (!chain) return 0;
   const deadline = chain.state === "cooldown" ? chain.cooldownAt : chain.state === "active" ? chain.timeoutAt : 0;
-  if (deadline <= 0) return 0;
-  return Math.max(0, deadline - Math.floor(nowMs / 1_000));
+  return deadline > 0 ? deadline * 1_000 : 0;
+}
+
+/**
+ * A countdown that stays still unless something really changed.
+ *
+ * Each sync recomputes the deadline from three jittery inputs — a
+ * second-resolution `Date` header, Torn's own response cache, and a variable
+ * round trip — so consecutive syncs disagree by up to a second or two even when
+ * nothing has happened. Adopting every one of those made the timer visibly jump
+ * on every sync. The deadline is held until it moves by more than the tolerance,
+ * and the remainder is never allowed to step backwards by less than that, so a
+ * hit restarting the window is adopted at once while noise is ignored.
+ */
+function useStableCountdown(targetMs: number): number {
+  const [remainingMs, setRemainingMs] = useState(() => Math.max(0, targetMs - tornNow()));
+  const deadlineRef = useRef(targetMs);
+
+  useEffect(() => {
+    deadlineRef.current = reconcileDeadline(deadlineRef.current, targetMs);
+  }, [targetMs]);
+
+  useEffect(() => {
+    function tick(): void {
+      const deadline = deadlineRef.current;
+      const raw = deadline > 0 ? Math.max(0, deadline - tornNow()) : 0;
+      setRemainingMs((current) => stabiliseRemaining(current, raw));
+    }
+    // Four times a second: the label still reads whole seconds, but the ring
+    // sweeps continuously instead of stepping once per second.
+    const interval = window.setInterval(tick, 250);
+    // A hidden tab is throttled, so re-read the clock as soon as it returns.
+    document.addEventListener("visibilitychange", tick);
+    // Re-read when the measured offset from Torn's clock actually moves.
+    const stopObserving = observeTornClock(tick);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+      stopObserving();
+    };
+  }, []);
+
+  // Ceiling, so the display reaches zero exactly at the deadline and each
+  // whole second is shown for its full duration.
+  return Math.ceil(remainingMs / 1_000);
 }
 
 function formatCheckedTime(value: string): string {

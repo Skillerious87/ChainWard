@@ -235,7 +235,10 @@ export class TornClient {
     if (!header) return;
     const remote = Date.parse(header);
     if (!Number.isFinite(remote)) return;
-    const skew = remote - Date.now();
+    // HTTP dates carry whole seconds only, so the header is the floor of the
+    // real instant. Half a second recovers the expected value instead of
+    // biasing every reading a little early.
+    const skew = remote + 500 - Date.now();
     if (Math.abs(skew) > 24 * 60 * 60 * 1_000) return;
     this.clockSkewMs = skew;
   }
