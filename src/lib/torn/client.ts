@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { ZodType } from "zod";
 import { TornApiError } from "./errors";
+import { CHAIN_CACHE_SECONDS } from "./polling-policy";
 import {
   chainReportResponseSchema,
   chainsResponseSchema,
@@ -86,7 +87,6 @@ export class TornClient {
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly keyFingerprint: string;
   private currentChainFetchedAt: number | null = null;
-  private clockSkewMs = 0;
 
   constructor(options: TornClientOptions) {
     if (!options.apiKey.trim()) throw new Error("A Torn API key is required.");
@@ -96,7 +96,7 @@ export class TornClient {
     this.comment = options.comment ?? "chainward";
     this.requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
     this.liveCacheMs = (options.liveCacheSeconds ?? 30) * 1_000;
-    this.chainCacheMs = (options.chainCacheSeconds ?? 10) * 1_000;
+    this.chainCacheMs = (options.chainCacheSeconds ?? CHAIN_CACHE_SECONDS) * 1_000;
     this.historyCacheMs = (options.historyCacheSeconds ?? 900) * 1_000;
     this.fetchImplementation = options.fetchImplementation ?? fetch;
     this.sleep = options.sleep ?? delay;
@@ -133,15 +133,6 @@ export class TornClient {
    */
   getCurrentChainFetchedAt(): number | null {
     return this.currentChainFetchedAt;
-  }
-
-  /**
-   * Difference between Torn's clock and this machine's, taken from the `Date`
-   * header of the most recent response. Chain deadlines are expressed on Torn's
-   * clock so the countdown does not inherit local clock drift.
-   */
-  getClockSkewMs(): number {
-    return this.clockSkewMs;
   }
 
   getCompletedChains(
@@ -226,22 +217,6 @@ export class TornClient {
     return promise;
   }
 
-  /**
-   * `Date` is sent by Torn on every response. Ignoring implausible values keeps
-   * a broken proxy header from corrupting the countdown.
-   */
-  private recordClockSkew(response: Response): void {
-    const header = response.headers.get("date");
-    if (!header) return;
-    const remote = Date.parse(header);
-    if (!Number.isFinite(remote)) return;
-    // HTTP dates carry whole seconds only, so the header is the floor of the
-    // real instant. Half a second recovers the expected value instead of
-    // biasing every reading a little early.
-    const skew = remote + 500 - Date.now();
-    if (Math.abs(skew) > 24 * 60 * 60 * 1_000) return;
-    this.clockSkewMs = skew;
-  }
 
   private async fetchWithRetry<T>(
     url: URL,
@@ -267,7 +242,6 @@ export class TornClient {
       throw new TornApiError(17, "Torn API request failed.", { cause });
     }
 
-    this.recordClockSkew(response);
     const payload: unknown = await response.json().catch(() => null);
     const errorResult = tornErrorSchema.safeParse(payload);
     if (errorResult.success) {

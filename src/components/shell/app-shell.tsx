@@ -52,6 +52,7 @@ import { notify, type ToastDetail, type ToastTone } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 import type { MemberActivityAlertSummary } from "@/lib/members/member-activity-intelligence";
+import { pollSecondsForChain } from "@/lib/torn/polling-policy";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 interface NavigationItem {
@@ -226,11 +227,11 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
   }, []);
 
-  // Torn resets a chain's timeout on every hit, so a 30-120s cadence can show a
-  // countdown far lower than reality while a chain is running. The saved
-  // preference still governs the idle workspace.
+  // Torn resets a chain's timeout on every hit, so a 30-120s cadence can show
+  // a countdown far lower than reality. The shared policy also holds the app to
+  // Torn's documented floor for this selection.
   const chainRunning = liveTelemetry.chain?.state === "active";
-  const pollSeconds = chainRunning ? Math.min(preferences.refreshIntervalSeconds, 10) : preferences.refreshIntervalSeconds;
+  const pollSeconds = pollSecondsForChain(chainRunning, preferences.refreshIntervalSeconds);
 
   useEffect(() => {
     if (!preferences.autoRefresh) return;

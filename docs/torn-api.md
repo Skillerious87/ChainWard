@@ -39,6 +39,39 @@ An ongoing chain currently contains exactly `id`, `current`, `max`, `timeout`,
 `modifier`, `cooldown`, `start`, and `end`. The service must not invent a target
 or elapsed duration beyond what can be derived from those values.
 
+### Chain field semantics
+
+| Field | Meaning | How Chainward uses it |
+| --- | --- | --- |
+| `current` | Hits in the chain so far. | Chain progress, and part of the liveness test. |
+| `timeout` | **Seconds remaining** before the chain drops. Reset by every hit. | The only unambiguous liveness signal, and the countdown source. |
+| `cooldown` | **Seconds remaining** of cooldown after a chain ends. | Selects the cooldown state and its countdown. |
+| `max` | The next chain bonus target. | Labelled "next bonus at", never a faction ceiling. |
+
+`timeout` and `cooldown` are durations, not timestamps. Treating `cooldown` as a
+unix time made the cooldown state unreachable, and deciding liveness from `end`
+reported live chains as idle while their hit count was still climbing.
+
+### Polling limits
+
+Torn's guidance for the `chain` selection is to poll no faster than once every 5
+to 30 seconds; going below that risks an API key cooldown or a temporary ban.
+`src/lib/torn/polling-policy.ts` holds the app to that floor and is the single
+place those numbers are defined. Chainward polls every 10 seconds while a chain
+is running and returns to the saved workspace preference when it is not.
+
+The chain response cache is deliberately **shorter** than the poll interval. If
+the two are equal, a poll can arrive while the previous response is still valid,
+return that cached copy, and push the next real refresh out by another full
+interval — so a hit that restarted the timeout could go unnoticed for twice as
+long as intended.
+
+A countdown cannot be corrected without knowing how stale its reading is, so
+telemetry carries `dataAgeMs`: how long ago Torn answered, measured entirely
+within the server's own clock. The browser subtracts it and projects the
+remainder with `performance.now()`, a monotonic clock, so no two machines ever
+have to agree about the time.
+
 A completed-chain list item contains `id`, `chain`, `respect`, `start`, and
 `end`. Contributor totals come from the report rather than the chain list.
 
