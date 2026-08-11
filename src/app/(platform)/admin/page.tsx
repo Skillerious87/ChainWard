@@ -44,15 +44,17 @@ export default async function AdminPage() {
 
       <AdminKpis factionCount={queue.factionCount} activeLicenseCount={queue.activeLicenseCount} reviewCount={reviewCount} telemetry={telemetry} />
 
-      {/* The review queue is the work; everything else is reference and sits in
-          the rail beside it. */}
+      {/* The queue is the work and takes the wide column; service state is a
+          three-row readout and fits the rail. Stacking the four-step procedure
+          under it made the rail run far past the queue and left a dead column
+          on the left, so the procedure now spans the full width where its
+          columns can actually breathe. */}
       <div className="admin-grid">
         <AccessRequestTable initialRequests={queue.requests} databaseConfigured={queue.databaseConfigured} message={queue.message} />
-        <div className="admin-rail">
-          <ServiceHealthPanel telemetry={telemetry} database={database} />
-          <PurchaseReviewGuide />
-        </div>
+        <ServiceHealthPanel telemetry={telemetry} database={database} />
       </div>
+
+      <PurchaseReviewGuide />
 
       <div className="admin-records-grid"><LicenseRegistry licenses={queue.activeLicenses} /><AccessAuditTimeline events={queue.auditEvents} /></div>
     </div>

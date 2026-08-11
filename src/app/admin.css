@@ -433,27 +433,97 @@
 .admin-queue-flag--action { border-color: rgba(245, 185, 76, .34); background: rgba(245, 185, 76, .08); color: var(--warning); }
 .admin-queue-flag--clear { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .06); color: var(--success); }
 
-/* Queue first, reference material in the rail. */
-.admin-console .admin-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, .42fr); align-items: start; }
-.admin-rail { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
-.admin-rail .service-health,
-.admin-rail .admin-procedure { margin: 0; }
+/* Layout --------------------------------------------------------------------
+   Panels in a row are stretched to a shared height, so no column ends early and
+   leaves the band looking broken. The tall lists are capped and scroll inside
+   themselves, which keeps the page a dashboard rather than a document that runs
+   for several screens. */
+.admin-console .admin-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, .4fr);
+  align-items: stretch;
+}
+.admin-console .admin-records-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
+  align-items: stretch;
+}
+.admin-console .admin-grid > *,
+.admin-console .admin-records-grid > * { min-width: 0; }
 
-/* The procedure is reference, so it reads as a compact checklist in the rail
-   rather than the full-width feature it used to be. */
-.admin-rail .admin-procedure > header { align-items: flex-start; flex-wrap: wrap; gap: 11px; }
-.admin-rail .admin-procedure > header > a { flex-basis: 100%; }
-.admin-rail .admin-procedure ol { display: grid; gap: 2px; }
-.admin-rail .admin-procedure ol li { align-items: flex-start; }
+/* The queue holds the row's height even when nothing is awaiting review. */
+.admin-console .admin-requests { display: flex; min-height: 420px; flex-direction: column; }
+.admin-console .admin-requests > .table-scroll { display: flex; flex: 1; flex-direction: column; }
+.admin-console .admin-requests > .table-scroll > table { flex: 0 0 auto; }
+/* A dashboard's resting state should still read as designed, not as a bare
+   sentence floating in an empty panel. */
+.queue-empty {
+  display: flex;
+  min-height: 240px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.queue-empty > span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  margin-bottom: 8px;
+  border: 1px solid rgba(103, 211, 145, .24);
+  border-radius: 12px;
+  background: rgba(103, 211, 145, .06);
+  color: var(--success);
+}
+.queue-empty strong { color: #dfe5e8; font-size: 14px; font-weight: 640; }
+.queue-empty p { max-width: 46ch; color: var(--text-muted); font-size: 12px !important; line-height: 1.55; text-wrap: pretty; }
+
+/* Service state ------------------------------------------------------------- */
+.admin-console .service-health { display: flex; flex-direction: column; margin: 0; }
+.admin-console .service-health .health-list { flex: 1; }
+.admin-console .service-health__footnote { margin-top: auto; }
+
+/* Purchase procedure --------------------------------------------------------
+   Four steps side by side. In a narrow rail each column collapsed to roughly
+   one word per line and the fourth step overflowed the panel entirely. */
+.admin-console .admin-procedure { margin: 0; }
+.admin-console .admin-procedure ol { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-console .admin-procedure li { min-height: 96px; align-items: flex-start; padding: 15px 17px; }
+.admin-console .admin-procedure li > span { margin-top: 1px; }
+.admin-console .admin-procedure li strong { font-size: 12.5px; }
+.admin-console .admin-procedure li small { font-size: 11.5px !important; line-height: 1.5; text-wrap: pretty; }
+
+/* Records ------------------------------------------------------------------- */
+.admin-console .active-license-registry,
+.admin-console .access-audit-panel { display: flex; min-height: 0; flex-direction: column; }
+.admin-console .license-register-list,
+.admin-console .access-audit-list {
+  min-height: 0;
+  max-height: 420px;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.admin-console .license-register-list article { align-items: center; }
 
 .admin-console .admin-kpis { border-radius: 12px; }
 .admin-console .admin-kpis > div { padding: 17px 19px; }
 .admin-console .admin-kpis strong { font-size: 22px; letter-spacing: -.5px; }
 
-@media (max-width: 1180px) {
-  .admin-console .admin-grid { grid-template-columns: 1fr; }
-  .admin-rail { flex-direction: row; flex-wrap: wrap; }
-  .admin-rail > * { flex: 1 1 340px; }
+@media (max-width: 1240px) {
+  .admin-console .admin-procedure ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-console .admin-procedure li:nth-child(2) { border-right: 0; }
+  .admin-console .admin-procedure li:nth-child(-n+2) { border-bottom: 1px solid #2c353d; }
+}
+
+@media (max-width: 1080px) {
+  .admin-console .admin-grid,
+  .admin-console .admin-records-grid { grid-template-columns: 1fr; }
+  .admin-console .admin-requests { min-height: 0; }
+  .admin-console .license-register-list,
+  .admin-console .access-audit-list { max-height: none; }
 }
 
 @media (max-width: 760px) {
@@ -461,5 +531,4 @@
   .admin-masthead__crest { width: 44px; height: 44px; border-radius: 11px; }
   .admin-masthead__identity h1 { font-size: 21px; }
   .admin-masthead__side { grid-column: 1 / -1; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
-  .admin-rail { flex-direction: column; }
 }
