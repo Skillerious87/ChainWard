@@ -177,16 +177,20 @@
   white-space: nowrap;
 }
 
-.timeout-ring__dial { position: relative; width: 158px; height: 158px; margin-top: 2px; }
-.timeout-ring__dial svg { width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
-.timeout-ring__track { fill: none; stroke: #1a222a; stroke-width: 8; }
+.timeout-ring__dial { position: relative; width: 168px; height: 168px; margin-top: 4px; }
+/* The direct-child selector matters: only the dial itself is a full-size
+   drawing. Any icon that lands inside the readout keeps its own size. */
+.timeout-ring__dial > svg { display: block; width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
+.timeout-ring__readout svg { width: 14px; height: 14px; }
+.timeout-ring__track { fill: none; stroke: #171e25; stroke-width: 9; }
+.timeout-ring__tick { stroke: #232c34; stroke-linecap: round; stroke-width: 2; }
+.timeout-ring__head { fill: var(--ring-colour, var(--accent)); filter: drop-shadow(0 0 6px rgba(var(--ring-glow, var(--accent-rgb)), .75)); transition: cx 260ms linear, cy 260ms linear, fill 400ms ease; }
 .timeout-ring__sweep {
   fill: none;
-  stroke: var(--ring-colour, var(--accent));
   stroke-linecap: round;
-  stroke-width: 8;
-  filter: drop-shadow(0 0 8px rgba(var(--ring-glow, var(--accent-rgb)), .4));
-  transition: stroke-dashoffset 260ms linear, stroke 400ms ease;
+  stroke-width: 9;
+  filter: drop-shadow(0 0 9px rgba(var(--ring-glow, var(--accent-rgb)), .45));
+  transition: stroke-dashoffset 260ms linear;
 }
 .timeout-ring__readout {
   position: absolute;
@@ -245,10 +249,10 @@
   text-wrap: pretty;
 }
 
-.timeout-ring--safe { --ring-colour: var(--accent); --ring-glow: var(--accent-rgb); }
-.timeout-ring--warning { --ring-colour: var(--warning); --ring-glow: 245, 185, 76; }
-.timeout-ring--critical { --ring-colour: var(--danger); --ring-glow: 242, 109, 109; }
-.timeout-ring--expired { --ring-colour: #6c7780; --ring-glow: 108, 119, 128; }
+.timeout-ring--safe { --ring-colour: var(--accent); --ring-from: rgba(var(--accent-rgb), .45); --ring-glow: var(--accent-rgb); }
+.timeout-ring--warning { --ring-colour: var(--warning); --ring-from: rgba(245, 185, 76, .4); --ring-glow: 245, 185, 76; }
+.timeout-ring--critical { --ring-colour: var(--danger); --ring-from: rgba(242, 109, 109, .4); --ring-glow: 242, 109, 109; }
+.timeout-ring--expired { --ring-colour: #6c7780; --ring-from: rgba(108, 119, 128, .35); --ring-glow: 108, 119, 128; }
 .timeout-ring--critical { border-color: rgba(242, 109, 109, .3); }
 .timeout-ring--critical .timeout-ring__badge { animation: timeout-ring-pulse 1.2s ease-in-out infinite; }
 @keyframes timeout-ring-pulse { 50% { opacity: .45; } }
@@ -260,16 +264,17 @@
 }
 
 @media (max-width: 620px) {
-  .timeout-ring__dial { width: 132px; height: 132px; }
+  .timeout-ring__dial { width: 138px; height: 138px; }
   .timeout-ring__readout strong { font-size: 27px; }
   .timeout-ring__facts { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .timeout-ring__sweep { transition: none; }
+  .timeout-ring__sweep, .timeout-ring__head { transition: none; }
   .timeout-ring--critical .timeout-ring__badge { animation: none; }
 }
-:root.reduced-motion .timeout-ring__sweep { transition: none; }
+:root.reduced-motion .timeout-ring__sweep,
+:root.reduced-motion .timeout-ring__head { transition: none; }
 :root.reduced-motion .timeout-ring--critical .timeout-ring__badge { animation: none; }
 
 /* The console body gives the ring a real column with breathing room, rather

@@ -191,8 +191,31 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 .data-status-control strong { font-size: 11px; }
 .data-status-control small { font-size: 10.5px !important; }
 
-.notification-button { width: var(--control-height); }
-.notification-button__badge { top: -5px; right: -5px; border-color: #0a0d0f; }
+.notification-button { position: relative; width: var(--control-height); }
+/* The badge sits inside the control. Hanging it off the corner put it above the
+   top bar, where the fixed shell's overflow clipped the top of the circle. */
+.notification-button__badge {
+  top: 4px;
+  right: 4px;
+  display: grid;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--control-surface);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.notification-button:hover .notification-button__badge { border-color: var(--control-surface-hover); }
+/* Nudge the bell so the icon stays optically centred beneath the badge. */
+.notification-button > svg { transform: translate(-1px, 1px); }
 
 .user-menu { gap: 9px; padding: 0 9px 0 4px; }
 

@@ -292,15 +292,42 @@ function TimeoutRing({ seconds, windowSeconds, deadline }: { seconds: number; wi
 
       <div className="timeout-ring__dial">
         <svg viewBox="0 0 128 128" aria-hidden="true">
+          <defs>
+            <linearGradient id="timeout-ring-sweep" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="var(--ring-from)" />
+              <stop offset="100%" stopColor="var(--ring-colour)" />
+            </linearGradient>
+          </defs>
           <circle className="timeout-ring__track" cx="64" cy="64" r={radius} />
+          {/* Quarter marks give the sweep a scale to be read against. */}
+          {[0, 90, 180, 270].map((degrees) => {
+            const angle = (degrees * Math.PI) / 180;
+            return <line
+              key={degrees}
+              className="timeout-ring__tick"
+              x1={64 + (radius - 9) * Math.cos(angle)}
+              y1={64 + (radius - 9) * Math.sin(angle)}
+              x2={64 + (radius + 9) * Math.cos(angle)}
+              y2={64 + (radius + 9) * Math.sin(angle)}
+            />;
+          })}
           <circle
             className="timeout-ring__sweep"
             cx="64"
             cy="64"
             r={radius}
+            stroke="url(#timeout-ring-sweep)"
             strokeDasharray={circumference}
             strokeDashoffset={circumference * (1 - fraction)}
           />
+          {/* A head on the sweep reads as a clock hand, so movement is obvious
+              even when a single second barely changes the arc. */}
+          {fraction > 0 && <circle
+            className="timeout-ring__head"
+            cx={64 + radius * Math.cos(fraction * 2 * Math.PI)}
+            cy={64 + radius * Math.sin(fraction * 2 * Math.PI)}
+            r={5.5}
+          />}
         </svg>
         <div className="timeout-ring__readout" role="timer" aria-live="off">
           <strong>{formatTime(seconds)}</strong>
