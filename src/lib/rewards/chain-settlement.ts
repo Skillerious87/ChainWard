@@ -136,6 +136,43 @@ export async function savePaidChainSettlement(settlement: ChainSettlement, repor
   });
 }
 
+/**
+ * Withdraws a paid acknowledgement so the chain returns to its calculated but
+ * unpaid state. Marking a chain paid is an operator assertion that the rewards
+ * were actually sent, and an operator can assert that by mistake; without a way
+ * back the ledger would permanently disagree with reality.
+ *
+ * The reward scheme keeps its history lock. That lock only forces an edit to
+ * create a new version, and other chains may already reference the same
+ * version, so releasing it here could silently rewrite another settled chain's
+ * rules.
+ */
+export async function revertChainSettlement(factionId: number, chainId: number): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    if (!localDatabaseExists()) throw new Error("The local database is unavailable.");
+    const database = openLocalDatabase();
+    if (!database) throw new Error("The local database is unavailable.");
+    try {
+      database.prepare("DELETE FROM chain_settlements WHERE faction_id = ? AND chain_id = ?").run(factionId, chainId);
+    } finally { database.close(); }
+    return;
+  }
+
+  const { db } = await import("@/lib/db");
+  await db.$transaction(async (tx) => {
+    const chain = await tx.chain.findFirst({ where: { tornChainId: chainId, faction: { tornFactionId: factionId } } });
+    if (!chain) throw new Error("No stored chain record matches this payout.");
+    const snapshots = await tx.chainRewardSnapshot.findMany({ where: { chainId: chain.id, status: "FINAL" }, select: { id: true } });
+    if (snapshots.length === 0) throw new Error("No final payout snapshot exists for this chain.");
+    const snapshotIds = snapshots.map((snapshot) => snapshot.id);
+    // The payouts are removed and the snapshot superseded rather than deleted,
+    // so the record that a settlement once existed survives the correction.
+    await tx.memberPayout.deleteMany({ where: { snapshotId: { in: snapshotIds } } });
+    await tx.chainRewardSnapshot.updateMany({ where: { id: { in: snapshotIds } }, data: { status: "SUPERSEDED", supersededAt: new Date() } });
+    await tx.factionSetting.deleteMany({ where: { faction: { tornFactionId: factionId }, key: settlementKey(chainId) } });
+  });
+}
+
 export function settlementFromPreview(preview: ChainRewardPreview, factionId: number, chainId: number, paidByTornId: number, now = new Date()): ChainSettlement {
   if (!preview.available || !preview.schemeId || !preview.schemeName || preview.schemeVersion === null || !preview.rewardUnit) throw new Error(preview.message);
   return { ...preview, factionId, chainId, status: "PAID", calculatedAt: now.toISOString(), paidAt: now.toISOString(), paidByTornId };

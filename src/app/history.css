@@ -227,3 +227,56 @@
   .chain-history-page .row-action:hover { transform: none; }
 }
 :root.reduced-motion .contributor-chart__bar i { transition: none; }
+
+/* Contributor avatars -------------------------------------------------------
+   The shared avatar assigns one of four hues from a hash of the name. Across a
+   ranked leaderboard that reads as noise — six unrelated colours competing with
+   the position chips and the accent bars. Inside this chart the tiles are
+   neutral, and only the leader is picked out in the accent. */
+.contributor-chart .avatar {
+  width: 30px;
+  height: 30px;
+  border-color: var(--border-strong) !important;
+  border-radius: 9px;
+  background: #131920 !important;
+  color: #97a3ac !important;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+.contributor-chart__row--lead .avatar {
+  border-color: rgba(var(--accent-rgb), .34) !important;
+  background: rgba(var(--accent-rgb), .09) !important;
+  color: var(--accent) !important;
+}
+
+/* Payout correction --------------------------------------------------------- */
+.payment-revert-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 11px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+.payment-revert-button:hover {
+  border-color: rgba(245, 185, 76, .4);
+  background: rgba(245, 185, 76, .05);
+  color: var(--warning);
+}
+.payment-confirmation--revert > span {
+  border-color: rgba(245, 185, 76, .28) !important;
+  background: rgba(245, 185, 76, .07) !important;
+  color: var(--warning) !important;
+}
+.payment-confirmation--revert h3 { color: #f2d59a; }
