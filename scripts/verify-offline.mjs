@@ -221,6 +221,8 @@ async function run() {
 
     const history = await getRoute("/chains", session.cookie);
     check("chain history reports settlement standing", history.html.includes("history-summary__settlement") && history.html.includes("marked paid"));
+    check("chain history plots recent form", history.html.includes("chain-trend__plot") && history.html.includes("Last "), "the trend panel needs at least two completed chains to draw");
+    check("chain history offers settlement filters", history.html.includes("history-view-tabs") && history.html.includes("Needs calculation"));
     const chainReport = await getRoute("/chains/7000003", session.cookie);
     check("chain report renders the ranked contributor chart", chainReport.html.includes("contributor-chart__rank") && chainReport.html.includes("contributor-chart__bar"));
     check("chain report states respect per hit", chainReport.html.includes("Respect per hit"));
@@ -231,6 +233,10 @@ async function run() {
     const ownerForSettings = await openOfflineSession("owner");
     const ownerSettings = await getRoute("/settings", ownerForSettings.cookie);
     check("licence testing tools are offered to the owner in local test mode", ownerSettings.html.includes("Developer tools"));
+
+    const payouts = await getRoute("/payouts", session.cookie);
+    check("payout ledger ranks recipients", payouts.html.includes("payout-recipient__rank") && payouts.html.includes("Recipients"));
+    check("payout ledger keeps a withdrawal on the record", payouts.html.includes("Withdrawn acknowledgements") && payouts.html.includes("re-issuing after the next faction bank run"), "a reverted settlement must not vanish from the ledger");
 
     console.log("\nPermission enforcement");
     const memberBackup = await fetch(`${ORIGIN}/api/data/backup`, { headers: { cookie: session.cookie } });

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Activity, CircleDollarSign, History, Sparkles, Swords } from "lucide-react";
+import { ChainTrend } from "@/components/chain/chain-trend";
 import { HistoryTable } from "@/components/chain/history-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { ExportButton } from "@/components/ui/action-controls";
@@ -38,6 +39,7 @@ export default async function ChainHistoryPage() {
         <span className="history-summary__note">{paidCount} marked paid</span>
       </div>
     </section>
+    <ChainTrend chains={chains} settlements={settlements} />
     <HistoryTable chains={chains} message={result.message} checkedAt={result.checkedAt} settlements={settlements} />
   </div>;
 }
