@@ -52,6 +52,43 @@ or elapsed duration beyond what can be derived from those values.
 unix time made the cooldown state unreachable, and deciding liveness from `end`
 reported live chains as idle while their hit count was still climbing.
 
+### Observed behaviour of the ongoing-chain endpoint
+
+Measured against a live faction with `scripts/observe-chain-endpoint.mts`:
+
+```
+elapsed  current  timeout  server date
+     0s        1       76  23:59:02
+    10s        1       76  23:59:12
+    20s        1       76  23:59:22
+    30s        1       45  23:59:33   <- one step of 31s
+    40s        1       45  23:59:43
+    50s        1       45  23:59:53
+```
+
+Three findings, all load-bearing:
+
+1. **Torn serves this endpoint from a roughly thirty second cache.** `timeout`
+   holds a value then steps, rather than counting down smoothly. A reading can
+   therefore be up to a full cache window old, and how old is unknowable.
+2. **The `Date` header advances in real time even while the body is stale**, so
+   it cannot be used to age the response.
+3. **`end` was a non-zero timestamp while the chain was live** (`1786492818`
+   alongside `timeout` 76), confirming that `end` must not be used to decide
+   whether a chain is running. `timeout` is the only reliable signal.
+
+Because staleness is unknowable and varies per request, a reported `timeout` is
+an **upper bound** on the time actually remaining, never an exact measure. The
+countdown therefore tracks the lowest bound it has seen: it adopts any lower
+reading in full, ignores higher ones as staleness, and treats only a large
+increase as a hit restarting the window. That also errs the safe way — better to
+show less time than there really is than more.
+
+Polling faster than the cache window cannot make a reading fresher, but it does
+reduce how long a new snapshot goes unseen. Ten seconds was stable in testing;
+eight seconds produced repeated `code 17` backend errors, so the floor in
+`polling-policy.ts` is not a formality.
+
 ### Polling limits
 
 Torn's guidance for the `chain` selection is to poll no faster than once every 5

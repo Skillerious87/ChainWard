@@ -46,11 +46,28 @@ export const NOISE_TOLERANCE_MS = 1_500;
 export const RESET_THRESHOLD_MS = 5_000;
 
 /**
- * Corrections between the two thresholds are applied a quarter at a time, so a
- * genuine drift converges over a few syncs instead of snapping. Slewing rather
- * than stepping is the same reason NTP disciplines a clock gradually.
+ * Observed behaviour of the live endpoint, measured against a real faction:
+ *
+ *   elapsed   timeout
+ *      0s        76
+ *     10s        76
+ *     20s        76
+ *     30s        45     <- one step of 31s
+ *     40s        45
+ *     50s        45
+ *
+ * Torn serves the chain from a roughly thirty second cache. The body is a
+ * snapshot that only moves at the cache boundary, while the `Date` header
+ * advances in real time — so the header cannot be used to age the body.
+ *
+ * The consequence drives the whole design: a reading can be up to a full cache
+ * window stale, and how stale is unknowable and different every time. A
+ * reported figure is therefore an **upper bound** on the time actually left,
+ * never an exact measure, and the honest countdown is the lowest bound seen so
+ * far. That also errs the safe way for a chain timer: better to believe there
+ * is less time than there really is.
  */
-export const SLEW_FRACTION = 0.25;
+export const TORN_CACHE_WINDOW_SECONDS = 30;
 
 export function createAnchor(remainingMs: number, atPerf: number): CountdownAnchor {
   return { remainingMs: Math.max(0, remainingMs), atPerf };
@@ -80,11 +97,18 @@ export function project(anchor: CountdownAnchor, nowPerf: number): number {
  * The rules, in order:
  *
  *   - A large increase is a genuine window reset, so it is adopted at once.
- *   - A small increase is ignored. Running marginally fast is invisible and
- *     safe; a timer that ticks upward reads as broken.
- *   - A small decrease is ignored as noise for the same reason.
- *   - A larger decrease is real drift and is corrected, but only a fraction at
- *     a time, so the number never visibly jumps.
+ *   - A small increase is ignored. Because every reading is an upper bound, an
+ *     increase carries no information — it only means this reading is staler
+ *     than the one already held. Adopting it would also make the countdown tick
+ *     upward, which reads as broken.
+ *   - A small decrease is ignored as noise, so the display does not twitch.
+ *   - A larger decrease is adopted in full. It is not drift to be eased in: a
+ *     lower bound is strictly better information, and holding the higher figure
+ *     would overstate the time left, which is the dangerous direction.
+ *
+ * In steady state these corrections are small. The previous reading has already
+ * counted down by the time the next arrives, so the two bounds are usually
+ * within a second or two of each other.
  */
 export function reconcileAnchor(anchor: CountdownAnchor, incomingRemainingMs: number, nowPerf: number): CountdownAnchor {
   const projected = project(anchor, nowPerf);
@@ -94,8 +118,7 @@ export function reconcileAnchor(anchor: CountdownAnchor, incomingRemainingMs: nu
   if (delta >= RESET_THRESHOLD_MS) return createAnchor(incoming, nowPerf);
   if (delta >= -NOISE_TOLERANCE_MS) return createAnchor(projected, nowPerf);
 
-  // Running behind reality: converge downward without a visible step.
-  return createAnchor(projected + delta * SLEW_FRACTION, nowPerf);
+  return createAnchor(incoming, nowPerf);
 }
 
 /**

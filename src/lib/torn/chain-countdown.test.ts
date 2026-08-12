@@ -66,28 +66,35 @@ describe("reconciling a new reading", () => {
     expect(project(next, 10_000)).toBe(110_000);
   });
 
-  it("corrects a real drift only a fraction at a time", () => {
-    // Eight seconds adrift: a quarter is taken now, so nothing visibly jumps.
+  it("adopts a lower bound in full, because it is strictly better information", () => {
+    // Every reading is an upper bound: Torn's cache means a figure can only be
+    // too high, never too low. Holding the higher one would overstate the time
+    // left, which is the dangerous direction for a chain timer.
     const next = reconcileAnchor(anchor, 102_000, 10_000);
-    expect(project(next, 10_000)).toBe(108_000);
+    expect(project(next, 10_000)).toBe(102_000);
   });
 
-  it("converges on repeated syncs without ever stepping", () => {
+  it("settles onto the lowest bound and stays there", () => {
     let current = createAnchor(120_000, 0);
     let previous = project(current, 0);
     for (let sync = 1; sync <= 6; sync += 1) {
       const at = sync * 10_000;
-      // Truth runs 8s behind what the anchor believes.
+      // Truth runs 8s behind what the first reading implied.
       current = reconcileAnchor(current, 120_000 - at - 8_000, at);
       const shown = project(current, at);
       expect(shown).toBeLessThanOrEqual(previous);
       previous = shown;
     }
-    // Correcting a quarter of the gap each sync closes it geometrically, and
-    // the last stretch is left alone once it falls inside the noise tolerance —
-    // chasing further would only reintroduce the twitching this avoids.
-    const truth = 120_000 - 60_000 - 8_000;
-    expect(Math.abs(project(current, 60_000) - truth)).toBeLessThan(NOISE_TOLERANCE_MS);
+    expect(project(current, 60_000)).toBe(120_000 - 60_000 - 8_000);
+  });
+
+  it("holds its bound when a staler reading arrives afterwards", () => {
+    // A later fetch can land earlier in Torn's cache cycle and report more time
+    // than the reading already held. That is staleness, not news.
+    let current = createAnchor(120_000, 0);
+    current = reconcileAnchor(current, 100_000, 10_000);
+    current = reconcileAnchor(current, 104_000, 10_000);
+    expect(project(current, 10_000)).toBe(100_000);
   });
 
   it("never lets the displayed label tick upward across a noisy run", () => {
