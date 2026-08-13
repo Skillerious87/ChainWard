@@ -45,6 +45,10 @@ export function consumeGlobalRateLimit(scope: string, options: RateLimitOptions)
 }
 
 function requestAddress(request: Request): string {
+  // Proxy headers are only meaningful when the origin is not directly
+  // reachable. Defaulting this off prevents a caller rotating an arbitrary
+  // x-forwarded-for value to evade the per-address bucket.
+  if (process.env.CHAINWARD_TRUST_PROXY_HEADERS?.trim().toLowerCase() !== "true") return "direct-client";
   const realIp = request.headers.get("x-real-ip")?.trim();
   if (realIp) return realIp.slice(0, 100);
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();

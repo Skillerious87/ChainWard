@@ -4,8 +4,8 @@
    shell chrome. Keep new shell rules here rather than growing polish.css.
    --------------------------------------------------------------------------- */
 
-/* Route handoff: a fixed-height indeterminate bar that only becomes visible if
-   the navigation actually takes time, then always plays a completion sweep. */
+/* Route handoff: every workspace link receives an immediate, visible response
+   (including prefetched links whose framework pending state is skipped). */
 .route-progress {
   position: relative;
   z-index: 39;
@@ -24,12 +24,30 @@
 }
 .route-progress[data-phase="running"]::after {
   opacity: 1;
-  animation: route-progress-sweep 1.1s cubic-bezier(.4, 0, .2, 1) 120ms infinite;
+  animation: route-progress-sweep 1.1s cubic-bezier(.4, 0, .2, 1) infinite;
 }
 .route-progress[data-phase="finishing"]::after {
   opacity: 1;
   animation: route-progress-finish 320ms cubic-bezier(.2, .8, .2, 1) forwards;
 }
+.route-loading-core {
+  position: fixed;
+  z-index: 70;
+  top: calc(var(--topbar-height) + 31px);
+  right: 0;
+  bottom: 0;
+  left: var(--rail-width);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7,10,12,.22);
+  pointer-events: none;
+  opacity: 0;
+  animation: route-core-in 180ms ease-out forwards;
+}
+.route-loading-core[data-phase="finishing"] { animation: route-core-out 260ms ease-in forwards; }
+@keyframes route-core-in { to { opacity: 1; } }
+@keyframes route-core-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes route-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 @keyframes route-progress-finish { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(60%); } }
 
@@ -62,10 +80,8 @@
 :root[data-sidebar="collapsed"] .nav-item__pending { right: 18px; left: 18px; }
 
 /* Route handoff.
-   There is deliberately no route-level `loading.tsx`: replacing the whole page
-   with placeholder blocks on every navigation is what made view switching read
-   as a browser reload. The current view stays on screen and settles instead,
-   then the incoming view rises into place.
+   A server-suspended view gets a shaped fallback while the shell remains
+   interactive and the incoming view rises into place.
 
    The enter animation avoids `filter: blur()`, which forces an expensive
    offscreen composite of the entire page on every navigation. */
@@ -78,7 +94,7 @@
   to { opacity: 1; transform: none; }
 }
 
-/* Applied ~140ms into a navigation, so an instant one never flickers. */
+/* Applied for the same short, minimum-duration handoff as the loading ring. */
 .page-content {
   transition: opacity 220ms ease, transform 220ms cubic-bezier(.22, .82, .28, 1), filter 220ms ease;
 }
@@ -362,6 +378,10 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   .service-drawer__footer time { width: 100%; margin-left: 0; }
 }
 
+@media (max-width: 960px) {
+  .route-loading-core { left: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .route-progress[data-phase="running"]::after,
   .route-progress[data-phase="finishing"]::after,
@@ -369,8 +389,10 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   .service-summary__pulse::after { animation: none; }
   .nav-item__pending[data-pending="true"] { opacity: .9; transform: scaleX(1); }
   .platform-route-stage,
+  .route-loading-core,
   .service-drawer__panel,
   .service-drawer__scrim { animation: none; }
+  .route-loading-core { opacity: 1; }
   .page-content { transition: opacity 120ms ease; }
   :root[data-navigating="true"] .page-content { transform: none; }
 }
@@ -378,4 +400,5 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 :root.reduced-motion .nav-item__pending,
 :root.reduced-motion .service-summary__pulse::after { animation: none; }
 :root.reduced-motion .platform-route-stage { animation: none; }
+:root.reduced-motion .route-loading-core { animation: none; opacity: 1; }
 :root.reduced-motion[data-navigating="true"] .page-content { transform: none; }

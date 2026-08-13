@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
 
 export type ManagedFactionRole = "ADMINISTRATOR" | "CHAIN_MANAGER" | "VIEWER";
@@ -44,12 +45,39 @@ interface AccessTarget {
   memberName: string;
 }
 
-export async function getFactionAccessWorkspace(factionId: number | null): Promise<FactionAccessWorkspace> {
+export const getFactionAccessWorkspace = cache(async (factionId: number | null): Promise<FactionAccessWorkspace> => {
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return empty(false, false, "Create local storage in Settings before assigning application access.");
   if (!factionId) return empty(true, true, "Connect a verified faction to manage workspace access.");
   return hasPostgres ? getPostgresWorkspace(factionId) : getLocalWorkspace(factionId);
-}
+});
+
+/**
+ * The shell needs one actor's active role, not the complete assignment table
+ * and twenty audit events. Keeping this query narrow removes that work from
+ * every route navigation while preserving the richer workspace on /faction.
+ */
+export const getFactionAccessAssignment = cache(async (factionId: number | null, tornUserId: number | null): Promise<FactionAccessAssignment | null> => {
+  if (!factionId || !tornUserId || (!process.env.DATABASE_URL?.trim() && !localDatabaseExists())) return null;
+  if (!process.env.DATABASE_URL?.trim()) {
+    const database = openLocalDatabase();
+    if (!database) return null;
+    try {
+      const row = database.prepare("SELECT * FROM faction_access_assignments WHERE faction_id = ? AND torn_user_id = ? AND status = 'ACTIVE' AND role != 'OWNER'").get(factionId, tornUserId) as unknown as LocalAssignmentRow | undefined;
+      return row && isManagedRole(row.role) ? mapLocalAssignment(row) : null;
+    } catch { return null; }
+    finally { database.close(); }
+  }
+  try {
+    const { db } = await import("@/lib/db");
+    const membership = await db.factionMembership.findFirst({
+      where: { faction: { tornFactionId: factionId }, user: { tornUserId }, status: "ACTIVE", role: { not: "OWNER" } },
+      include: { user: true },
+    });
+    if (!membership || !isManagedRole(membership.role)) return null;
+    return { tornUserId: membership.user.tornUserId, memberName: membership.user.name, role: membership.role, status: "ACTIVE", assignedByTornId: 0, updatedAt: membership.updatedAt.toISOString() };
+  } catch { return null; }
+});
 
 export async function setFactionAccess(
   faction: FactionIdentity,

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { localDatabaseExists, localDatabaseInfo, openLocalDatabase, openLocalTestDatabase } from "./local-database";
 
 export interface DatabaseStatus {
@@ -11,7 +12,7 @@ export interface DatabaseStatus {
   filename: string | null;
 }
 
-export async function getDatabaseStatus(): Promise<DatabaseStatus> {
+export const getDatabaseStatus = cache(async (): Promise<DatabaseStatus> => {
   const connectionString = process.env.DATABASE_URL?.trim();
   if (connectionString) try {
     const { db } = await import("@/lib/db");
@@ -36,7 +37,7 @@ export async function getDatabaseStatus(): Promise<DatabaseStatus> {
     } finally { database?.close(); }
   }
   return { configured: false, available: false, label: "No local database", message: "Enable local test mode or configure PostgreSQL before saving workspace records.", provider: "none", filename: null };
-}
+});
 
 function safeLocalFilename(): string {
   try { return localDatabaseInfo().filename; } catch { return "chainward-local.sqlite"; }

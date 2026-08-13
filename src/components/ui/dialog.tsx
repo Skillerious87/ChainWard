@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Spinner } from "@/components/ui/spinner";
 
 interface DialogProps {
   open: boolean;
@@ -79,6 +80,7 @@ export function Dialog({
             }
           }}
         >
+          {submitting && <Spinner size={15} label="Working" tone={destructive ? "muted" : "accent"} />}
           {submitting ? "Working…" : confirmLabel}
         </button>
       </div>

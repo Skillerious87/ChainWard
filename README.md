@@ -72,6 +72,22 @@ Chainward supports two storage modes:
 active-chain timeout warning. Background refresh pauses while the tab is hidden
 or offline; manual refresh always requests a fresh Torn snapshot.
 
+## Member notifications
+
+Faction Administrators and the platform owner can enable native notifications
+under **Settings → Member alerts**. Permission is requested only after the user
+presses **Enable Windows notifications**. The monitor supports critical-only or
+full review alerts, watch-list and expired-holiday controls, quiet hours,
+deduplicated reminders, and a five-to-sixty-minute check interval.
+
+Hosted deployments must use HTTPS for notification permission and service
+workers. Localhost is treated as a secure development context by supported
+browsers. Monitoring continues when the Chainward tab is in the background,
+but the browser must remain running with the site open; this is deliberately a
+same-origin browser monitor, not a third-party push service that can wake a
+closed browser. Every monitor request rechecks the active licence and the
+operator's `members:manage` permission.
+
 Settings can download and restore portable faction-configuration backups. The
 JSON file contains reward schemes and selected workspace settings. It excludes
 API credentials, licence records, payment acknowledgements, audit records, and
@@ -97,7 +113,7 @@ supplied.
 
 ```bash
 npm run check           # lint, TypeScript, unit tests, production build
-npm run verify:offline  # 41 end-to-end assertions with no network access
+npm run verify:offline  # 65 end-to-end assertions with no network access
 npm run check:full      # both of the above
 ```
 

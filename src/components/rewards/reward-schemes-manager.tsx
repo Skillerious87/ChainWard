@@ -25,7 +25,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { saveRewardScheme, setRewardSchemeArchived } from "@/app/(platform)/rewards/actions";
+import { publishViewSwitch } from "@/components/shell/route-progress";
 import { InfoTip } from "@/components/ui/info-tip";
+import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
 import { analyzeRewardCoverage, validateRewardTiers } from "@/lib/rewards/reward-engine";
 import type { RewardSchemeView, RewardTierView, RewardWorkspaceView } from "@/lib/rewards/reward-store";
@@ -114,6 +116,7 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
   }, [save]);
 
   function selectScheme(scheme: RewardSchemeView): void {
+    if (scheme.id !== selectedId) publishViewSwitch(`reward-scheme:${scheme.id}`);
     setSelectedId(scheme.id);
     setDraft(editable(scheme));
     setBaseline(fingerprint(editable(scheme)));
@@ -134,7 +137,7 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
     setSelectedId(null);
     setDraft(next);
     setBaseline("");
-    setTab("details");
+    selectTab("details");
   }
 
   function discardChanges(): void {
@@ -143,6 +146,12 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
     setDraft(editable(source));
     setBaseline(fingerprint(editable(source)));
     notify({ title: "Changes discarded", description: "The editor was reset to the saved version.", tone: "info" });
+  }
+
+  function selectTab(next: EditorTab): void {
+    if (next === tab) return;
+    publishViewSwitch(`reward-editor:${next}`);
+    setTab(next);
   }
 
   function updateTier(id: string, changes: Partial<RewardTierView>): void {
@@ -307,14 +316,14 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
                   {draft.id && <button className="button button--quiet" onClick={() => startNew(draft)}><Copy size={14} /> Duplicate</button>}
                   {draft.id && <button className="button button--quiet" onClick={() => { const source = workspace.schemes.find((scheme) => scheme.id === draft.id); if (source) void archive(source); }}><Archive size={14} /> Archive</button>}
                   <button className="button button--primary" disabled={saving || !savable} onClick={() => void save()} title={workspace.databaseAvailable ? "Save (Ctrl+S)" : workspace.message}>
-                    <Save size={14} /> {saving ? "Saving…" : draft.lockedByHistory ? "Save new version" : "Save scheme"}
+                    {saving ? <Spinner size={14} label="Saving reward scheme" /> : <Save size={14} />} {saving ? "Saving…" : draft.lockedByHistory ? "Save new version" : "Save scheme"}
                   </button>
                 </div>
               </header>
 
               <nav className="reward-tabs" aria-label="Scheme editor sections">
                 {TABS.map(({ id, label, icon: Icon }) => (
-                  <button key={id} className={tab === id ? "reward-tab reward-tab--active" : "reward-tab"} onClick={() => setTab(id)} aria-current={tab === id ? "true" : undefined}>
+                  <button key={id} className={tab === id ? "reward-tab reward-tab--active" : "reward-tab"} onClick={() => selectTab(id)} aria-current={tab === id ? "true" : undefined}>
                     <Icon size={14} /> {label}
                     {id === "tiers" && validation.length > 0 && <em className="reward-tab__flag reward-tab__flag--error">{validation.length}</em>}
                     {id === "tiers" && validation.length === 0 && coverage && coverage.gaps.length > 0 && <em className="reward-tab__flag reward-tab__flag--warn">{coverage.gaps.length}</em>}

@@ -12,6 +12,7 @@ export interface PayoutLedgerEntry {
   rewardUnit: string;
   tierLabel: string | null;
   status: "PENDING" | "APPROVED" | "PAID" | "HELD" | "WAIVED";
+  createdAt: string;
   processedAt: string | null;
   processedBy: { tornUserId: number; name: string } | null;
 }
@@ -32,16 +33,31 @@ export async function getPayoutLedger(tornFactionId: number | null, knownNames: 
     const { db } = await import("@/lib/db");
     const rows = await db.memberPayout.findMany({
       where: { faction: { tornFactionId } },
-      include: { snapshot: { include: { chain: true } }, rewardDefinition: true, processedBy: true },
+      select: {
+        id: true, snapshotId: true, tornUserId: true, memberName: true, amount: true,
+        status: true, createdAt: true, processedAt: true,
+        snapshot: { select: { chain: { select: { tornChainId: true } } } },
+        rewardDefinition: { select: { displayUnit: true } },
+        processedBy: { select: { name: true, tornUserId: true } },
+      },
       orderBy: [{ processedAt: "desc" }, { createdAt: "desc" }],
     });
+    // A snapshot calculation contains every member. Including it through each
+    // payout row multiplied the same JSON by the member count; fetch every
+    // distinct snapshot once and join it in memory instead.
+    const snapshotIds = [...new Set(rows.map((row) => row.snapshotId))];
+    const snapshots = snapshotIds.length ? await db.chainRewardSnapshot.findMany({
+      where: { id: { in: snapshotIds } },
+      select: { id: true, calculation: true },
+    }) : [];
+    const calculationBySnapshot = new Map(snapshots.map((snapshot) => [snapshot.id, parseCalculation(snapshot.calculation)]));
     const tierByMember = new Map<string, string | null>();
     for (const row of rows) {
-      const calculation = parseCalculation(row.snapshot.calculation);
+      const calculation = calculationBySnapshot.get(row.snapshotId);
       const member = calculation?.find((item) => item.tornUserId === row.tornUserId);
       tierByMember.set(row.id, member?.tierLabel ?? null);
     }
-    const entries = rows.map<PayoutLedgerEntry>((row) => ({ id: row.id, chainId: row.snapshot.chain.tornChainId, tornUserId: row.tornUserId, memberName: row.memberName, amount: Number(row.amount), rewardUnit: row.rewardDefinition.displayUnit, tierLabel: tierByMember.get(row.id) ?? null, status: row.status, processedAt: row.processedAt?.toISOString() ?? null, processedBy: row.processedBy ? { name: row.processedBy.name, tornUserId: row.processedBy.tornUserId } : null }));
+    const entries = rows.map<PayoutLedgerEntry>((row) => ({ id: row.id, chainId: row.snapshot.chain.tornChainId, tornUserId: row.tornUserId, memberName: row.memberName, amount: Number(row.amount), rewardUnit: row.rewardDefinition.displayUnit, tierLabel: tierByMember.get(row.id) ?? null, status: row.status, createdAt: row.createdAt.toISOString(), processedAt: row.processedAt?.toISOString() ?? null, processedBy: row.processedBy ? { name: row.processedBy.name, tornUserId: row.processedBy.tornUserId } : null }));
     return { databaseConfigured: true, databaseAvailable: true, entries, message: entries.length ? `${entries.length} persisted member payout${entries.length === 1 ? "" : "s"}.` : "No payout records have been created for this faction." };
   } catch { return empty(true, false, "The configured PostgreSQL payout register could not be queried."); }
 }
@@ -50,8 +66,8 @@ function getLocalLedger(factionId: number, knownNames: Readonly<Record<number, s
   const database = openLocalDatabase();
   if (!database) return empty(false, false, "The local database file is unavailable.");
   try {
-    const rows = database.prepare("SELECT chain_id, reward_unit, snapshot_json, paid_at, paid_by_torn_id, paid_by_name FROM chain_settlements WHERE faction_id = ? AND status = 'PAID' ORDER BY paid_at DESC").all(factionId) as unknown as LocalSettlementRow[];
-    const entries = rows.flatMap<PayoutLedgerEntry>((row) => parseMembers(row.snapshot_json).map((member) => ({ id: `${factionId}:${row.chain_id}:${member.tornUserId}`, chainId: row.chain_id, tornUserId: member.tornUserId, memberName: member.memberName, amount: member.amount, rewardUnit: row.reward_unit, tierLabel: member.tierLabel, status: "PAID", processedAt: row.paid_at, processedBy: row.paid_by_torn_id ? { tornUserId: row.paid_by_torn_id, name: row.paid_by_name || knownNames[row.paid_by_torn_id] || "Unknown user" } : null })));
+    const rows = database.prepare("SELECT chain_id, reward_unit, snapshot_json, calculated_at, paid_at, paid_by_torn_id, paid_by_name FROM chain_settlements WHERE faction_id = ? AND status = 'PAID' ORDER BY paid_at DESC").all(factionId) as unknown as LocalSettlementRow[];
+    const entries = rows.flatMap<PayoutLedgerEntry>((row) => parseMembers(row.snapshot_json).map((member) => ({ id: `${factionId}:${row.chain_id}:${member.tornUserId}`, chainId: row.chain_id, tornUserId: member.tornUserId, memberName: member.memberName, amount: member.amount, rewardUnit: row.reward_unit, tierLabel: member.tierLabel, status: "PAID", createdAt: row.calculated_at, processedAt: row.paid_at, processedBy: row.paid_by_torn_id ? { tornUserId: row.paid_by_torn_id, name: row.paid_by_name || knownNames[row.paid_by_torn_id] || "Unknown user" } : null })));
     return { databaseConfigured: true, databaseAvailable: true, entries, message: entries.length ? `${entries.length} local member payout${entries.length === 1 ? "" : "s"}.` : "No paid chains are stored in the local database yet." };
   } catch { return empty(true, false, "The local payout register could not be read safely."); }
   finally { database.close(); }
@@ -69,4 +85,4 @@ function parseMembers(value: string): ChainMemberReward[] {
 
 function empty(databaseConfigured: boolean, databaseAvailable: boolean, message: string): PayoutLedgerResult { return { databaseConfigured, databaseAvailable, entries: [], message }; }
 
-interface LocalSettlementRow { chain_id: number; reward_unit: string; snapshot_json: string; paid_at: string | null; paid_by_torn_id: number | null; paid_by_name: string | null }
+interface LocalSettlementRow { chain_id: number; reward_unit: string; snapshot_json: string; calculated_at: string; paid_at: string | null; paid_by_torn_id: number | null; paid_by_name: string | null }

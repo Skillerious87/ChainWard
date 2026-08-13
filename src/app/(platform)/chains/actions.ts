@@ -42,6 +42,8 @@ export async function revertChainPayment(input: unknown): Promise<{ chainId: num
   if (!existing || existing.status !== "PAID") throw new Error("This chain is not currently marked as paid.");
   await revertChainSettlement(faction.id, chainId, {
     reason,
+    totalAmount: existing.totalAmount,
+    rewardUnit: existing.rewardUnit,
     revertedAt: new Date().toISOString(),
     revertedByTornId: actor.tornUserId,
     revertedByName: actor.name,

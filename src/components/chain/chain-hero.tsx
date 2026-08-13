@@ -1,8 +1,9 @@
 "use client";
 
-import { Activity, Clock3, Crosshair, Expand, RefreshCw, TrendingUp, Users, X } from "lucide-react";
+import { Activity, Clock3, Crosshair, Expand, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
 import { anchorFromReading, createAnchor, displaySeconds, project, reconcileAnchor, type CountdownAnchor } from "@/lib/torn/chain-countdown";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
@@ -122,7 +123,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
         <div className="chain-console__toolbar">
           <div className="live-label live-label--unavailable"><i /> Live chain telemetry</div>
           <button className="button button--quiet" onClick={() => void refresh()} disabled={syncing}>
-            <RefreshCw className={syncing ? "spin" : undefined} size={15} />
+            {syncing ? <Spinner size={15} label="Checking chain telemetry" tone="muted" /> : <Activity size={15} />}
             {syncing ? "Checking" : "Retry connection"}
           </button>
         </div>
@@ -149,7 +150,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
           <div className="live-label live-label--paused"><i /> Verified Torn telemetry</div>
           <div className="chain-console__toolbar-actions">
             <span>Checked {formatCheckedTime(snapshot.checkedAt)}</span>
-            <button className="button button--quiet" onClick={() => void refresh()} disabled={syncing}><RefreshCw className={syncing ? "spin" : undefined} size={15} />{syncing ? "Checking" : "Sync now"}</button>
+            <button className="button button--quiet" onClick={() => void refresh()} disabled={syncing}>{syncing ? <Spinner size={15} label="Checking chain telemetry" tone="muted" /> : <Activity size={15} />}{syncing ? "Checking" : "Sync now"}</button>
           </div>
         </div>
         <div className="chain-unavailable chain-paused-state">
@@ -191,7 +192,7 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
         <div className="live-label"><i /> Verified Torn telemetry <span>#{chain.id}</span></div>
         <div className="chain-console__toolbar-actions">
           <span>Official service cache · up to 30s</span>
-          <button className="button button--quiet" onClick={() => void refresh()} disabled={syncing}><RefreshCw className={syncing ? "spin" : undefined} size={15} />{syncing ? "Checking" : "Sync now"}</button>
+          <button className="button button--quiet" onClick={() => void refresh()} disabled={syncing}>{syncing ? <Spinner size={15} label="Checking chain telemetry" tone="muted" /> : <Activity size={15} />}{syncing ? "Checking" : "Sync now"}</button>
           {!focus && <button ref={expandButtonRef} className="icon-button chain-focus-button" onClick={() => setFocus(true)} aria-label="Expand live chain telemetry" title="Expand telemetry"><Expand size={16} /></button>}
         </div>
       </div>

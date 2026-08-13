@@ -191,7 +191,7 @@ export async function revertChainSettlement(factionId: number, chainId: number, 
         action: "chain_payout.reverted",
         entityType: "ChainRewardSnapshot",
         entityId: snapshotIds[0]!,
-        metadata: { chainId, reason: correction.reason, revertedAt: correction.revertedAt },
+        metadata: { chainId, reason: correction.reason, totalAmount: correction.totalAmount ?? null, rewardUnit: correction.rewardUnit ?? null, revertedAt: correction.revertedAt },
       },
     });
   });
@@ -200,6 +200,8 @@ export async function revertChainSettlement(factionId: number, chainId: number, 
 export interface PayoutCorrection {
   /** The operator's stated reason, kept with the withdrawal record. */
   reason: string;
+  totalAmount?: number;
+  rewardUnit?: string | null;
   revertedAt: string;
   revertedByTornId: number;
   revertedByName: string;
@@ -223,6 +225,34 @@ export interface PayoutRevertRecord {
   rewardUnit: string | null;
   revertedAt: string;
   revertedByName: string;
+}
+
+/** Recent payout withdrawals from either persistence backend, newest first. */
+export async function getPayoutReverts(factionId: number, limit = 10): Promise<PayoutRevertRecord[]> {
+  if (!process.env.DATABASE_URL) return getLocalPayoutReverts(factionId, limit);
+  try {
+    const { db } = await import("@/lib/db");
+    const events = await db.auditLog.findMany({
+      where: { faction: { tornFactionId: factionId }, action: "chain_payout.reverted" },
+      include: { actor: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return events.flatMap<PayoutRevertRecord>((event) => {
+      if (!event.metadata || typeof event.metadata !== "object" || Array.isArray(event.metadata)) return [];
+      const metadata = event.metadata as Record<string, unknown>;
+      if (typeof metadata.chainId !== "number" || typeof metadata.reason !== "string") return [];
+      return [{
+        id: event.id,
+        chainId: metadata.chainId,
+        reason: metadata.reason,
+        totalAmount: typeof metadata.totalAmount === "number" ? metadata.totalAmount : null,
+        rewardUnit: typeof metadata.rewardUnit === "string" ? metadata.rewardUnit : null,
+        revertedAt: typeof metadata.revertedAt === "string" ? metadata.revertedAt : event.createdAt.toISOString(),
+        revertedByName: event.actor?.name ?? "Unknown operator",
+      }];
+    });
+  } catch { return []; }
 }
 
 /** Recent payout withdrawals, newest first. */

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { submitAccessRequest } from "@/app/(platform)/licensing/actions";
 import { InfoTip } from "@/components/ui/info-tip";
+import { Spinner } from "@/components/ui/spinner";
 import { TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
 import { createPaymentReference, licensePayment, licensePlans, type LicensePlanId } from "@/lib/licensing/pricing";
@@ -107,7 +108,7 @@ function InactiveAccess({ factionId, factionName }: { factionId: number | null; 
         <span><strong>Keep this reference to yourself.</strong> It is the single identifier that links your Torn transfer to this faction&apos;s access. Share it only inside the transfer itself — anyone who quotes it could claim your payment during review.</span>
       </p>
       <ol><li><span>1</span><p><strong>Reserve the request</strong><small>The plan and reference are locked to this faction.</small></p></li><li><span>2</span><p><strong>Send {selected.price}</strong><small>Transfer to <TornUserName name={licensePayment.recipientName} tornUserId={licensePayment.recipientTornId} /> with the exact reference.</small></p></li><li><span>3</span><p><strong>Follow owner review</strong><small>This page becomes the live approval-status view.</small></p></li></ol>
-      <footer><a href={licensePayment.profileUrl} target="_blank" rel="noreferrer">Open Skillerious profile <ExternalLink size={13} /></a><button className="button button--primary" disabled={!factionId || submitting} onClick={() => void submitRequest()}>{submitting ? "Reserving request…" : `Reserve ${selected.name} access`}<ArrowRight size={15} /></button></footer>
+      <footer><a href={licensePayment.profileUrl} target="_blank" rel="noreferrer">Open Skillerious profile <ExternalLink size={13} /></a><button className="button button--primary" disabled={!factionId || submitting} onClick={() => void submitRequest()}>{submitting && <Spinner size={15} label="Reserving access request" />}{submitting ? "Reserving request…" : `Reserve ${selected.name} access`}{!submitting && <ArrowRight size={15} />}</button></footer>
     </section>
   </div>;
 }

@@ -9,7 +9,6 @@ import {
   EyeOff,
   KeyRound,
   Laptop,
-  LoaderCircle,
   LockKeyhole,
   RefreshCcw,
   ShieldCheck,
@@ -18,6 +17,7 @@ import {
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Spinner } from "@/components/ui/spinner";
 
 type ConnectionResult = {
   player: { id: number; name: string };
@@ -41,6 +41,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const confirmationHeadingRef = useRef<HTMLHeadingElement>(null);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState<ConnectionError | null>(null);
   const [result, setResult] = useState<ConnectionResult | null>(null);
 
@@ -155,8 +156,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
           {error && <div className="form-error connection-confirmation__error" role="alert"><AlertTriangle size={17} /><div><strong>Session could not be cleared</strong><span>{error.message}</span></div></div>}
 
           <div className="connection-confirmation__actions">
-            <button type="button" className="button button--primary" disabled={loading} onClick={() => router.push(connectionNextPath(result))}>Open {result.faction.tag ? `[${result.faction.tag}]` : "faction"} workspace <ArrowRight size={16} /></button>
-            <button type="button" className="connection-confirmation__reset" disabled={loading} onClick={() => void resetConnection()}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
+            <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); router.push(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open {result.faction.tag ? `[${result.faction.tag}]` : "faction"} workspace <ArrowRight size={16} /></>}</button>
+            <button type="button" className="connection-confirmation__reset" disabled={loading} onClick={() => void resetConnection()}>{loading ? <Spinner size={14} label="Clearing connection" /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
           </div>
         </section>
       ) : (
@@ -173,7 +174,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <span><strong>Remember this browser</strong><small>Reconnect automatically for 30 days. Only a random, HTTP-only session token is stored in this browser.</small></span>
           </label>
           {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
-          <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><LoaderCircle className="spin" size={16} /> Validating securely…</> : <>Validate and connect <ArrowRight size={16} /></>}</button>
+          <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Validating Torn connection" /> Validating securely…</> : <>Validate and connect <ArrowRight size={16} /></>}</button>
           <section className="connect-requirements" aria-label="API selections Chainward verifies">
             <p><ShieldCheck size={13} /> Selections checked during validation</p>
             <ul>{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>

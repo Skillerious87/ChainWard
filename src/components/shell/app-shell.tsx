@@ -19,7 +19,6 @@ import {
   MonitorCog,
   PanelLeftClose,
   PanelLeftOpen,
-  RefreshCw,
   Search,
   Settings,
   ShieldCheck,
@@ -43,15 +42,17 @@ import {
 } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { UpgradeAccess } from "@/components/licensing/upgrade-access";
+import { useMemberActivityMonitor } from "@/components/members/use-member-activity-monitor";
 import { NavigationBeacon, publishNavigationState, RouteProgress } from "@/components/shell/route-progress";
 import { ServiceStateDrawer } from "@/components/shell/service-state-drawer";
 import { StatusDot } from "@/components/ui/status-dot";
+import { Spinner } from "@/components/ui/spinner";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { notify, type ToastDetail, type ToastTone } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
-import type { MemberActivityAlertSummary } from "@/lib/members/member-activity-intelligence";
+import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
 import { pollSecondsForChain } from "@/lib/torn/polling-policy";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
@@ -108,7 +109,7 @@ interface ToastState extends ToastDetail {
 }
 
 interface SystemNotification {
-  id: number;
+  id: string;
   title: string;
   detail: string;
   tone: "warning" | "danger";
@@ -116,7 +117,7 @@ interface SystemNotification {
   href?: Route;
 }
 
-export function AppShell({ children, currentUser, telemetry, access, database, memberActivityAlert }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; database: DatabaseStatus; memberActivityAlert: MemberActivityAlertSummary | null }) {
+export function AppShell({ children, currentUser, telemetry, access, database, memberActivityAlert }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const preferences = useAppearancePreferences();
@@ -129,7 +130,8 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
   const [commandIndex, setCommandIndex] = useState(0);
   const [telemetryOverride, setTelemetryOverride] = useState<WorkspaceTelemetry | null>(null);
   const [syncState, setSyncState] = useState<"syncing" | "failed" | null>(null);
-  const [readNotificationIds, setReadNotificationIds] = useState<number[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const monitoredActivity = useMemberActivityMonitor(memberActivityAlert);
   const liveTelemetry = newestTelemetry(telemetry, telemetryOverride);
   const syncLabel = syncState === "syncing"
     ? "Syncing..."
@@ -137,23 +139,24 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       ? "Check failed"
       : checkedTimeLabel(liveTelemetry.checkedAt);
   const systemNotifications: SystemNotification[] = [];
-  if (liveTelemetry.source === "unavailable") systemNotifications.push({ id: 1, title: "Torn API connection required", detail: liveTelemetry.message, tone: "warning", unread: true });
+  if (liveTelemetry.source === "unavailable") systemNotifications.push({ id: "connection", title: "Torn API connection required", detail: liveTelemetry.message, tone: "warning", unread: true });
   // Torn reports seconds remaining at the moment it answered; the shell shows
   // that figure rather than running its own countdown.
   const chainTimeoutRemaining = liveTelemetry.chain?.timeoutSeconds ?? 0;
-  if (liveTelemetry.chain?.state === "active" && chainTimeoutRemaining < preferences.chainWarningSeconds) systemNotifications.push({ id: 2, title: "Live chain timeout warning", detail: `${chainTimeoutRemaining} seconds remained at the last Torn check.`, tone: "warning", unread: true, href: "/live-chain" });
-  if (memberActivityAlert?.attentionCount) {
-    const names = memberActivityAlert.memberNames.join(", ");
+  if (liveTelemetry.chain?.state === "active" && chainTimeoutRemaining < preferences.chainWarningSeconds) systemNotifications.push({ id: `chain:${liveTelemetry.chain.id}:warning`, title: "Live chain timeout warning", detail: `${chainTimeoutRemaining} seconds remained at the last Torn check.`, tone: "warning", unread: true, href: "/live-chain" });
+  if (monitoredActivity?.attentionCount) {
+    const names = monitoredActivity.memberNames.join(", ");
     systemNotifications.push({
-      id: 3,
-      title: memberActivityAlert.criticalCount ? `${memberActivityAlert.criticalCount} critical inactivity alert${memberActivityAlert.criticalCount === 1 ? "" : "s"}` : `${memberActivityAlert.attentionCount} member${memberActivityAlert.attentionCount === 1 ? "" : "s"} need activity review`,
-      detail: `${names}${memberActivityAlert.attentionCount > memberActivityAlert.memberNames.length ? ` and ${memberActivityAlert.attentionCount - memberActivityAlert.memberNames.length} more` : ""}. Owner threshold: ${memberActivityAlert.thresholdDays} days.`,
-      tone: memberActivityAlert.criticalCount ? "danger" : "warning",
+      id: `activity:${monitoredActivity.fingerprint}`,
+      title: monitoredActivity.criticalCount ? `${monitoredActivity.criticalCount} critical inactivity alert${monitoredActivity.criticalCount === 1 ? "" : "s"}` : `${monitoredActivity.attentionCount} member${monitoredActivity.attentionCount === 1 ? "" : "s"} need activity review`,
+      detail: `${names}${monitoredActivity.attentionCount > monitoredActivity.memberNames.length ? ` and ${monitoredActivity.attentionCount - monitoredActivity.memberNames.length} more` : ""}. Owner threshold: ${monitoredActivity.thresholdDays} days.`,
+      tone: monitoredActivity.criticalCount ? "danger" : "warning",
       unread: true,
       href: "/members",
     });
   }
   const notifications = systemNotifications.map((item) => ({ ...item, unread: !readNotificationIds.includes(item.id) }));
+  const activeNotificationIdsKey = JSON.stringify(systemNotifications.map((item) => item.id).toSorted());
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const faction = liveTelemetry.faction;
   const chain = liveTelemetry.chain;
@@ -165,7 +168,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     .map((group) => ({ ...group, items: group.items.map((item) => {
       if (workspaceLocked && item.requiresLicense) return { ...item, locked: true, badge: "Locked" };
       if (item.href === "/live-chain") return { ...item, badge: chain ? chain.current.toLocaleString() : "—" };
-      if (item.href === "/members" && memberActivityAlert?.attentionCount) return { ...item, badge: memberActivityAlert.attentionCount.toLocaleString() };
+      if (item.href === "/members" && monitoredActivity?.attentionCount) return { ...item, badge: monitoredActivity.attentionCount.toLocaleString() };
       return item;
     }) }));
   const searchableItems = visibleNavigation.flatMap((group) => group.items);
@@ -199,6 +202,19 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
   useEffect(() => {
     applyAppearancePreferences(preferences);
   }, [preferences]);
+
+  // Once a condition clears, forget its read acknowledgement. If the same
+  // chain or member condition genuinely returns later, it should be unread.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const activeIds = new Set<string>(JSON.parse(activeNotificationIdsKey) as string[]);
+      setReadNotificationIds((current) => {
+        const next = current.filter((id) => activeIds.has(id));
+        return next.length === current.length ? current : next;
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeNotificationIdsKey]);
 
   useEffect(() => {
     searchableItemsRef.current = searchableItems;
@@ -297,7 +313,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
         if (prefixTimer) window.clearTimeout(prefixTimer);
         if (destination) {
           event.preventDefault();
-          router.push(destination.locked ? "/unlock" : destination.href);
+          startNavigation(() => router.push(destination.locked ? "/unlock" : destination.href));
         }
         return;
       }
@@ -311,7 +327,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       if (prefixTimer) window.clearTimeout(prefixTimer);
       window.removeEventListener("keydown", openCommand);
     };
-  }, [router]);
+  }, [router, startNavigation]);
 
   useEffect(() => {
     function receiveToast(event: Event): void {
@@ -373,6 +389,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
 
   async function disconnectWorkspace(): Promise<void> {
     setOpenPanel(null);
+    publishNavigationState("disconnect-workspace", true);
     try {
       const response = await fetch("/api/onboarding/disconnect", { method: "POST" });
       if (!response.ok) throw new Error("The connection could not be cleared.");
@@ -384,6 +401,8 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
         description: error instanceof Error ? error.message : "Try again in a moment.",
         tone: "danger",
       });
+    } finally {
+      publishNavigationState("disconnect-workspace", false);
     }
   }
 
@@ -481,7 +500,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
             <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => void syncWorkspace()} disabled={syncing || workspaceLocked} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
               <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live" && !syncing} />
               <span><strong>{offlineMode ? "Offline fixture" : liveTelemetry.source === "live" ? "Torn API" : "API attention"}</strong><small>{syncLabel}</small></span>
-              <RefreshCw className={syncing ? "spin" : undefined} size={14} aria-hidden="true" />
+              {syncing ? <Spinner size={14} label="Syncing Torn data" /> : <Clock3 size={14} aria-hidden="true" />}
             </button>
             <div className="topbar-popover-wrap">
               <button className="icon-button notification-button" onClick={() => setOpenPanel(openPanel === "notifications" ? null : "notifications")} aria-label="Notifications" aria-expanded={openPanel === "notifications"}>
@@ -491,7 +510,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
                 <TopbarPopover className="topbar-popover--notifications" close={() => setOpenPanel(null)}>
                   <div className="popover-heading popover-heading--action"><span>Notifications</span><button onClick={() => setReadNotificationIds(notifications.map((item) => item.id))}>Mark all read</button></div>
                   <div className="notification-list">
-                    {notifications.map((item) => <button key={item.id} onClick={() => { setReadNotificationIds((current) => current.includes(item.id) ? current : [...current, item.id]); if (item.href) { setOpenPanel(null); router.push(item.href); } }}><i className={`notification-tone notification-tone--${item.tone}`} /><span><strong>{item.title}</strong><small>{item.detail}</small></span>{item.unread && <em />}</button>)}
+                    {notifications.map((item) => <button key={item.id} onClick={() => { setReadNotificationIds((current) => current.includes(item.id) ? current : [...current, item.id]); if (item.href) { setOpenPanel(null); startNavigation(() => router.push(item.href!)); } }}><i className={`notification-tone notification-tone--${item.tone}`} /><span><strong>{item.title}</strong><small>{item.detail}</small></span>{item.unread && <em />}</button>)}
                     {notifications.length === 0 && <div className="table-empty">No operational notifications.</div>}
                   </div>
                   {ownerAccess && <Link href="/admin" onClick={() => setOpenPanel(null)} className="popover-action">Open owner operations <span>→</span></Link>}

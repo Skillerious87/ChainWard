@@ -162,6 +162,9 @@ async function run() {
     check("/connect lists the verified key selections", connect.html.includes("chainreport"));
     check("/connect declares a responsive viewport", /<meta name="viewport" content="[^"]*width=device-width/.test(connect.html));
     check("/connect keeps the key field above the supporting steps for narrow viewports", connect.html.indexOf("onboarding-form-shell") < connect.html.indexOf("onboarding-support"), "the form markup must precede the supporting steps");
+    const notificationWorker = await fetch(`${ORIGIN}/chainward-notifications.js`);
+    const notificationWorkerSource = await notificationWorker.text();
+    check("notification worker is served from the application origin", notificationWorker.ok && notificationWorkerSource.includes("notificationclick"), `status ${notificationWorker.status}`);
 
     console.log("\nGuest access control");
     const guarded = await getRoute("/dashboard");
@@ -219,6 +222,11 @@ async function run() {
     check("gauge scale is derived from Torn's reported maximum", liveChain.html.includes("1,000"));
     check("live chain labels contributors as live, not last-completed", liveChain.html.includes("Live report contributors"));
 
+    const membersPage = await getRoute("/members", session.cookie);
+    check("member activity renders the ranked follow-up queue", membersPage.html.includes("Smart follow-up queue") && membersPage.html.includes("member-priority-queue"));
+    check("member activity offers expanded escalation views", membersPage.html.includes("Due soon") && membersPage.html.includes("Expired holiday"));
+    check("member activity offers a deliberate roster refresh", membersPage.html.includes("Refresh roster"));
+
     const history = await getRoute("/chains", session.cookie);
     check("chain history reports settlement standing", history.html.includes("history-summary__settlement") && history.html.includes("marked paid"));
     check("chain history plots recent form", history.html.includes("chain-trend__plot") && history.html.includes("Last "), "the trend panel needs at least two completed chains to draw");
@@ -254,6 +262,16 @@ async function run() {
     check("telemetry never leaks a credential", !JSON.stringify(telemetryPayload).toLowerCase().includes("apikey"));
     const anonymousTelemetry = await fetch(`${ORIGIN}/api/telemetry/live-chain`, { headers: { accept: "application/json" } });
     check("telemetry rejects an unauthenticated caller", anonymousTelemetry.status === 401, `status ${anonymousTelemetry.status}`);
+
+    console.log("\nMember activity monitor API");
+    const activityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json", cookie: ownerSession.cookie } });
+    const activityPayload = await activityMonitor.json();
+    check("owner receives a verified activity monitor snapshot", activityMonitor.ok && activityPayload.factionId === 98765 && Array.isArray(activityPayload.alerts), `status ${activityMonitor.status}`);
+    check("activity monitor carries a stable alert fingerprint", typeof activityPayload.fingerprint === "string" && typeof activityPayload.checkedAt === "string");
+    const unassignedActivityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json", cookie: session.cookie } });
+    check("an unassigned member cannot monitor the roster", unassignedActivityMonitor.status === 403, `status ${unassignedActivityMonitor.status}`);
+    const anonymousActivityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json" } });
+    check("an unauthenticated caller cannot monitor the roster", anonymousActivityMonitor.status === 403, `status ${anonymousActivityMonitor.status}`);
 
     console.log("\nRequest hardening");
     const crossSite = await fetch(`${ORIGIN}/api/onboarding/offline-session`, {

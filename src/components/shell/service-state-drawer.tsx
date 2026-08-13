@@ -4,7 +4,6 @@ import {
   Activity,
   Database,
   KeyRound,
-  RefreshCw,
   Satellite,
   Settings,
   Timer,
@@ -14,6 +13,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { DatabaseStatus } from "@/lib/data/database-status";
+import { Spinner } from "@/components/ui/spinner";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 type ServiceTone = "ok" | "attention" | "neutral";
@@ -107,7 +107,7 @@ export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClo
 
         <footer className="service-drawer__footer">
           <button className="button button--secondary" onClick={onSync} disabled={syncing || offline}>
-            <RefreshCw className={syncing ? "spin" : undefined} size={14} /> {syncing ? "Checking…" : "Re-check now"}
+            {syncing ? <Spinner size={14} label="Checking service state" tone="muted" /> : <Activity size={14} />} {syncing ? "Checking…" : "Re-check now"}
           </button>
           <Link href="/settings" className="button button--quiet" onClick={onClose}><Settings size={14} /> Settings</Link>
           <time dateTime={telemetry.checkedAt}>{new Date(telemetry.checkedAt).toLocaleString("en-GB")}</time>

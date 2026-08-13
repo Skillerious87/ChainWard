@@ -1,9 +1,14 @@
 "use client";
 
 import { useLinkStatus } from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { PageLoadingCore } from "@/components/ui/page-loading-core";
 
 const NAVIGATION_EVENT = "chainward:navigating";
+const MINIMUM_VISIBLE_MS = 1_000;
+const FINISH_DURATION_MS = 260;
+const NAVIGATION_SAFETY_TIMEOUT_MS = 12_000;
 
 /**
  * Rendered inside a `<Link>`. `useLinkStatus` only reports the pending state to
@@ -33,31 +38,44 @@ export function publishNavigationState(id: string, pending: boolean): void {
 }
 
 /**
- * A thin indeterminate bar under the top chrome. It only becomes visible after
- * a short delay so instant, prefetched navigations do not flash a loading
- * state, and it always plays a completion sweep so the transition reads as
- * finished rather than cancelled.
+ * Client-only panes (settings sections, editor tabs, and similar views) render
+ * synchronously, but still deserve the same visible acknowledgement as a route
+ * change. RouteProgress owns the minimum display time, so callers only need to
+ * publish for the duration of the render frame.
+ */
+export function publishViewSwitch(id: string): void {
+  publishNavigationState(id, true);
+  window.requestAnimationFrame(() => window.requestAnimationFrame(() => publishNavigationState(id, false)));
+}
+
+/**
+ * Immediate workspace navigation feedback. `useLinkStatus` deliberately skips
+ * prefetched routes, so a capture listener also observes ordinary same-origin
+ * link activation. The ring stays visible long enough to be perceived even
+ * when the destination was already in the Next.js client cache.
  */
 export function RouteProgress() {
+  const pathname = usePathname();
   const [phase, setPhase] = useState<"idle" | "running" | "finishing">("idle");
   const pendingIds = useRef(new Set<string>());
+  const manualNavigationId = useRef<string | null>(null);
+  const manualSafetyTimer = useRef<number | undefined>(undefined);
+  const runningSince = useRef(0);
 
   useEffect(() => {
-    let finishTimer: number | undefined;
-    let settleTimer: number | undefined;
+    let finishDelayTimer: number | undefined;
+    let idleTimer: number | undefined;
 
     /**
      * The outgoing view stays on screen while the next one resolves, so it is
      * marked on the root element instead of being replaced by a placeholder.
-     * The flag is delayed so an instant navigation never dims at all.
      */
     function markNavigating(active: boolean): void {
-      window.clearTimeout(settleTimer);
       if (!active) {
         delete document.documentElement.dataset.navigating;
         return;
       }
-      settleTimer = window.setTimeout(() => { document.documentElement.dataset.navigating = "true"; }, 140);
+      document.documentElement.dataset.navigating = "true";
     }
 
     function receive(event: Event): void {
@@ -67,25 +85,85 @@ export function RouteProgress() {
       else pendingIds.current.delete(detail.id);
 
       if (pendingIds.current.size > 0) {
-        window.clearTimeout(finishTimer);
+        window.clearTimeout(finishDelayTimer);
+        window.clearTimeout(idleTimer);
+        if (runningSince.current === 0) runningSince.current = performance.now();
         markNavigating(true);
         setPhase("running");
         return;
       }
-      markNavigating(false);
-      setPhase((current) => (current === "running" ? "finishing" : current));
-      window.clearTimeout(finishTimer);
-      finishTimer = window.setTimeout(() => setPhase("idle"), 420);
+
+      const remaining = Math.max(0, MINIMUM_VISIBLE_MS - (performance.now() - runningSince.current));
+      window.clearTimeout(finishDelayTimer);
+      finishDelayTimer = window.setTimeout(() => {
+        setPhase((current) => current === "idle" ? current : "finishing");
+        idleTimer = window.setTimeout(() => {
+          runningSince.current = 0;
+          markNavigating(false);
+          setPhase("idle");
+        }, FINISH_DURATION_MS);
+      }, remaining);
     }
 
     window.addEventListener(NAVIGATION_EVENT, receive);
     return () => {
-      window.clearTimeout(finishTimer);
-      window.clearTimeout(settleTimer);
+      window.clearTimeout(finishDelayTimer);
+      window.clearTimeout(idleTimer);
       delete document.documentElement.dataset.navigating;
       window.removeEventListener(NAVIGATION_EVENT, receive);
     };
   }, []);
 
-  return <div className="route-progress" data-phase={phase} role="presentation" />;
+  useEffect(() => {
+    function completeManualNavigation(): void {
+      const id = manualNavigationId.current;
+      if (!id) return;
+      manualNavigationId.current = null;
+      window.clearTimeout(manualSafetyTimer.current);
+      manualSafetyTimer.current = undefined;
+      publishNavigationState(id, false);
+    }
+
+    function captureNavigation(event: MouseEvent): void {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest<HTMLAnchorElement>("a[href]");
+      if (!anchor || anchor.hasAttribute("download") || (anchor.target && anchor.target !== "_self")) return;
+
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin) return;
+      const current = new URL(window.location.href);
+      // Query/hash-only links do not replace a workspace view, and pathname is
+      // the completion signal available without forcing a search-param
+      // Suspense boundary around the persistent shell.
+      if (destination.pathname === current.pathname) return;
+
+      completeManualNavigation();
+      const id = `link:${destination.pathname}${destination.search}:${performance.now()}`;
+      manualNavigationId.current = id;
+      publishNavigationState(id, true);
+      manualSafetyTimer.current = window.setTimeout(completeManualNavigation, NAVIGATION_SAFETY_TIMEOUT_MS);
+    }
+
+    document.addEventListener("click", captureNavigation, true);
+    return () => {
+      document.removeEventListener("click", captureNavigation, true);
+      completeManualNavigation();
+    };
+  }, []);
+
+  useEffect(() => {
+    const id = manualNavigationId.current;
+    if (!id) return;
+    manualNavigationId.current = null;
+    window.clearTimeout(manualSafetyTimer.current);
+    manualSafetyTimer.current = undefined;
+    publishNavigationState(id, false);
+  }, [pathname]);
+
+  return <>
+    <div className="route-progress" data-phase={phase} aria-hidden="true" />
+    {phase !== "idle" && <div className="route-loading-core" data-phase={phase}><PageLoadingCore title="Loading" hint="Preparing the next view" /></div>}
+  </>;
 }
