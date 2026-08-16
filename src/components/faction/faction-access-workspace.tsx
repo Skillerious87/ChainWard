@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  AlertTriangle,
   BadgeCheck,
   Check,
   ChevronsUpDown,
@@ -31,6 +32,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Spinner } from "@/components/ui/spinner";
 import { TornUserLink, TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
+import { analyzeAccessChange, analyzeAccessPosture } from "@/lib/auth/access-intelligence";
 import { roleDefinitions, roleLabel } from "@/lib/auth/authorization";
 import type { FactionAccessAssignment, FactionAccessWorkspace, ManagedAccessStatus, ManagedFactionRole } from "@/lib/auth/faction-access-store";
 import { summarizeRoster } from "@/lib/intelligence/analytics";
@@ -82,6 +84,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
   const checkedAtSeconds = Math.floor(Date.parse(rosterResult.checkedAt) / 1_000);
   const activeAssignments = access.assignments.filter((assignment) => assignment.status === "ACTIVE").length;
   const rosterIds = useMemo(() => new Set(roster.map((member) => member.tornId)), [roster]);
+  const accessPosture = useMemo(() => analyzeAccessPosture(access.assignments, rosterIds, rosterResult.available, access.databaseAvailable), [access.assignments, access.databaseAvailable, rosterIds, rosterResult.available]);
   /**
    * An assignment whose holder is no longer on the verified roster. The server
    * refuses these at permission-check time, but the row survives until somebody
@@ -114,6 +117,12 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
   const visible = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize);
   const visibleSelectableIds = visible.map((member) => member.tornId);
   const allVisibleSelected = visibleSelectableIds.length > 0 && visibleSelectableIds.every((tornUserId) => selectedIds.has(tornUserId));
+  const selectedAssignment = selected ? assignmentById.get(selected.tornId) ?? null : null;
+  const accessImpact = selected ? analyzeAccessChange(selectedAssignment, { role: draftRole, status: draftStatus }) : null;
+  const bulkChangedIds = [...selectedIds].filter((tornUserId) => {
+    const current = assignmentById.get(tornUserId);
+    return !current || current.role !== bulkRole || current.status !== bulkStatus;
+  });
 
   function changeView(next: RosterView): void { setView(next); setPage(0); }
   function inspect(member: TornRosterMember): void {
@@ -125,6 +134,10 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
 
   async function saveAccess(): Promise<void> {
     if (!selected || !faction) return;
+    if (!accessImpact?.changed) {
+      notify({ title: "Access already matches", description: "No access record or audit event was changed.", tone: "info", dedupeKey: `access-noop:${selected.tornId}` });
+      return;
+    }
     const result = await updateFactionMemberAccess({ factionId: faction.id, tornUserId: selected.tornId, role: draftRole, status: draftStatus });
     notify({ title: result.ok ? "Access registry updated" : "Access was not changed", description: result.message, tone: result.ok ? "success" : "danger" });
     if (!result.ok) throw new Error(result.message);
@@ -166,9 +179,13 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
 
   async function saveBulkAccess(): Promise<void> {
     if (!faction || !selectedIds.size) return;
+    if (!bulkChangedIds.length) {
+      notify({ title: "Everyone already matches", description: "No access records or audit events were changed.", tone: "info", dedupeKey: "access-bulk-noop" });
+      return;
+    }
     setBulkWorking(true);
     try {
-      const result = await updateFactionMemberAccessBatch({ factionId: faction.id, tornUserIds: [...selectedIds], role: bulkRole, status: bulkStatus });
+      const result = await updateFactionMemberAccessBatch({ factionId: faction.id, tornUserIds: bulkChangedIds, role: bulkRole, status: bulkStatus });
       notify({ title: result.ok ? "Bulk access updated" : "Bulk access was not changed", description: result.message, tone: result.ok ? "success" : "danger" });
       if (!result.ok) return;
       setSelectedIds(new Set());
@@ -200,6 +217,17 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
       <AccessStat icon={Activity} label="Active in 15m" value={rosterResult.available ? summary.active15Minutes.toLocaleString() : "—"} detail={`${summary.activeHour} active in the last hour`} />
       <AccessStat icon={BadgeCheck} label="Status Okay" value={rosterResult.available ? `${summary.okayPercent.toFixed(0)}%` : "—"} detail={`${summary.okay} of ${summary.total} members`} />
       <AccessStat icon={KeyRound} label="Application access" value={access.databaseAvailable ? activeAssignments.toLocaleString() : "—"} detail={`${access.assignments.length - activeAssignments} suspended · ${access.message}`} />
+    </section>
+
+    <section className={`access-intelligence access-intelligence--${accessPosture.tone}`} role="status">
+      <span className="access-intelligence__icon">{accessPosture.tone === "healthy" ? <ShieldCheck size={19} /> : <AlertTriangle size={19} />}</span>
+      <div><p className="eyebrow">Access intelligence</p><strong>{accessPosture.title}</strong><small>{accessPosture.detail}</small></div>
+      <dl>
+        <div><dt>Administrators</dt><dd>{accessPosture.administratorCount}</dd></div>
+        <div><dt>Suspended</dt><dd>{accessPosture.suspendedCount}</dd></div>
+        <div><dt>Stale</dt><dd>{accessPosture.staleCount}</dd></div>
+      </dl>
+      <button className="button button--quiet" onClick={() => setAccessView(accessPosture.action)}>{accessPosture.actionLabel}</button>
     </section>
 
     <nav className="access-workspace-nav" aria-label="Access management views">
@@ -265,7 +293,13 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
     {accessView === "directory" && <section className="data-section access-roster-section">
       <div className="section-heading access-roster-heading"><div><h2>Roster and access control</h2><p>{filtered.length} of {roster.length} verified members match this view</p></div><div className="table-tools"><label className="search-field"><Search size={15} /><span className="sr-only">Search faction roster</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Member, position, or Torn ID" /></label><label className="access-position-filter"><SlidersHorizontal size={14} /><span className="sr-only">Faction position</span><select value={position} onChange={(event) => { setPosition(event.target.value); setPage(0); }}>{positions.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
       <div className="roster-view-tabs" role="tablist" aria-label="Roster view">{([ ["all", "All members", roster.length], ["recent", "Active 15m", summary.active15Minutes], ["attention", "Needs attention", Math.max(0, roster.length - summary.okay)], ["assigned", "Access assigned", access.assignments.length] ] as const).map(([value, label, count]) => <button role="tab" aria-selected={view === value} className={view === value ? "roster-view-tab--active" : undefined} key={value} onClick={() => changeView(value)}>{label}<span>{count}</span></button>)}</div>
-      {canManage && selectedIds.size > 0 && <div className="access-bulk-bar"><span><Check size={14} /><strong>{selectedIds.size} selected</strong><button onClick={() => setSelectedIds(new Set())}>Clear</button></span><label><span>Role</span><select value={bulkRole} onChange={(event) => setBulkRole(event.target.value as ManagedFactionRole)}>{roleOptions.map((definition) => <option key={definition.role} value={definition.role}>{definition.label}</option>)}</select></label><label><span>Status</span><select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value as ManagedAccessStatus)}><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option></select></label><button className="button button--primary" disabled={bulkWorking || !access.databaseAvailable} onClick={() => void saveBulkAccess()}>{bulkWorking && <Spinner size={14} label="Updating selected members" />}{bulkWorking ? "Updating…" : "Apply to selected"}</button></div>}
+      {canManage && selectedIds.size > 0 && <div className="access-bulk-bar">
+        <span><Check size={14} /><strong>{selectedIds.size} selected</strong><button onClick={() => setSelectedIds(new Set())}>Clear</button></span>
+        <label><span>Role</span><select value={bulkRole} onChange={(event) => setBulkRole(event.target.value as ManagedFactionRole)}>{roleOptions.map((definition) => <option key={definition.role} value={definition.role}>{definition.label}</option>)}</select></label>
+        <label><span>Status</span><select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value as ManagedAccessStatus)}><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option></select></label>
+        <small className="access-bulk-impact">{bulkChangedIds.length ? `${bulkChangedIds.length} will change${bulkChangedIds.length < selectedIds.size ? ` · ${selectedIds.size - bulkChangedIds.length} already match` : ""}` : "No changes needed"}</small>
+        <button className="button button--primary" disabled={bulkWorking || !access.databaseAvailable || bulkChangedIds.length === 0} onClick={() => void saveBulkAccess()}>{bulkWorking && <Spinner size={14} label="Updating selected members" />}{bulkWorking ? "Updating…" : "Apply changes"}</button>
+      </div>}
       <div className="table-scroll"><table className="data-table access-roster-table"><thead><tr>{canManage && <th className="access-selection-cell"><input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleVisible(event.target.checked)} aria-label="Select visible members" /></th>}<RosterSort label="Player" value="name" active={sortKey} onChange={setSortKey} /><th>Faction position</th><RosterSort label="Level" value="level" active={sortKey} onChange={setSortKey} numeric /><RosterSort label="Tenure" value="tenure" active={sortKey} onChange={setSortKey} numeric /><RosterSort label="Last action" value="activity" active={sortKey} onChange={setSortKey} /><th>Torn status</th><RosterSort label="App access" value="access" active={sortKey} onChange={setSortKey} /><th><span className="sr-only">Manage</span></th></tr></thead><tbody>{visible.map((member) => { const assignment = assignmentById.get(member.tornId); return <tr key={member.tornId}>{canManage && <td className="access-selection-cell"><input type="checkbox" checked={selectedIds.has(member.tornId)} onChange={(event) => toggleSelected(member.tornId, event.target.checked)} aria-label={`Select ${member.name}`} /></td>}<td><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail={`Level ${member.level}`} /></td><td>{member.position || <span className="muted-value">Not returned</span>}</td><td className="numeric"><strong>{member.level}</strong></td><td className="numeric"><strong>{member.daysInFaction.toLocaleString()}</strong><small className="cell-subtext">days</small></td><td><strong>{member.lastAction}</strong></td><td><span className={`member-status member-status--${memberStatusClass(member.status)}`} title={member.statusDescription}><i />{member.status}</span></td><td>{assignment ? <span className="roster-access-cell"><strong>{roleLabel(assignment.role)}</strong><small className={`access-copy--${assignment.status.toLowerCase()}`}>{titleCase(assignment.status)}</small></span> : <span className="roster-access-none"><ShieldOff size={13} />None</span>}</td><td><button className="row-manage-button" onClick={() => inspect(member)}>{canManage ? assignment ? "Manage" : "Grant access" : "Inspect"}</button></td></tr>; })}</tbody></table>{visible.length === 0 && <div className="table-empty">No faction members match the selected search and filters.</div>}</div>
       <div className="table-footer"><span>Page {safePage + 1} of {pageCount} · sorted by {sortLabel(sortKey)}</span><div className="pagination"><button disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button><button disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next</button></div></div>
     </section>}
@@ -275,8 +309,25 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
       {access.audit.length ? <div className="faction-access-audit-list">{access.audit.map((event) => { const actor = roster.find((member) => member.tornId === event.actorTornUserId); return <article key={event.id}><span>{auditIcon(event.action)}</span><div><strong>{event.memberName}</strong><p>{auditSentence(event.action, event.role)}</p></div>{event.actorTornUserId ? <TornUserName name={actor?.name ?? "Unknown user"} tornUserId={event.actorTornUserId} detail="Updated by" /> : <em>System actor</em>}<time dateTime={event.createdAt}>{formatAuditTime(event.createdAt)}</time></article>; })}</div> : <div className="access-audit-empty"><ShieldCheck size={17} /><span><strong>No access changes recorded</strong><small>The first role assignment will create an immutable audit entry here.</small></span></div>}
     </section>}
 
-    <Dialog open={Boolean(selected)} className="dialog--member-access" title={selected ? `${selected.name} · workspace access` : "Workspace access"} description={selected ? "Verified member of the connected Torn faction" : undefined} confirmLabel={canManage ? "Save access" : "Close"} cancelLabel="Cancel" hideCancel={!canManage} confirmDisabled={canManage && (!access.databaseAvailable || !faction)} onConfirm={canManage ? saveAccess : async () => undefined} onClose={() => setSelected(null)}>
-      {selected && <div className="member-access-editor"><div className="member-access-profile"><MemberAvatar name={selected.name} /><div><strong>{selected.name}</strong><p>{selected.position || "Faction position unavailable"} · Level {selected.level}</p><span className={`member-status member-status--${memberStatusClass(selected.status)}`}><i />{selected.status}</span></div><button onClick={() => void copyTornId(selected.tornId)}><Copy size={13} />Copy ID</button></div><dl className="member-access-facts"><div><dt>Last activity</dt><dd>{selected.lastAction}</dd></div><div><dt>Faction tenure</dt><dd>{selected.daysInFaction.toLocaleString()} days</dd></div><div><dt>Status detail</dt><dd>{selected.statusDescription || "No description returned"}</dd></div></dl>{canManage && <><div className="access-editor-fields"><label><span>Application role</span><select value={draftRole} onChange={(event) => setDraftRole(event.target.value as ManagedFactionRole)}>{roleOptions.map((definition) => <option key={definition.role} value={definition.role}>{definition.label}</option>)}</select><small>{roleOptions.find((definition) => definition.role === draftRole)?.description}</small></label><label><span>Access status</span><select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value as ManagedAccessStatus)}><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option></select><small>Suspended access remains auditable but cannot be used.</small></label></div><div className="access-safety-note"><ShieldCheck size={15} /><p><strong>Verified assignment boundary</strong><span>The server will re-check owner authority, connected faction, and current roster membership before saving.</span></p></div>{assignmentById.has(selected.tornId) && <button className="revoke-access-button" onClick={() => { setSelected(null); setRevokeTarget({ tornUserId: selected.tornId, name: selected.name, inRoster: true }); }}><CircleSlash2 size={14} />Revoke this member&apos;s application access</button>}</>}</div>}
+    <Dialog open={Boolean(selected)} className="dialog--member-access" title={selected ? `${selected.name} · workspace access` : "Workspace access"} description={selected ? "Verified member of the connected Torn faction" : undefined} confirmLabel={!canManage ? "Close" : accessImpact?.changed ? selectedAssignment ? "Save access" : "Grant access" : "No changes"} cancelLabel="Cancel" hideCancel={!canManage} confirmDisabled={canManage && (!access.databaseAvailable || !faction || !accessImpact?.changed)} onConfirm={canManage ? saveAccess : async () => undefined} onClose={() => setSelected(null)}>
+      {selected && <div className="member-access-editor">
+        <div className="member-access-profile"><MemberAvatar name={selected.name} /><div><strong>{selected.name}</strong><p>{selected.position || "Faction position unavailable"} · Level {selected.level}</p><span className={`member-status member-status--${memberStatusClass(selected.status)}`}><i />{selected.status}</span></div><button onClick={() => void copyTornId(selected.tornId)}><Copy size={13} />Copy ID</button></div>
+        <dl className="member-access-facts"><div><dt>Last activity</dt><dd>{selected.lastAction}</dd></div><div><dt>Faction tenure</dt><dd>{selected.daysInFaction.toLocaleString()} days</dd></div><div><dt>Status detail</dt><dd>{selected.statusDescription || "No description returned"}</dd></div></dl>
+        {canManage && <>
+          <div className="access-editor-fields"><label><span>Application role</span><select value={draftRole} onChange={(event) => setDraftRole(event.target.value as ManagedFactionRole)}>{roleOptions.map((definition) => <option key={definition.role} value={definition.role}>{definition.label}</option>)}</select><small>{roleOptions.find((definition) => definition.role === draftRole)?.description}</small></label><label><span>Access status</span><select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value as ManagedAccessStatus)}><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option></select><small>Suspended access remains auditable but cannot be used.</small></label></div>
+          {accessImpact && <section className={`access-change-preview access-change-preview--${accessImpact.tone}`} aria-live="polite">
+            <span>{accessImpact.tone === "danger" || accessImpact.tone === "warning" ? <AlertTriangle size={16} /> : <ShieldCheck size={16} />}</span>
+            <div><strong>{accessImpact.title}</strong><p>{accessImpact.detail}</p>
+              {(accessImpact.gained.length > 0 || accessImpact.removed.length > 0) && <dl>
+                {accessImpact.gained.length > 0 && <div><dt>Added</dt><dd>{accessImpact.gained.map((permission) => <em key={permission.permission}>+ {permission.label}</em>)}</dd></div>}
+                {accessImpact.removed.length > 0 && <div><dt>Removed</dt><dd>{accessImpact.removed.map((permission) => <em key={permission.permission}>− {permission.label}</em>)}</dd></div>}
+              </dl>}
+              <small>The server rechecks owner authority, faction scope, and current roster membership before saving.</small>
+            </div>
+          </section>}
+          {assignmentById.has(selected.tornId) && <button className="revoke-access-button" onClick={() => { setSelected(null); setRevokeTarget({ tornUserId: selected.tornId, name: selected.name, inRoster: true }); }}><CircleSlash2 size={14} />Revoke this member&apos;s application access</button>}
+        </>}
+      </div>}
     </Dialog>
 
     <Dialog open={Boolean(revokeTarget)} className="dialog--revoke-access" title="Revoke application access?" description={revokeTarget ? `${revokeTarget.name} will no longer have a Chainward faction role.` : undefined} confirmLabel="Revoke access" destructive onConfirm={revokeAccess} onClose={() => setRevokeTarget(null)}>

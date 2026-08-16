@@ -15,4 +15,11 @@ describe("PayoutRecipients", () => {
     expect(html).toContain("1,000,000");
     expect(html).not.toContain("1,000,005");
   });
+
+  it("keeps an addressable recipient section when the ledger is empty", () => {
+    const html = renderToStaticMarkup(<PayoutRecipients entries={[]} />);
+
+    expect(html).toContain('id="payout-recipients"');
+    expect(html).toContain("No recipient totals yet");
+  });
 });

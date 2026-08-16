@@ -11,7 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import { Spinner } from "@/components/ui/spinner";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
@@ -37,6 +37,7 @@ interface ServiceStateDrawerProps {
 
 export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClose }: ServiceStateDrawerProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
   const offline = telemetry.mode === "offline";
   const live = telemetry.source === "live";
   const rows = buildRows(telemetry, database);
@@ -50,25 +51,37 @@ export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClo
       : "Every check Chainward performs on this device responded successfully.";
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const returnTarget = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     closeRef.current?.focus();
     function onKey(event: KeyboardEvent): void {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.requestAnimationFrame(() => {
+        if (returnTarget?.isConnected) returnTarget.focus();
+      });
+    };
+  }, []);
 
   return (
     <div className="service-drawer" role="dialog" aria-modal="true" aria-label="Observed service state">
-      <button className="service-drawer__scrim" onClick={onClose} aria-label="Close service state" />
-      <aside className="service-drawer__panel">
+      <button type="button" tabIndex={-1} className="service-drawer__scrim" onClick={onClose} aria-label="Close service state" />
+      <aside className="service-drawer__panel" onKeyDown={trapDrawerFocus}>
         <header className="service-drawer__header">
           <span className={`service-drawer__glyph service-drawer__glyph--${overall}`}><Activity size={18} /></span>
           <div>
             <p className="eyebrow">Observed service state</p>
             <h2>Data connection</h2>
           </div>
-          <button ref={closeRef} className="icon-button" onClick={onClose} aria-label="Close service state"><X size={18} /></button>
+          <button type="button" ref={closeRef} className="icon-button" onClick={onClose} aria-label="Close service state"><X size={18} /></button>
         </header>
 
         <div className="service-drawer__body">
@@ -106,7 +119,7 @@ export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClo
         </div>
 
         <footer className="service-drawer__footer">
-          <button className="button button--secondary" onClick={onSync} disabled={syncing || offline}>
+          <button type="button" className="button button--secondary" onClick={onSync} disabled={syncing || offline}>
             {syncing ? <Spinner size={14} label="Checking service state" tone="muted" /> : <Activity size={14} />} {syncing ? "Checking…" : "Re-check now"}
           </button>
           <Link href="/settings" className="button button--quiet" onClick={onClose}><Settings size={14} /> Settings</Link>
@@ -115,6 +128,27 @@ export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClo
       </aside>
     </div>
   );
+}
+
+function trapDrawerFocus(event: ReactKeyboardEvent<HTMLElement>): void {
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  ));
+  if (focusable.length === 0) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable.at(0);
+  const last = focusable.at(-1);
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function buildRows(telemetry: WorkspaceTelemetry, database: DatabaseStatus): ServiceRow[] {

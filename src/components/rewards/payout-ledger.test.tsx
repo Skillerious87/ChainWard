@@ -11,6 +11,24 @@ describe("PayoutLedger", () => {
     expect(html).not.toContain("[object Object]");
   });
 
+  it("adds artwork-aware rewards and professional register controls", () => {
+    const html = renderToStaticMarkup(<PayoutLedger entries={[
+      entry({ id: "none", amount: 0, tornUserId: 1, memberName: "No reward", status: "PAID" }),
+      entry({ id: "single", amount: 1, tornUserId: 2, memberName: "Single pill", status: "PAID" }),
+      entry({ id: "blister", amount: 3, tornUserId: 3, memberName: "Blister", status: "PAID" }),
+      entry({ id: "box", amount: 5, tornUserId: 4, memberName: "Box", status: "PAID" }),
+    ]} message="Ready" />);
+
+    expect(html).toContain("/images/rewards/xanax-reward-one-pill.png");
+    expect(html).toContain("/images/rewards/xanax-reward.png");
+    expect(html).toContain("/images/rewards/xanax-reward-box.png");
+    expect(html).toContain("reward-amount--none");
+    expect(html).toContain("Export view (4)");
+    expect(html).toContain("Last 30 days");
+    expect(html).toContain("aria-sort=\"descending\"");
+    expect(html).toContain("Open chain 123");
+  });
+
   it("keeps unlike reward units separate while calculating settlement risk", () => {
     const entries: PayoutLedgerEntry[] = [
       entry({ id: "paid", amount: 4, rewardUnit: "Xanax", status: "PAID", processedAt: "2026-08-10T12:00:00.000Z", processedBy: { tornUserId: 1, name: "Recorder" } }),

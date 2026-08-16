@@ -157,17 +157,15 @@ contradicting the policy stated on the same screen.
 owner as a target. The local registry read also filters `OWNER` rows, matching
 what the PostgreSQL path already did.
 
-### 14. The chain state could never report a cooldown, and hid live chains
+### 14. Chain state mixed two different time representations
 
-Torn returns `timeout` and `cooldown` as **seconds remaining**, not as unix
-timestamps. The service compared `cooldown` against the current epoch second,
-which is always false, so the cooldown state was unreachable. It also treated a
-non-zero `end` as proof the chain had finished, which reported a live chain as
-idle while its hit count was still climbing.
+Torn's current OpenAPI schema defines `timeout` as **seconds remaining** and
+`cooldown` as the **Unix timestamp at which cooldown ends**. It also returns a
+non-zero `end` for some live chains, so that field cannot decide liveness.
 
-**Fix.** `timeout` is the only unambiguous liveness signal — it counts down
-while and only while a chain runs — so state is decided from it, with `cooldown`
-read as the duration it is. Seven tests pin the state table.
+**Fix.** `timeout > 0` selects an active chain. A future `cooldown` timestamp
+selects cooldown and is converted to seconds remaining before reaching the
+browser. Tests pin the active, cooldown, stale-timestamp, and idle cases.
 
 ### 15. The chain countdown restarted on every page load
 
@@ -175,23 +173,25 @@ Chain responses are cached briefly, but the telemetry map stamped every render
 with `checkedAt = now`. A cached response therefore received a fresh timestamp
 and the countdown appeared to jump back to its cached value on each refresh.
 
-**Fix.** The cache records when Torn actually answered, and telemetry carries
-absolute deadlines (`timeoutAt`, `cooldownAt`) computed from that moment. The
-deadlines are expressed on **Torn's clock**, taken from the `Date` response
-header, and the browser measures its own offset from a timed sample of each
-telemetry fetch. The countdown is therefore immune to both a stale cache and a
-wrong local system clock; the residual error is half the network round trip.
+**Fix.** The cache records when Torn actually answered and telemetry carries
+that reading's age. The browser subtracts the age plus half the measured round
+trip, then projects the duration with `performance.now()`. The displayed drop
+time and elapsed runtime use the server's checked time projected by the same
+monotonic clock, so changing the browser wall clock cannot move the countdown.
 
-### 16. The countdown learned about resets up to a poll late
+### 16. Cached bodies looked like timer resets
 
-Torn restarts a chain's `timeout` on **every hit**, so at a 30-120s refresh the
-displayed timer could sit far below reality.
+An identical Torn response can repeat the same `timeout` for up to 30 seconds.
+As the local projection fell, the difference from that unchanged value grew
+past the old reset threshold, so every cached `300` could push the UI back to
+`300` without a hit.
 
-**Fix.** The ongoing-chain response has its own short cache window
-(`TORN_CHAIN_CACHE_SECONDS`, default 10s) separate from the 30s live cache, and
-the workspace polls at that cadence while a chain is running, returning to the
-saved preference when idle. That is 6 chain calls a minute, well inside Torn's
-per-key allowance.
+**Fix.** An upward reset now requires corroboration from a higher `current`
+count at hit 10 or later; hits 1–10 share the warm-up window. Active checks also
+use Torn's documented unique `timestamp` parameter to bypass the service cache,
+immediately on mount and then every 10 seconds. Only the chain request bypasses
+cache, keeping usage to at most six unique chain calls per minute at the default
+cadence.
 
 ### 17. `max` was labelled as a faction ceiling
 

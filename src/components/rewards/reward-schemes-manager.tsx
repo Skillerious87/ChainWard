@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { saveRewardScheme, setRewardSchemeArchived } from "@/app/(platform)/rewards/actions";
 import { publishViewSwitch } from "@/components/shell/route-progress";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -152,6 +152,24 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
     if (next === tab) return;
     publishViewSwitch(`reward-editor:${next}`);
     setTab(next);
+  }
+
+  function handleTabKey(event: ReactKeyboardEvent<HTMLButtonElement>, current: EditorTab): void {
+    const currentIndex = TABS.findIndex((item) => item.id === current);
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % TABS.length;
+    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = TABS.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const next = TABS[nextIndex];
+    if (!next) return;
+    selectTab(next.id);
+    event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      .item(nextIndex)
+      .focus();
   }
 
   function updateTier(id: string, changes: Partial<RewardTierView>): void {
@@ -321,9 +339,9 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
                 </div>
               </header>
 
-              <nav className="reward-tabs" aria-label="Scheme editor sections">
+              <nav className="reward-tabs" role="tablist" aria-label="Scheme editor sections">
                 {TABS.map(({ id, label, icon: Icon }) => (
-                  <button key={id} className={tab === id ? "reward-tab reward-tab--active" : "reward-tab"} onClick={() => selectTab(id)} aria-current={tab === id ? "true" : undefined}>
+                  <button type="button" id={`reward-tab-${id}`} role="tab" aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} key={id} className={tab === id ? "reward-tab reward-tab--active" : "reward-tab"} onClick={() => selectTab(id)} onKeyDown={(event) => handleTabKey(event, id)}>
                     <Icon size={14} /> {label}
                     {id === "tiers" && validation.length > 0 && <em className="reward-tab__flag reward-tab__flag--error">{validation.length}</em>}
                     {id === "tiers" && validation.length === 0 && coverage && coverage.gaps.length > 0 && <em className="reward-tab__flag reward-tab__flag--warn">{coverage.gaps.length}</em>}
@@ -331,7 +349,7 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
                 ))}
               </nav>
 
-              <div className="reward-editor__pane" key={tab}>
+              <div id={`reward-panel-${tab}`} className="reward-editor__pane" role="tabpanel" aria-labelledby={`reward-tab-${tab}`} tabIndex={0} key={tab}>
                 {tab === "details" && (
                   <div className="reward-detail-grid">
                     <label>

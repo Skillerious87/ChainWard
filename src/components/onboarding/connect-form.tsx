@@ -5,8 +5,10 @@ import {
   ArrowRight,
   BadgeCheck,
   Check,
+  ChevronDown,
   Eye,
   EyeOff,
+  ExternalLink,
   KeyRound,
   Laptop,
   LockKeyhole,
@@ -130,59 +132,61 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       {result ? (
         <section className="connection-confirmation" aria-labelledby="connection-confirmation-title">
           <header className="connection-confirmation__hero">
-            <div className="connection-confirmation__crest" aria-hidden="true"><span><BadgeCheck size={29} /></span><i /></div>
+            <div className="connection-confirmation__crest" aria-hidden="true"><span><BadgeCheck size={24} /></span><i /></div>
             <p className="connection-confirmation__eyebrow"><Check size={12} /> {result.offline ? "Offline preview verified" : "Connection verified"}</p>
             <h2 id="connection-confirmation-title" ref={confirmationHeadingRef} tabIndex={-1}>Your workspace is ready.</h2>
-            <p>{result.player.name} is securely matched to <strong>{result.faction.name}</strong>. Review the connection below, then enter when you are ready.</p>
+            <p>Everything checks out. Continue to your verified faction workspace.</p>
           </header>
 
-          <dl className="connection-confirmation__identity">
-            <div><dt>Player</dt><dd>{result.player.name}<small>#{result.player.id}</small></dd></div>
-            <div><dt>Faction</dt><dd>{result.faction.name}<small>{result.faction.tag ? `[${result.faction.tag}]` : `#${result.faction.id}`}</small></dd></div>
-            <div><dt>Key access</dt><dd><Check size={13} /> {result.key.accessType}<small>Approved</small></dd></div>
+          <dl className="connection-confirmation__identity" aria-label="Verified connection">
+            <div><dt>Signed in as</dt><dd><span>{result.player.name}</span><small>#{result.player.id}</small></dd></div>
+            <div><dt>Faction workspace</dt><dd><span>{result.faction.name}</span><small>{result.faction.tag ? `[${result.faction.tag}]` : `#${result.faction.id}`}</small></dd></div>
           </dl>
 
-          <div className="connection-confirmation__capabilities" aria-label="Verified API capabilities">
-            {Object.entries(result.capabilities).map(([name, status]) => (
-              <span key={name}><Check size={12} /><strong>{capabilityLabel(name)}</strong><small>{status === "verified" ? "Tested" : "Ready"}</small></span>
-            ))}
-          </div>
-
-          <div className="connection-confirmation__session">
-            <span><LockKeyhole size={16} /></span>
-            <p><strong>{result.session.remembered ? "Remembered connection secured" : "Private session secured"}</strong><small>{result.session.remembered ? "This browser can reconnect for 30 days using an HTTP-only session token." : "This temporary workspace session expires automatically within 12 hours."}</small></p>
+          <div className="connection-confirmation__security">
+            <span><ShieldCheck size={17} /></span>
+            <p><strong>{result.key.accessType} key approved</strong><small>{result.session.remembered ? "Securely remembered on this browser for 30 days." : "Private session secured for up to 12 hours."}</small></p>
+            <Check size={15} aria-hidden="true" />
           </div>
 
           {error && <div className="form-error connection-confirmation__error" role="alert"><AlertTriangle size={17} /><div><strong>Session could not be cleared</strong><span>{error.message}</span></div></div>}
 
           <div className="connection-confirmation__actions">
-            <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); router.push(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open {result.faction.tag ? `[${result.faction.tag}]` : "faction"} workspace <ArrowRight size={16} /></>}</button>
+            <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); router.push(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open workspace <ArrowRight size={16} /></>}</button>
             <button type="button" className="connection-confirmation__reset" disabled={loading} onClick={() => void resetConnection()}>{loading ? <Spinner size={14} label="Clearing connection" /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
           </div>
         </section>
       ) : (
         <div className="connect-stage connect-stage--entry">
-          <div className="connect-form__heading"><span><KeyRound size={19} /></span><div><small>{loading ? "Verification in progress" : "Restricted key connection"}</small><h2>{loading ? "Checking your connection…" : "Connect your Torn API"}</h2><p>{loading ? "Confirming your identity, faction, and required selections with Torn. This usually takes only a moment." : "We’ll verify your identity, faction, and required API selections before anything opens."}</p></div></div>
-          <label className="api-key-field">
-            <span className="api-key-field__label"><strong>Torn API key</strong><small>Exactly 16 characters</small></span>
-            <div><input name="apiKey" type={visible ? "text" : "password"} autoComplete="off" autoCapitalize="none" spellCheck={false} inputMode="text" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={loading} placeholder="Paste your restricted Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} /><button type="button" disabled={loading} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
-            <small id="api-key-guidance"><ShieldCheck size={13} /> Limited Access is sufficient. Never enter your Torn password.</small>
-          </label>
+          <header className="connect-form__heading">
+            <p><ShieldCheck size={13} /> Secure sign in</p>
+            <h2>Connect to Chainward</h2>
+            <span>Enter your restricted Torn API key to continue.</span>
+          </header>
+          <span className="sr-only" aria-live="polite">{loading ? "Verifying your Torn connection." : ""}</span>
+          <div className="api-key-field">
+            <label className="api-key-field__label" htmlFor="torn-api-key"><strong>Torn API key</strong><small>Exactly 16 characters</small></label>
+            <div><input id="torn-api-key" name="apiKey" type={visible ? "text" : "password"} autoComplete="off" autoCapitalize="none" spellCheck={false} inputMode="text" enterKeyHint="go" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={loading} placeholder="Paste your Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} /><button type="button" disabled={loading} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
+            <small id="api-key-guidance"><span><ShieldCheck size={13} /> Limited Access is enough. Never use your Torn password.</span><a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create a key <ExternalLink size={12} /></a></small>
+          </div>
           <label className="remember-connection">
             <input name="remember" type="checkbox" defaultChecked disabled={loading} />
             <span aria-hidden="true"><Check size={14} /></span>
-            <span><strong>Remember this browser</strong><small>Reconnect automatically for 30 days. Only a random, HTTP-only session token is stored in this browser.</small></span>
+            <span><strong>Keep me signed in</strong><small>Remember this browser for 30 days.</small></span>
           </label>
           {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
-          <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Validating Torn connection" /> Validating securely…</> : <>Validate and connect <ArrowRight size={16} /></>}</button>
-          <section className="connect-requirements" aria-label="API selections Chainward verifies">
-            <p><ShieldCheck size={13} /> Selections checked during validation</p>
+          <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Verifying Torn connection" /> Verifying securely…</> : <>Verify and continue <ArrowRight size={16} /></>}</button>
+          <p className="connect-security-note"><LockKeyhole size={15} /><span><strong>Protected connection</strong><small>Your raw key never returns to browser code.</small></span></p>
+          <details className="connect-requirements">
+            <summary>API access Chainward needs <ChevronDown size={15} /></summary>
+            <p>Chainward checks these selections before opening a workspace.</p>
             <ul>{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
-          </section>
-          {offlineEnabled && <section className="offline-test-entry" aria-label="Offline testing">
-            <header><span><Laptop size={16} /></span><p><strong>Test without internet access</strong><small>Development fixture only · clearly labelled · never available in production</small></p></header>
-            <div><button type="button" disabled={loading} onClick={() => void openOfflineSession("member")}><KeyRound size={14} /><span><strong>Faction tester</strong><small>Preview the member confirmation flow</small></span></button><button type="button" disabled={loading} onClick={() => void openOfflineSession("owner")}><UserRoundCog size={14} /><span><strong>Owner reviewer</strong><small>Preview the owner confirmation flow</small></span></button></div>
-          </section>}
+          </details>
+          {offlineEnabled && <details className="offline-test-entry">
+            <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>
+            <p>Development fixture only. Never available in production.</p>
+            <div><button type="button" disabled={loading} onClick={() => void openOfflineSession("member")}><KeyRound size={14} /><span><strong>Faction tester</strong><small>Preview member access</small></span></button><button type="button" disabled={loading} onClick={() => void openOfflineSession("owner")}><UserRoundCog size={14} /><span><strong>Owner reviewer</strong><small>Preview owner access</small></span></button></div>
+          </details>}
         </div>
       )}
     </form>
@@ -192,10 +196,6 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 function isConnectionResult(value: unknown): value is ConnectionResult {
   if (!value || typeof value !== "object") return false;
   return "player" in value && "faction" in value && "key" in value && "capabilities" in value && "checkedAt" in value && "session" in value && "connected" in value && value.connected === true;
-}
-
-function capabilityLabel(name: string): string {
-  return ({ identity: "Identity", faction: "Faction", liveChain: "Live chain", completedChains: "History", members: "Roster", chainReports: "Reports" } as Record<string, string>)[name] ?? name;
 }
 
 function connectionNextPath(result: ConnectionResult): Route {

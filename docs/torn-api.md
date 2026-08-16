@@ -1,7 +1,7 @@
 # Torn API integration findings
 
 Verified against Torn's official API documentation and OpenAPI document on
-9 August 2026.
+14 August 2026.
 
 ## Specification
 
@@ -44,13 +44,14 @@ or elapsed duration beyond what can be derived from those values.
 | Field | Meaning | How Chainward uses it |
 | --- | --- | --- |
 | `current` | Hits in the chain so far. | Chain progress, and part of the liveness test. |
-| `timeout` | **Seconds remaining** before the chain drops. Reset by every hit. | The only unambiguous liveness signal, and the countdown source. |
-| `cooldown` | **Seconds remaining** of cooldown after a chain ends. | Selects the cooldown state and its countdown. |
+| `timeout` | **Seconds remaining** before the chain drops. Hit 10 and each later hit reset it. | The unambiguous active-chain signal and countdown source. |
+| `cooldown` | **Unix timestamp** at which post-chain cooldown ends. | Selects cooldown only while the timestamp is in the future; converted to a duration for the client. |
 | `max` | The next chain bonus target. | Labelled "next bonus at", never a faction ceiling. |
 
-`timeout` and `cooldown` are durations, not timestamps. Treating `cooldown` as a
-unix time made the cooldown state unreachable, and deciding liveness from `end`
-reported live chains as idle while their hit count was still climbing.
+The current official OpenAPI schema explicitly describes `timeout` as seconds
+until the chain breaks and `cooldown` as a timestamp. Deciding active-chain
+liveness from `end` still reports some live chains as idle, so `timeout > 0`
+remains the active signal.
 
 ### Observed behaviour of the ongoing-chain endpoint
 
@@ -68,40 +69,38 @@ elapsed  current  timeout  server date
 
 Three findings, all load-bearing:
 
-1. **Torn serves this endpoint from a roughly thirty second cache.** `timeout`
-   holds a value then steps, rather than counting down smoothly. A reading can
-   therefore be up to a full cache window old, and how old is unknowable.
+1. **Identical requests can be served from Torn's service cache for up to thirty
+   seconds.** `timeout` then holds a value and steps rather than counting down.
 2. **The `Date` header advances in real time even while the body is stale**, so
    it cannot be used to age the response.
 3. **`end` was a non-zero timestamp while the chain was live** (`1786492818`
    alongside `timeout` 76), confirming that `end` must not be used to decide
    whether a chain is running. `timeout` is the only reliable signal.
 
-Because staleness is unknowable and varies per request, a reported `timeout` is
-an **upper bound** on the time actually remaining, never an exact measure. The
-countdown therefore tracks the lowest bound it has seen: it adopts any lower
-reading in full, ignores higher ones as staleness, and treats only a large
-increase as a hit restarting the window. That also errs the safe way — better to
-show less time than there really is than more.
+Torn documents a `timestamp` query parameter as the supported way to make a
+request unique and bypass this service cache. Chainward now uses it for active
+chain checks. Reconciliation still treats a normal reading as an upper bound:
+it adopts lower bounds immediately, ignores uncorroborated increases, and only
+allows an upward reset when `current` has also increased at hit 10 or later.
+This chain-count confirmation is load-bearing: the old duration-only threshold
+mistook a repeated cached `300` response for a new hit every ten seconds.
 
-Polling faster than the cache window cannot make a reading fresher, but it does
-reduce how long a new snapshot goes unseen. Ten seconds was stable in testing;
-eight seconds produced repeated `code 17` backend errors, so the floor in
-`polling-policy.ts` is not a formality.
+The official chain rules also distinguish the warm-up: hits 1–10 share the
+initial five-minute window. Hit 10 and each subsequent successful hit reset the
+five-minute timer.
 
 ### Polling limits
 
-Torn's guidance for the `chain` selection is to poll no faster than once every 5
-to 30 seconds; going below that risks an API key cooldown or a temporary ban.
-`src/lib/torn/polling-policy.ts` holds the app to that floor and is the single
-place those numbers are defined. Chainward polls every 10 seconds while a chain
-is running and returns to the saved workspace preference when it is not.
+Torn currently documents a ceiling of 100 individual requests per minute per
+user across all keys, rather than a chain-specific polling interval. Chainward
+uses a conservative ten-second active cadence (at most six unique chain calls
+per minute) and a five-second application floor. It returns to the saved
+workspace preference when no chain is active.
 
-The chain response cache is deliberately **shorter** than the poll interval. If
-the two are equal, a poll can arrive while the previous response is still valid,
-return that cached copy, and push the next real refresh out by another full
-interval — so a hit that restarted the timeout could go unnoticed for twice as
-long as intended.
+The local chain cache remains shorter than the poll interval so concurrent tabs
+can share ordinary reads. Active checks deliberately force-refresh that local
+entry and add a unique upstream timestamp. Faction identity keeps its normal
+cache, so an active check consumes only one uncached Torn request.
 
 A countdown cannot be corrected without knowing how stale its reading is, so
 telemetry carries `dataAgeMs`: how long ago Torn answered, measured entirely
@@ -139,17 +138,18 @@ hits do not consume quota.
 
 Chainward therefore defaults to:
 
-- at least 30 seconds for live-chain reads;
+- a unique current-chain check every 10 seconds while active, with an immediate
+  check when the active view mounts;
+- a 5-second local chain cache for ordinary/shared reads;
 - 30 seconds for faction basic data and member lists used by operational screens;
 - 60 seconds for completed-chain lists and key identity data;
 - local permanent storage for finalized chain reports;
 - request coalescing for concurrent identical calls;
 - exponential retry for only rate-limit and transient availability failures.
 
-Normal polling deliberately does not add a unique `timestamp` parameter. An
-explicit user-triggered **Sync now** request uses Torn's documented `timestamp`
-parameter once to request an uncached operational snapshot, then replaces the
-canonical local cache entry with that response.
+Active polling and **Sync now** add Torn's documented `timestamp` parameter to
+the chain request, then replace the canonical local cache entry. Idle polling
+does not bypass the service cache.
 
 ## Error handling
 

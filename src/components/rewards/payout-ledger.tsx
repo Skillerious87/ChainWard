@@ -2,29 +2,38 @@
 
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   BadgeCheck,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   CircleGauge,
   Clock3,
+  ClipboardList,
   DatabaseZap,
   Layers3,
+  RotateCcw,
   Search,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Trophy,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useDeferredValue, useMemo, useState, type CSSProperties } from "react";
+import { ExportButton } from "@/components/ui/action-controls";
+import { RewardAmount } from "@/components/ui/reward-amount";
 import { TornUserLink } from "@/components/ui/torn-user-link";
 import type { PayoutLedgerEntry } from "@/lib/rewards/payout-store";
 
 type LedgerView = "ALL" | "ACTION" | "PAID" | "HELD" | "WAIVED";
 type LedgerSort = "RECENT" | "CHAIN" | "MEMBER" | "AMOUNT";
+type LedgerRange = "ALL" | "30" | "90" | "365";
+type SortDirection = "asc" | "desc";
+type PageSize = 10 | 25 | 50;
 
-const PAGE_SIZE = 25;
 const views: ReadonlyArray<{ value: LedgerView; label: string }> = [
   { value: "ALL", label: "All records" },
   { value: "ACTION", label: "Needs action" },
@@ -120,12 +129,31 @@ export function analysePayoutLedger(entries: readonly PayoutLedgerEntry[]): Payo
   };
 }
 
-export function PayoutLedger({ entries, message, databaseAvailable = true }: { entries: PayoutLedgerEntry[]; message: string; databaseAvailable?: boolean }) {
+interface PayoutLedgerProps {
+  entries: PayoutLedgerEntry[];
+  message: string;
+  databaseAvailable?: boolean;
+  section?: "all" | "overview" | "register";
+}
+
+export function PayoutOverview(props: Omit<PayoutLedgerProps, "section">) {
+  return <PayoutLedger {...props} section="overview" />;
+}
+
+export function PayoutRegister(props: Omit<PayoutLedgerProps, "section">) {
+  return <PayoutLedger {...props} section="register" />;
+}
+
+export function PayoutLedger({ entries, message, databaseAvailable = true, section = "all" }: PayoutLedgerProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [view, setView] = useState<LedgerView>("ALL");
   const [unit, setUnit] = useState("ALL");
+  const [range, setRange] = useState<LedgerRange>("ALL");
+  const [rangeCutoff, setRangeCutoff] = useState<number | null>(null);
   const [sort, setSort] = useState<LedgerSort>("RECENT");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [pageSize, setPageSize] = useState<PageSize>(25);
   const [page, setPage] = useState(0);
   const analysis = useMemo(() => analysePayoutLedger(entries), [entries]);
   const units = useMemo(() => [...new Set(entries.map((entry) => entry.rewardUnit))].toSorted(), [entries]);
@@ -135,22 +163,33 @@ export function PayoutLedger({ entries, message, databaseAvailable = true }: { e
     return entries
       .filter((entry) => matchesView(entry, view)
         && (unit === "ALL" || entry.rewardUnit === unit)
+        && (rangeCutoff === null || Date.parse(entry.processedAt ?? entry.createdAt) >= rangeCutoff)
         && (!normalized || `${entry.memberName} ${entry.tornUserId} ${entry.chainId} ${entry.tierLabel ?? ""} ${entry.status} ${entry.processedBy?.name ?? ""}`.toLowerCase().includes(normalized)))
-      .toSorted((left, right) => compareEntries(left, right, sort));
-  }, [deferredQuery, entries, sort, unit, view]);
+      .toSorted((left, right) => compareEntries(left, right, sort, sortDirection));
+  }, [deferredQuery, entries, rangeCutoff, sort, sortDirection, unit, view]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
-  const visible = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const visible = filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const filteredTotals = useMemo(() => totalsForEntries(filtered), [filtered]);
+  const exportRows = useMemo(() => filtered.map((entry) => ({ chainId: entry.chainId, tornUserId: entry.tornUserId, member: entry.memberName, tier: entry.tierLabel ?? "", amount: entry.amount, unit: entry.rewardUnit, status: entry.status, createdAt: entry.createdAt, processedAt: entry.processedAt ?? "", processedBy: entry.processedBy?.name ?? "" })), [filtered]);
+  const outstandingTotal = singleTotal(analysis.openTotals);
   const latestActivity = analysis.latestProcessedAt
     ? new Date(analysis.latestProcessedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
     : "No processing activity";
 
   function changeView(next: LedgerView): void { setView(next); setPage(0); }
-  function clearFilters(): void { setQuery(""); setView("ALL"); setUnit("ALL"); setSort("RECENT"); setPage(0); }
+  function changeRange(next: LedgerRange): void { setRange(next); setRangeCutoff(next === "ALL" ? null : Date.now() - Number(next) * 86_400_000); setPage(0); }
+  function setSortMode(next: LedgerSort): void { setSort(next); setSortDirection(next === "MEMBER" ? "asc" : "desc"); setPage(0); }
+  function changeSort(next: LedgerSort): void {
+    if (sort === next) setSortDirection((current) => current === "asc" ? "desc" : "asc");
+    else setSortMode(next);
+    setPage(0);
+  }
+  function clearFilters(): void { setQuery(""); setView("ALL"); setUnit("ALL"); setRange("ALL"); setRangeCutoff(null); setSort("RECENT"); setSortDirection("desc"); setPage(0); }
 
   return <>
-    <section className="payout-intelligence" aria-labelledby="payout-intelligence-title">
+    {section !== "register" && <section className="payout-intelligence payout-workspace-section" aria-labelledby="payout-intelligence-title">
       <header className="payout-intelligence__header">
         <span className="payout-intelligence__mark"><Sparkles size={20} /></span>
         <div>
@@ -167,7 +206,7 @@ export function PayoutLedger({ entries, message, databaseAvailable = true }: { e
           <div><small>Settlement rate</small><strong>{analysis.resolved.toLocaleString()} / {entries.length.toLocaleString()}</strong><em>Paid or formally waived</em></div>
         </article>
         <article><span><ShieldAlert size={18} /></span><div><small>Requires attention</small><strong>{(analysis.pending + analysis.approved + analysis.held).toLocaleString()}</strong><em>{analysis.held ? `${analysis.held} held for review` : analysis.approved ? `${analysis.approved} approved, awaiting payment` : "No held records"}</em></div></article>
-        <article><span><CircleDollarSign size={18} /></span><div><small>Outstanding liability</small><strong>{formatTotals(analysis.openTotals)}</strong><em>{analysis.openTotals.size > 1 ? "Kept separate by reward unit" : "Pending, approved, and held"}</em></div></article>
+        <article><span><CircleDollarSign size={18} /></span><div><small>Outstanding liability</small>{outstandingTotal ? <RewardAmount amount={outstandingTotal[1]} unit={outstandingTotal[0]} artwork="liability" size="compact" /> : <strong>{formatTotals(analysis.openTotals)}</strong>}<em>{analysis.openTotals.size > 1 ? "Kept separate by reward unit" : "Pending, approved, and held"}</em></div></article>
         <article><span><Users size={18} /></span><div><small>Ledger coverage</small><strong>{analysis.distinctMembers.toLocaleString()} <b>members</b></strong><em>{analysis.chains.length.toLocaleString()} chain{analysis.chains.length === 1 ? "" : "s"} represented</em></div></article>
       </div>
 
@@ -221,9 +260,14 @@ export function PayoutLedger({ entries, message, databaseAvailable = true }: { e
           </ol>
         </section>
       </div>
-    </section>
+      <nav className="payout-overview-links" aria-label="Continue payout review">
+        <Link href="/payouts/ledger"><span><ClipboardList size={17} /></span><span><strong>Inspect the register</strong><small>{(analysis.pending + analysis.approved + analysis.held).toLocaleString()} record{analysis.pending + analysis.approved + analysis.held === 1 ? "" : "s"} need attention</small></span><ChevronRight size={14} /></Link>
+        <Link href="/payouts/recipients"><span><Trophy size={17} /></span><span><strong>Review recipients</strong><small>{analysis.distinctMembers.toLocaleString()} member{analysis.distinctMembers === 1 ? "" : "s"} across every reward unit</small></span><ChevronRight size={14} /></Link>
+        <Link href="/payouts/corrections"><span><RotateCcw size={17} /></span><span><strong>Audit corrections</strong><small>Reasons and operators behind withdrawn acknowledgements</small></span><ChevronRight size={14} /></Link>
+      </nav>
+    </section>}
 
-    <section className="data-section professional-payout-ledger">
+    {section !== "overview" && <section className="data-section professional-payout-ledger payout-workspace-section">
       <div className="payout-register-heading">
         <div><span><DatabaseZap size={18} /></span><div><p className="eyebrow">Auditable register</p><h2>Member payout ledger</h2><p>{filtered.length.toLocaleString()} of {entries.length.toLocaleString()} persisted records match this view</p></div></div>
         <span className="payout-register-heading__source"><ShieldCheck size={13} /> Persisted records only</span>
@@ -234,17 +278,22 @@ export function PayoutLedger({ entries, message, databaseAvailable = true }: { e
       </div>
 
       <div className="payout-ledger-toolbar">
-        <label className="search-field payout-ledger-search"><Search size={15} /><span className="sr-only">Search payout records</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Member, ID, chain, tier, or recorder" /></label>
+        <div className="payout-ledger-toolbar__primary">
+          <label className="search-field payout-ledger-search"><Search size={15} /><span className="sr-only">Search payout records</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Member, ID, chain, tier, or recorder" /></label>
+          <ExportButton filename="chainward-payout-current-view.csv" label={`Export view (${filtered.length})`} rows={exportRows} className="button button--quiet payout-ledger-export" />
+        </div>
         <div className="payout-ledger-filters">
+          <label><span>Date range</span><select value={range} onChange={(event) => changeRange(event.target.value as LedgerRange)}><option value="ALL">All activity</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option></select></label>
           <label><span>Reward unit</span><select value={unit} onChange={(event) => { setUnit(event.target.value); setPage(0); }}><option value="ALL">All units</option>{units.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
-          <label><span>Sort by</span><select value={sort} onChange={(event) => { setSort(event.target.value as LedgerSort); setPage(0); }}><option value="RECENT">Latest activity</option><option value="CHAIN">Newest chain</option><option value="MEMBER">Member name</option><option value="AMOUNT">Highest reward</option></select></label>
-          {(query || view !== "ALL" || unit !== "ALL" || sort !== "RECENT") && <button className="payout-filter-reset" onClick={clearFilters}>Reset filters</button>}
+          <label><span>Sort by</span><select value={sort} onChange={(event) => setSortMode(event.target.value as LedgerSort)}><option value="RECENT">Activity date</option><option value="CHAIN">Chain number</option><option value="MEMBER">Member name</option><option value="AMOUNT">Reward amount</option></select></label>
+          <label><span>Rows</span><select className="payout-page-size" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value) as PageSize); setPage(0); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label>
+          {(query || view !== "ALL" || unit !== "ALL" || range !== "ALL" || sort !== "RECENT" || sortDirection !== "desc") && <button className="payout-filter-reset" onClick={clearFilters}>Reset view</button>}
         </div>
       </div>
 
-      <div className="table-scroll"><table className="data-table payout-ledger-table"><caption className="sr-only">Persisted member payout records with reward, status, processing time, and recorder</caption><thead><tr><th>Member</th><th>Chain</th><th>Reward decision</th><th className="numeric">Liability</th><th>Status</th><th>Timeline</th><th>Recorded by</th></tr></thead><tbody>{visible.map((entry) => <tr key={entry.id}><td><TornUserLink className="ledger-member" name={entry.memberName} tornUserId={entry.tornUserId} detail={`Torn ID ${entry.tornUserId}`} /></td><td><Link className="chain-id" href={`/chains/${entry.chainId}`}>#{entry.chainId}</Link></td><td>{entry.tierLabel ? <span className="tier-label">{entry.tierLabel}</span> : <span className="muted-value">No saved tier</span>}</td><td className="numeric"><span className="ledger-amount"><strong>{formatAmount(entry.amount)}</strong><small>{entry.rewardUnit}</small></span></td><td><span className={`payout-badge payout-badge--${statusClass(entry.status)}`}>{entry.status === "PAID" ? <BadgeCheck size={13} /> : entry.status === "WAIVED" ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}{statusLabel(entry.status)}</span></td><td><LedgerTimeline entry={entry} /></td><td><PayoutRecorder value={entry.processedBy} /></td></tr>)}</tbody></table>{visible.length === 0 && <div className="table-empty payout-ledger-empty"><CircleDollarSign size={22} /><div><strong>{entries.length ? "No records match this control view" : "No payout records yet"}</strong><span>{entries.length ? "Reset the filters or search a different member, chain, or recorder." : message}</span></div></div>}</div>
-      <div className="payout-register-footer"><span>Showing {visible.length ? safePage * PAGE_SIZE + 1 : 0}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString()} <small>· Payment state changes only through deliberate Chainward actions</small></span><div className="pagination"><button disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={14} /> Previous</button><span>Page {safePage + 1} of {pageCount}</span><button disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next <ChevronRight size={14} /></button></div></div>
-    </section>
+      <div className="table-scroll"><table className="data-table payout-ledger-table"><caption className="sr-only">Persisted member payout records with reward, status, processing time, and recorder</caption><thead><tr><SortableLedgerHeader label="Member" value="MEMBER" active={sort} direction={sortDirection} onSort={changeSort} /><SortableLedgerHeader label="Chain" value="CHAIN" active={sort} direction={sortDirection} onSort={changeSort} /><th>Reward decision</th><SortableLedgerHeader label="Member reward" value="AMOUNT" active={sort} direction={sortDirection} onSort={changeSort} numeric /><th>Status</th><SortableLedgerHeader label="Timeline" value="RECENT" active={sort} direction={sortDirection} onSort={changeSort} /><th>Recorded by</th><th><span className="sr-only">Open chain</span></th></tr></thead><tbody>{visible.map((entry) => <tr key={entry.id} className={`payout-ledger-row payout-ledger-row--${statusClass(entry.status)}`}><td><TornUserLink className="ledger-member" name={entry.memberName} tornUserId={entry.tornUserId} detail={`Torn ID ${entry.tornUserId}`} /></td><td><Link className="chain-id" href={`/chains/${entry.chainId}`}>#{entry.chainId}</Link></td><td>{entry.tierLabel ? <span className="tier-label">{entry.tierLabel}</span> : <span className="muted-value">No saved tier</span>}</td><td className="numeric ledger-reward-cell"><RewardAmount amount={entry.amount} unit={entry.rewardUnit} paid={entry.status === "PAID"} size="compact" /></td><td><span className={`payout-badge payout-badge--${statusClass(entry.status)}`}>{entry.status === "PAID" ? <BadgeCheck size={13} /> : entry.status === "WAIVED" ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}{statusLabel(entry.status)}</span></td><td><LedgerTimeline entry={entry} /></td><td><PayoutRecorder value={entry.processedBy} /></td><td className="payout-ledger-open"><Link href={`/chains/${entry.chainId}`} aria-label={`Open chain ${entry.chainId}`} title={`Open chain #${entry.chainId}`}><ChevronRight size={15} /></Link></td></tr>)}</tbody></table>{visible.length === 0 && <div className="table-empty payout-ledger-empty"><CircleDollarSign size={22} /><div><strong>{entries.length ? "No records match this control view" : "No payout records yet"}</strong><span>{entries.length ? "Reset the filters or search a different member, chain, or recorder." : message}</span></div></div>}</div>
+      <div className="payout-register-footer"><span>Showing {visible.length ? safePage * pageSize + 1 : 0}–{Math.min((safePage + 1) * pageSize, filtered.length)} of {filtered.length.toLocaleString()} <small>· {formatTotals(filteredTotals)} in this view</small></span><div className="pagination"><button disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={14} /> Previous</button><span>Page {safePage + 1} of {pageCount}</span><button disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next <ChevronRight size={14} /></button></div></div>
+    </section>}
   </>;
 }
 
@@ -254,6 +303,12 @@ function LifecycleItem({ tone, label, count }: { tone: string; label: string; co
 
 function PostureRow({ tone, title, detail }: { tone: "clear" | "danger" | "warning" | "neutral"; title: string; detail: string }) {
   return <li className={`payout-posture__row payout-posture__row--${tone}`}><span>{tone === "clear" ? <ShieldCheck size={15} /> : tone === "danger" ? <ShieldAlert size={15} /> : tone === "warning" ? <AlertTriangle size={15} /> : <CircleGauge size={15} />}</span><div><strong>{title}</strong><small>{detail}</small></div></li>;
+}
+
+function SortableLedgerHeader({ label, value, active, direction, onSort, numeric = false }: { label: string; value: LedgerSort; active: LedgerSort; direction: SortDirection; onSort: (value: LedgerSort) => void; numeric?: boolean }) {
+  const selected = active === value;
+  const Icon = selected && direction === "asc" ? ArrowUp : ArrowDown;
+  return <th className={numeric ? "numeric" : undefined} aria-sort={selected ? direction === "asc" ? "ascending" : "descending" : undefined}><button className="payout-sort-button" onClick={() => onSort(value)}>{label}<Icon size={12} className={selected ? "payout-sort-button__active" : undefined} /></button></th>;
 }
 
 function LedgerTimeline({ entry }: { entry: PayoutLedgerEntry }) {
@@ -272,11 +327,14 @@ function matchesView(entry: PayoutLedgerEntry, view: LedgerView): boolean {
   return entry.status === view;
 }
 
-function compareEntries(left: PayoutLedgerEntry, right: PayoutLedgerEntry, sort: LedgerSort): number {
-  if (sort === "CHAIN") return right.chainId - left.chainId || left.memberName.localeCompare(right.memberName);
-  if (sort === "MEMBER") return left.memberName.localeCompare(right.memberName) || right.chainId - left.chainId;
-  if (sort === "AMOUNT") return right.amount - left.amount || left.memberName.localeCompare(right.memberName);
-  return (right.processedAt ?? right.createdAt).localeCompare(left.processedAt ?? left.createdAt) || right.chainId - left.chainId;
+function compareEntries(left: PayoutLedgerEntry, right: PayoutLedgerEntry, sort: LedgerSort, direction: SortDirection): number {
+  const multiplier = direction === "asc" ? 1 : -1;
+  let comparison = 0;
+  if (sort === "CHAIN") comparison = left.chainId - right.chainId;
+  else if (sort === "MEMBER") comparison = left.memberName.localeCompare(right.memberName);
+  else if (sort === "AMOUNT") comparison = left.amount - right.amount;
+  else comparison = (left.processedAt ?? left.createdAt).localeCompare(right.processedAt ?? right.createdAt);
+  return comparison * multiplier || left.memberName.localeCompare(right.memberName);
 }
 
 function viewCount(view: LedgerView, analysis: PayoutLedgerAnalysis, total: number): number {
@@ -299,6 +357,15 @@ function formatTotalsForStatuses(entries: readonly PayoutLedgerEntry[], statuses
   const totals = new Map<string, number>();
   for (const entry of entries) if (statuses.includes(entry.status)) addTotal(totals, entry.rewardUnit, entry.amount);
   return formatTotals(totals);
+}
+function totalsForEntries(entries: readonly PayoutLedgerEntry[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const entry of entries) addTotal(totals, entry.rewardUnit, entry.amount);
+  return totals;
+}
+function singleTotal(totals: ReadonlyMap<string, number>): readonly [string, number] | null {
+  const values = [...totals.entries()].filter(([, amount]) => amount !== 0);
+  return values.length === 1 ? values[0] ?? null : null;
 }
 function statusClass(status: PayoutLedgerEntry["status"]): string { return status.toLowerCase(); }
 function statusLabel(status: PayoutLedgerEntry["status"]): string { return status.charAt(0) + status.slice(1).toLowerCase(); }

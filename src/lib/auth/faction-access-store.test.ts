@@ -27,8 +27,9 @@ describe.sequential("faction access store", () => {
     const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
     const target = { tornUserId: 123, memberName: "Member" };
 
-    await setFactionAccess(faction, target, 3212954, "VIEWER", "ACTIVE");
-    await setFactionAccess(faction, target, 3212954, "CHAIN_MANAGER", "SUSPENDED");
+    expect(await setFactionAccess(faction, target, 3212954, "VIEWER", "ACTIVE")).toBe(true);
+    expect(await setFactionAccess(faction, target, 3212954, "CHAIN_MANAGER", "SUSPENDED")).toBe(true);
+    expect(await setFactionAccess(faction, target, 3212954, "CHAIN_MANAGER", "SUSPENDED")).toBe(false);
     let workspace = await getFactionAccessWorkspace(faction.id);
     expect(workspace.assignments).toEqual([expect.objectContaining({ tornUserId: 123, role: "CHAIN_MANAGER", status: "SUSPENDED" })]);
     expect(workspace.audit.map((event) => event.action)).toEqual(["SUSPENDED", "GRANTED"]);
@@ -46,7 +47,9 @@ describe.sequential("faction access store", () => {
     createLocalDatabase();
     const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
 
-    await setFactionAccessBatch(faction, [{ tornUserId: 123, memberName: "First" }, { tornUserId: 456, memberName: "Second" }], 3212954, "CHAIN_MANAGER", "ACTIVE");
+    const targets = [{ tornUserId: 123, memberName: "First" }, { tornUserId: 456, memberName: "Second" }];
+    expect(await setFactionAccessBatch(faction, targets, 3212954, "CHAIN_MANAGER", "ACTIVE")).toBe(2);
+    expect(await setFactionAccessBatch(faction, targets, 3212954, "CHAIN_MANAGER", "ACTIVE")).toBe(0);
     const workspace = await getFactionAccessWorkspace(faction.id);
 
     expect(workspace.assignments).toHaveLength(2);

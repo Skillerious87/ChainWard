@@ -14,9 +14,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LockKeyhole,
-  LogOut,
   Menu,
-  MonitorCog,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -35,6 +33,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   useTransition,
@@ -43,17 +42,21 @@ import {
 import { BrandMark } from "@/components/brand-mark";
 import { UpgradeAccess } from "@/components/licensing/upgrade-access";
 import { useMemberActivityMonitor } from "@/components/members/use-member-activity-monitor";
+import { AboutDialog } from "@/components/shell/about-dialog";
+import { ProfileMenu } from "@/components/shell/profile-menu";
 import { NavigationBeacon, publishNavigationState, RouteProgress } from "@/components/shell/route-progress";
 import { ServiceStateDrawer } from "@/components/shell/service-state-drawer";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Spinner } from "@/components/ui/spinner";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
-import { notify, type ToastDetail, type ToastTone } from "@/lib/client-actions";
+import { enqueueToast, notify, toastDurationMs, toastKey, type ToastDetail, type ToastQueueItem, type ToastTone } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
+import { buildOperationalNotifications } from "@/lib/notifications/notification-intelligence";
 import { pollSecondsForChain } from "@/lib/torn/polling-policy";
+import { readWorkspaceTelemetryEvent, workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 interface NavigationItem {
@@ -104,19 +107,6 @@ const navigation: NavigationGroup[] = [
 
 type OpenPanel = "faction" | "notifications" | "user" | "health" | null;
 
-interface ToastState extends ToastDetail {
-  id: number;
-}
-
-interface SystemNotification {
-  id: string;
-  title: string;
-  detail: string;
-  tone: "warning" | "danger";
-  unread: boolean;
-  href?: Route;
-}
-
 export function AppShell({ children, currentUser, telemetry, access, database, memberActivityAlert }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -126,8 +116,13 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [commandIndex, setCommandIndex] = useState(0);
+  const commandListId = useId();
+  const commandInputRef = useRef<HTMLInputElement>(null);
+  const userMenuRef = useRef<HTMLButtonElement>(null);
+  const commandReturnFocusRef = useRef<HTMLElement | null>(null);
   const [telemetryOverride, setTelemetryOverride] = useState<WorkspaceTelemetry | null>(null);
   const [syncState, setSyncState] = useState<"syncing" | "failed" | null>(null);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
@@ -138,26 +133,12 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     : syncState === "failed"
       ? "Check failed"
       : checkedTimeLabel(liveTelemetry.checkedAt);
-  const systemNotifications: SystemNotification[] = [];
-  if (liveTelemetry.source === "unavailable") systemNotifications.push({ id: "connection", title: "Torn API connection required", detail: liveTelemetry.message, tone: "warning", unread: true });
-  // Torn reports seconds remaining at the moment it answered; the shell shows
-  // that figure rather than running its own countdown.
-  const chainTimeoutRemaining = liveTelemetry.chain?.timeoutSeconds ?? 0;
-  if (liveTelemetry.chain?.state === "active" && chainTimeoutRemaining < preferences.chainWarningSeconds) systemNotifications.push({ id: `chain:${liveTelemetry.chain.id}:warning`, title: "Live chain timeout warning", detail: `${chainTimeoutRemaining} seconds remained at the last Torn check.`, tone: "warning", unread: true, href: "/live-chain" });
-  if (monitoredActivity?.attentionCount) {
-    const names = monitoredActivity.memberNames.join(", ");
-    systemNotifications.push({
-      id: `activity:${monitoredActivity.fingerprint}`,
-      title: monitoredActivity.criticalCount ? `${monitoredActivity.criticalCount} critical inactivity alert${monitoredActivity.criticalCount === 1 ? "" : "s"}` : `${monitoredActivity.attentionCount} member${monitoredActivity.attentionCount === 1 ? "" : "s"} need activity review`,
-      detail: `${names}${monitoredActivity.attentionCount > monitoredActivity.memberNames.length ? ` and ${monitoredActivity.attentionCount - monitoredActivity.memberNames.length} more` : ""}. Owner threshold: ${monitoredActivity.thresholdDays} days.`,
-      tone: monitoredActivity.criticalCount ? "danger" : "warning",
-      unread: true,
-      href: "/members",
-    });
-  }
+  const systemNotifications = buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, memberActivity: monitoredActivity });
   const notifications = systemNotifications.map((item) => ({ ...item, unread: !readNotificationIds.includes(item.id) }));
   const activeNotificationIdsKey = JSON.stringify(systemNotifications.map((item) => item.id).toSorted());
-  const [toasts, setToasts] = useState<ToastState[]>([]);
+  const notificationScope = String(liveTelemetry.faction?.id ?? "global");
+  const [toasts, setToasts] = useState<ToastQueueItem[]>([]);
+  const toastTimersRef = useRef(new Map<string, number>());
   const faction = liveTelemetry.faction;
   const chain = liveTelemetry.chain;
   const offlineMode = liveTelemetry.mode === "offline";
@@ -194,14 +175,52 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       : "Live chain";
 
   const unreadCount = notifications.filter((item) => item.unread).length;
+  const closeAbout = useCallback(() => {
+    setAboutOpen(false);
+    window.requestAnimationFrame(() => userMenuRef.current?.focus());
+  }, []);
   const normalizedCommandQuery = commandQuery.trim().toLowerCase();
   const filteredCommands = normalizedCommandQuery
     ? searchableItems.filter((item) => item.label.toLowerCase().includes(normalizedCommandQuery))
     : searchableItems;
 
+  const markNotificationsRead = useCallback((ids: readonly string[]) => {
+    setReadNotificationIds((current) => {
+      const next = [...new Set([...current, ...ids])];
+      saveReadNotificationIds(notificationScope, next);
+      return next;
+    });
+  }, [notificationScope]);
+
+  const openCommandPalette = useCallback(() => {
+    if (!commandOpen) {
+      commandReturnFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    }
+    setOpenPanel(null);
+    setCommandOpen(true);
+  }, [commandOpen]);
+
+  const closeCommandPalette = useCallback(() => {
+    setCommandOpen(false);
+    setCommandQuery("");
+    setCommandIndex(0);
+    const returnTarget = commandReturnFocusRef.current;
+    commandReturnFocusRef.current = null;
+    window.requestAnimationFrame(() => {
+      if (returnTarget?.isConnected) returnTarget.focus();
+    });
+  }, []);
+
   useEffect(() => {
     applyAppearancePreferences(preferences);
   }, [preferences]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setReadNotificationIds(loadReadNotificationIds(notificationScope)), 0);
+    return () => window.clearTimeout(timer);
+  }, [notificationScope]);
 
   // Once a condition clears, forget its read acknowledgement. If the same
   // chain or member condition genuinely returns later, it should be unread.
@@ -210,11 +229,12 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       const activeIds = new Set<string>(JSON.parse(activeNotificationIdsKey) as string[]);
       setReadNotificationIds((current) => {
         const next = current.filter((id) => activeIds.has(id));
+        if (next.length !== current.length) saveReadNotificationIds(notificationScope, next);
         return next.length === current.length ? current : next;
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeNotificationIdsKey]);
+  }, [activeNotificationIdsKey, notificationScope]);
 
   useEffect(() => {
     searchableItemsRef.current = searchableItems;
@@ -226,15 +246,15 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     scrollRef.current?.scrollTo({ top: 0 });
   }, [pathname]);
 
-  const publishTelemetry = useCallback((next: WorkspaceTelemetry) => {
+  const publishTelemetry = useCallback((next: WorkspaceTelemetry, transitMs = 0) => {
     setTelemetryOverride(next);
     setSyncState(null);
-    window.dispatchEvent(new CustomEvent<WorkspaceTelemetry>("chainward:telemetry", { detail: next }));
+    window.dispatchEvent(workspaceTelemetryEvent(next, transitMs));
   }, []);
 
   useEffect(() => {
     function receiveTelemetry(event: Event): void {
-      const next = (event as CustomEvent<WorkspaceTelemetry>).detail;
+      const next = readWorkspaceTelemetryEvent(event).telemetry;
       if (!isWorkspaceTelemetry(next)) return;
       setTelemetryOverride(next);
       setSyncState(null);
@@ -243,30 +263,39 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
   }, []);
 
-  // Torn resets a chain's timeout on every hit, so a 30-120s cadence can show
-  // a countdown far lower than reality. The shared policy also holds the app to
-  // Torn's documented floor for this selection.
+  // Torn resets the timeout at hit 10 and on every hit thereafter, so a slow
+  // workspace cadence can leave the countdown far behind the game.
   const chainRunning = liveTelemetry.chain?.state === "active";
   const pollSeconds = pollSecondsForChain(chainRunning, preferences.refreshIntervalSeconds);
 
   useEffect(() => {
     if (!preferences.autoRefresh) return;
     let stopped = false;
+    let pollInFlight = false;
     let lastPollAt = Date.now();
 
     async function pollTelemetry(): Promise<void> {
-      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      if (document.visibilityState !== "visible" || !navigator.onLine || pollInFlight) return;
+      pollInFlight = true;
       lastPollAt = Date.now();
       try {
-        const response = await fetch("/api/telemetry/live-chain", {
+        const startedAt = performance.now();
+        // Torn documents `timestamp` as the supported way to bypass its
+        // 30-second service cache when fresh information is needed. The server
+        // adds it only while a chain is active, and only to the chain request.
+        const endpoint = chainRunning ? "/api/telemetry/live-chain?fresh=1" : "/api/telemetry/live-chain";
+        const response = await fetch(endpoint, {
           headers: { accept: "application/json" },
           cache: "no-store",
         });
         const payload: unknown = await response.json();
+        const transitMs = Math.max(0, (performance.now() - startedAt) / 2);
         if (!response.ok || !isWorkspaceTelemetry(payload) || stopped) return;
-        publishTelemetry(payload);
+        publishTelemetry(payload, transitMs);
       } catch {
         // A background poll keeps the last verified snapshot; manual sync reports failures.
+      } finally {
+        pollInFlight = false;
       }
     }
 
@@ -279,6 +308,9 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     }
 
     const interval = window.setInterval(() => void pollTelemetry(), pollSeconds * 1_000);
+    // The server-rendered snapshot may already be inside Torn's service-cache
+    // window. Replace it immediately instead of waiting one full interval.
+    if (chainRunning) void pollTelemetry();
     document.addEventListener("visibilitychange", refreshOnFocus);
     window.addEventListener("online", refreshOnFocus);
     return () => {
@@ -287,7 +319,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       document.removeEventListener("visibilitychange", refreshOnFocus);
       window.removeEventListener("online", refreshOnFocus);
     };
-  }, [preferences.autoRefresh, pollSeconds, publishTelemetry]);
+  }, [chainRunning, preferences.autoRefresh, pollSeconds, publishTelemetry]);
 
   useEffect(() => {
     let navigationPrefix = false;
@@ -295,11 +327,11 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     function openCommand(event: KeyboardEvent): void {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen(true);
+        openCommandPalette();
         return;
       }
       if (event.key === "Escape") {
-        setCommandOpen(false);
+        closeCommandPalette();
         setOpenPanel(null);
         navigationPrefix = false;
         return;
@@ -327,29 +359,59 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       if (prefixTimer) window.clearTimeout(prefixTimer);
       window.removeEventListener("keydown", openCommand);
     };
-  }, [router, startNavigation]);
+  }, [closeCommandPalette, openCommandPalette, router, startNavigation]);
 
   useEffect(() => {
     function receiveToast(event: Event): void {
       const detail = (event as CustomEvent<ToastDetail>).detail;
-      const id = Date.now() + Math.random();
-      setToasts((current) => [...current, { ...detail, id }]);
-      window.setTimeout(
-        () => setToasts((current) => current.filter((toast) => toast.id !== id)),
-        4_500,
-      );
+      if (!detail?.title?.trim()) return;
+      const key = toastKey(detail);
+      const id = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const previousTimer = toastTimersRef.current.get(key);
+      if (previousTimer) {
+        window.clearTimeout(previousTimer);
+        toastTimersRef.current.delete(key);
+      }
+      setToasts((current) => enqueueToast(current, detail, id));
+      const duration = toastDurationMs(detail);
+      if (duration > 0) {
+        const timer = window.setTimeout(() => {
+          setToasts((current) => current.filter((toast) => toast.key !== key));
+          toastTimersRef.current.delete(key);
+        }, duration);
+        toastTimersRef.current.set(key, timer);
+      }
     }
     window.addEventListener("chainward:toast", receiveToast);
-    return () => window.removeEventListener("chainward:toast", receiveToast);
+    const timers = toastTimersRef.current;
+    return () => {
+      window.removeEventListener("chainward:toast", receiveToast);
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      timers.clear();
+    };
   }, []);
 
   function goTo(item: NavigationItem): void {
+    commandReturnFocusRef.current = null;
     setCommandOpen(false);
     setCommandQuery("");
     startNavigation(() => router.push(item.locked ? "/unlock" : item.href));
   }
 
   function handleCommandKey(event: React.KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCommandPalette();
+      return;
+    }
+    if (event.key === "Tab") {
+      // Results use the standard combobox active-descendant pattern, so focus
+      // remains on the search field while arrows select an option.
+      event.preventDefault();
+      commandInputRef.current?.focus();
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setCommandIndex((current) => filteredCommands.length === 0 ? 0 : (current + 1) % filteredCommands.length);
@@ -368,17 +430,19 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     if (syncing) return;
     setSyncState("syncing");
     try {
+      const startedAt = performance.now();
       const response = await fetch("/api/telemetry/live-chain?fresh=1", {
         headers: { accept: "application/json" },
         cache: "no-store",
       });
       const payload: unknown = await response.json();
+      const transitMs = Math.max(0, (performance.now() - startedAt) / 2);
       if (!response.ok || !isWorkspaceTelemetry(payload)) throw new Error("Telemetry sync failed");
-      publishTelemetry(payload);
+      publishTelemetry(payload, transitMs);
       router.refresh();
       notify({
         title: payload.source === "live" ? "Live Torn data refreshed" : "Torn data unavailable",
-        description: payload.source === "live" ? "Torn returned an uncached faction and chain snapshot." : payload.message,
+        description: payload.source === "live" ? "Torn returned an uncached chain snapshot." : payload.message,
         tone: payload.source === "live" ? "success" : "warning",
       });
     } catch {
@@ -436,7 +500,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
           {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
         </button>
 
-        <button className="sidebar-command" onClick={() => setCommandOpen(true)}>
+        <button className="sidebar-command" onClick={openCommandPalette}>
           <Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd>
         </button>
 
@@ -496,7 +560,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
 
           <div className="topbar__right">
             <UpgradeAccess access={access} />
-            <button className="topbar-command" onClick={() => setCommandOpen(true)}><Command size={14} /><span>Quick find</span><kbd>⌘K</kbd></button>
+            <button className="topbar-command" onClick={openCommandPalette}><Command size={14} /><span>Quick find</span><kbd>⌘K</kbd></button>
             <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => void syncWorkspace()} disabled={syncing || workspaceLocked} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
               <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live" && !syncing} />
               <span><strong>{offlineMode ? "Offline fixture" : liveTelemetry.source === "live" ? "Torn API" : "API attention"}</strong><small>{syncLabel}</small></span>
@@ -508,28 +572,30 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
               </button>
               {openPanel === "notifications" && (
                 <TopbarPopover className="topbar-popover--notifications" close={() => setOpenPanel(null)}>
-                  <div className="popover-heading popover-heading--action"><span>Notifications</span><button onClick={() => setReadNotificationIds(notifications.map((item) => item.id))}>Mark all read</button></div>
+                  <div className="popover-heading popover-heading--action"><span>Notifications {unreadCount > 0 && <em>{unreadCount} new</em>}</span><button disabled={unreadCount === 0} onClick={() => markNotificationsRead(notifications.map((item) => item.id))}>Mark all read</button></div>
                   <div className="notification-list">
-                    {notifications.map((item) => <button key={item.id} onClick={() => { setReadNotificationIds((current) => current.includes(item.id) ? current : [...current, item.id]); if (item.href) { setOpenPanel(null); startNavigation(() => router.push(item.href!)); } }}><i className={`notification-tone notification-tone--${item.tone}`} /><span><strong>{item.title}</strong><small>{item.detail}</small></span>{item.unread && <em />}</button>)}
-                    {notifications.length === 0 && <div className="table-empty">No operational notifications.</div>}
+                    {notifications.map((item) => <button className={item.unread ? "notification-item--unread" : undefined} key={item.id} onClick={() => { markNotificationsRead([item.id]); if (item.href) { const href = item.href; setOpenPanel(null); startNavigation(() => router.push(href)); } }}><i className={`notification-tone notification-tone--${item.tone}`} /><span><span className="notification-context">{notificationCategoryLabel(item.category)}<time dateTime={item.checkedAt}>{notificationTimeLabel(item.checkedAt)}</time></span><strong>{item.title}</strong><small>{item.detail}</small></span>{item.unread && <em aria-label="Unread" />}</button>)}
+                    {notifications.length === 0 && <div className="notification-empty"><Bell size={20} /><strong>You&apos;re all caught up</strong><small>No connection, chain, or member conditions need attention.</small></div>}
                   </div>
                   {ownerAccess && <Link href="/admin" onClick={() => setOpenPanel(null)} className="popover-action">Open owner operations <span>→</span></Link>}
                 </TopbarPopover>
               )}
             </div>
             <div className="topbar-popover-wrap">
-              <button className="user-menu" onClick={() => setOpenPanel(openPanel === "user" ? null : "user")} aria-label="Open user menu" aria-expanded={openPanel === "user"}>
+              <button ref={userMenuRef} className="user-menu" onClick={() => setOpenPanel(openPanel === "user" ? null : "user")} aria-label="Open user menu" aria-expanded={openPanel === "user"}>
                 <span className="user-menu__avatar">{initials}</span><span className="user-menu__copy"><strong>{currentUser.name}</strong><small>{ownerAccess ? "Platform owner" : currentUser.tornUserId ? "Faction member" : "Not connected"}</small></span><ChevronDown size={14} />
               </button>
               {openPanel === "user" && (
                 <TopbarPopover className="topbar-popover--user" close={() => setOpenPanel(null)}>
-                  <div className="user-popover-profile" title={currentUser.tornUserId ? `Torn user ID ${currentUser.tornUserId}` : undefined}><span className="user-menu__avatar">{initials}</span><span><strong>{currentUser.name}</strong><small>{ownerAccess ? "Platform owner" : currentUser.tornUserId ? "Verified Torn identity" : "No verified Torn identity"}</small></span></div>
-                  {ownerAccess && <Link href="/admin" onClick={() => setOpenPanel(null)}><ShieldCheck size={14} /> Owner administration</Link>}
-                  <Link href="/settings" onClick={() => setOpenPanel(null)}><Settings size={14} /> Workspace settings</Link>
-                  <button onClick={toggleDensity}><MonitorCog size={14} /> {compact ? "Comfortable density" : "Compact density"}<small>{compact ? "Roomier" : "More rows"}</small></button>
-                  {currentUser.tornUserId
-                    ? <button onClick={() => void disconnectWorkspace()}><LogOut size={14} /> Disconnect Torn API</button>
-                    : <Link href="/connect" onClick={() => setOpenPanel(null)}><KeyRound size={14} /> Connect Torn API</Link>}
+                  <ProfileMenu
+                    actor={currentUser}
+                    compact={compact}
+                    ownerAccess={ownerAccess}
+                    onClose={() => setOpenPanel(null)}
+                    onDisconnect={() => void disconnectWorkspace()}
+                    onOpenAbout={() => { setOpenPanel(null); setAboutOpen(true); }}
+                    onToggleDensity={toggleDensity}
+                  />
                 </TopbarPopover>
               )}
             </div>
@@ -558,18 +624,20 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
 
       {commandOpen && (
         <div className="command-layer" role="dialog" aria-modal="true" aria-label="Command palette">
-          <button className="command-layer__scrim" onClick={() => setCommandOpen(false)} aria-label="Close command palette" />
+          <button type="button" tabIndex={-1} className="command-layer__scrim" onClick={closeCommandPalette} aria-label="Close command palette" />
           <section className="command-palette">
-            <label><Search size={19} /><input autoFocus value={commandQuery} onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} onKeyDown={handleCommandKey} placeholder="Jump to a page or search workspace…" /><kbd>Esc</kbd></label>
+            <label><Search size={19} /><input ref={commandInputRef} autoFocus role="combobox" aria-label="Search workspace" aria-autocomplete="list" aria-expanded="true" aria-controls={commandListId} aria-activedescendant={filteredCommands[commandIndex] ? `${commandListId}-option-${commandIndex}` : undefined} value={commandQuery} onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} onKeyDown={handleCommandKey} placeholder="Jump to a page or search workspace…" /><kbd>Esc</kbd></label>
             <div className="command-palette__label">Navigation</div>
-            <div className="command-results">
-              {filteredCommands.map((item, index) => { const Icon = item.icon; return <button key={item.href} className={index === commandIndex ? "command-result--selected" : undefined} onMouseEnter={() => setCommandIndex(index)} onClick={() => goTo(item)}><span><Icon size={16} /></span><strong>{item.label}</strong>{item.badge && <em>{item.badge}</em>}<kbd>{item.shortcut ?? "↵"}</kbd></button>; })}
+            <div id={commandListId} className="command-results" role="listbox" aria-label="Workspace destinations">
+              {filteredCommands.map((item, index) => { const Icon = item.icon; return <button type="button" tabIndex={-1} role="option" aria-selected={index === commandIndex} id={`${commandListId}-option-${index}`} key={item.href} className={index === commandIndex ? "command-result--selected" : undefined} onMouseEnter={() => setCommandIndex(index)} onClick={() => goTo(item)}><span><Icon size={16} /></span><strong>{item.label}</strong>{item.badge && <em>{item.badge}</em>}<kbd>{item.shortcut ?? "↵"}</kbd></button>; })}
               {filteredCommands.length === 0 && <div className="command-empty"><Sparkles size={18} /><strong>No matching destination</strong><small>Try “payouts”, “members”, or “settings”.</small></div>}
             </div>
             <footer><span><kbd>↑↓</kbd> Navigate</span><span><kbd>↵</kbd> Open</span><span><kbd>Esc</kbd> Close</span></footer>
           </section>
         </div>
       )}
+
+      <AboutDialog open={aboutOpen} onClose={closeAbout} />
 
       <div className="toast-region" aria-live="polite">
         {toasts.map((toast) => <Toast key={toast.id} toast={toast} onClose={() => setToasts((current) => current.filter((item) => item.id !== toast.id))} />)}
@@ -582,10 +650,36 @@ function TopbarPopover({ children, className, close }: { children: ReactNode; cl
   return <><button className="topbar-popover-scrim" aria-label="Close menu" onClick={close} /><div className={`topbar-popover ${className}`}>{children}</div></>;
 }
 
-function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
+function Toast({ toast, onClose }: { toast: ToastQueueItem; onClose: () => void }) {
   const icons: Record<ToastTone, LucideIcon> = { success: Check, info: Gauge, warning: Clock3, danger: X };
   const Icon = icons[toast.tone ?? "info"];
-  return <div className={`toast toast--${toast.tone ?? "info"}`}><span><Icon size={15} /></span><div><strong>{toast.title}</strong>{toast.description && <small>{toast.description}</small>}</div><button onClick={onClose} aria-label="Dismiss"><X size={14} /></button></div>;
+  return <div className={`toast toast--${toast.tone ?? "info"}`} role={toast.tone === "danger" ? "alert" : "status"} aria-atomic="true"><span><Icon size={15} /></span><div><strong>{toast.title}{toast.count > 1 && <em>×{toast.count}</em>}</strong>{toast.description && <small>{toast.description}</small>}</div><button onClick={onClose} aria-label={`Dismiss ${toast.title}`}><X size={14} /></button></div>;
+}
+
+function notificationCategoryLabel(category: "connection" | "chain" | "members"): string {
+  if (category === "chain") return "Live chain";
+  if (category === "members") return "Member monitor";
+  return "Connection";
+}
+
+function notificationTimeLabel(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "Recently";
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(timestamp);
+}
+
+function loadReadNotificationIds(scope: string): string[] {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(`chainward:notification-read:v2:${scope}`) ?? "[]");
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").slice(-100) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReadNotificationIds(scope: string, ids: readonly string[]): void {
+  try { window.localStorage.setItem(`chainward:notification-read:v2:${scope}`, JSON.stringify(ids.slice(-100))); }
+  catch { /* Read state remains valid for this page when storage is blocked. */ }
 }
 
 function checkedTimeLabel(value: string): string {

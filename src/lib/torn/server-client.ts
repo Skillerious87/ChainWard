@@ -28,7 +28,7 @@ export const getConfiguredTornClient = cache(async (): Promise<TornClient | null
     comment: process.env.TORN_API_COMMENT,
     requestTimeoutMs: positiveInteger(process.env.TORN_REQUEST_TIMEOUT_MS, 10_000),
     liveCacheSeconds: positiveInteger(process.env.TORN_LIVE_CACHE_SECONDS, 30),
-    // Held at or above Torn's documented floor even if the environment asks for less.
+    // Held at or above the application's conservative floor even if configured lower.
     chainCacheSeconds: Math.max(MIN_POLL_SECONDS, positiveInteger(process.env.TORN_CHAIN_CACHE_SECONDS, CHAIN_CACHE_SECONDS)),
     historyCacheSeconds: positiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 600),
     ...(offline ? { fetchImplementation: createOfflineFixtureFetch(apiKey) } : {}),

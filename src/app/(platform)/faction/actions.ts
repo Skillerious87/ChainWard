@@ -34,9 +34,9 @@ export async function updateFactionMemberAccess(input: unknown): Promise<Faction
   if (!parsed.success) return { ok: false, message: "The access assignment was incomplete or invalid." };
   try {
     const verified = await verifiedTarget(parsed.data.factionId, parsed.data.tornUserId);
-    await setFactionAccess(verified.faction, verified.member, verified.actorTornUserId, parsed.data.role, parsed.data.status);
+    const changed = await setFactionAccess(verified.faction, verified.member, verified.actorTornUserId, parsed.data.role, parsed.data.status);
     revalidatePath("/faction");
-    return { ok: true, message: `${verified.member.memberName} now has ${roleLabel(parsed.data.role)} access${parsed.data.status === "SUSPENDED" ? " in a suspended state" : ""}.` };
+    return { ok: true, message: changed ? `${verified.member.memberName} now has ${roleLabel(parsed.data.role)} access${parsed.data.status === "SUSPENDED" ? " in a suspended state" : ""}.` : `${verified.member.memberName} already has that role and status. No audit event was added.` };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }
@@ -60,9 +60,9 @@ export async function updateFactionMemberAccessBatch(input: unknown): Promise<Fa
   if (!parsed.success) return { ok: false, message: "Select between 1 and 50 valid faction members." };
   try {
     const verified = await verifiedTargets(parsed.data.factionId, parsed.data.tornUserIds);
-    await setFactionAccessBatch(verified.faction, verified.members, verified.actorTornUserId, parsed.data.role, parsed.data.status);
+    const changed = await setFactionAccessBatch(verified.faction, verified.members, verified.actorTornUserId, parsed.data.role, parsed.data.status);
     revalidatePath("/faction");
-    return { ok: true, message: `${verified.members.length} member${verified.members.length === 1 ? "" : "s"} updated to ${roleLabel(parsed.data.role)}${parsed.data.status === "SUSPENDED" ? " and suspended" : ""}.` };
+    return { ok: true, message: changed ? `${changed} member${changed === 1 ? "" : "s"} updated to ${roleLabel(parsed.data.role)}${parsed.data.status === "SUSPENDED" ? " and suspended" : ""}.` : "Every selected member already had that role and status. No audit events were added." };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }

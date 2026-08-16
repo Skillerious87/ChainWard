@@ -15,6 +15,11 @@ interface TelemetryClient {
   getCurrentChainFetchedAt?(): number | null;
 }
 
+interface TelemetryRequestOptions {
+  faction?: TornRequestOptions;
+  chain?: TornRequestOptions;
+}
+
 export const getWorkspaceTelemetry = cache(async (): Promise<WorkspaceTelemetry> => {
   try {
     const client = await getConfiguredTornClient();
@@ -29,7 +34,11 @@ export async function getFreshWorkspaceTelemetry(): Promise<WorkspaceTelemetry> 
   try {
     const client = await getConfiguredTornClient();
     if (!client) return unavailableTelemetry(new Date(), "Connect a Torn API key to load verified faction data.");
-    return loadWorkspaceTelemetry(client, undefined, { forceRefresh: true, bypassUpstreamCache: true });
+    return loadWorkspaceTelemetry(client, undefined, {
+      // Faction identity can use its normal cache. Only the countdown needs a
+      // unique request, keeping active polling to one quota-consuming call.
+      chain: { forceRefresh: true, bypassUpstreamCache: true },
+    });
   } catch {
     return unavailableTelemetry(new Date(), "The encrypted Torn connection could not be initialized. Reconnect the API key in Settings.");
   }
@@ -38,12 +47,12 @@ export async function getFreshWorkspaceTelemetry(): Promise<WorkspaceTelemetry> 
 export async function loadWorkspaceTelemetry(
   client: TelemetryClient,
   now?: Date,
-  requestOptions: TornRequestOptions = {},
+  requestOptions: TelemetryRequestOptions = {},
 ): Promise<WorkspaceTelemetry> {
   try {
     const [faction, chain] = await Promise.all([
-      client.getFactionBasic(undefined, requestOptions),
-      client.getCurrentChain(undefined, requestOptions),
+      client.getFactionBasic(undefined, requestOptions.faction),
+      client.getCurrentChain(undefined, requestOptions.chain),
     ]);
     const chainFetchedAt = client.getCurrentChainFetchedAt?.() ?? null;
     return mapTornTelemetry(faction, chain, now ?? new Date(), client.dataMode ?? "torn", chainFetchedAt);
@@ -64,6 +73,7 @@ export function mapTornTelemetry(
 ): WorkspaceTelemetry {
   const { basic } = factionResponse;
   const { chain } = chainResponse;
+  const checkedAtSeconds = Math.floor(checkedAt.getTime() / 1_000);
   // How stale Torn's countdown already is. Both readings come from this
   // machine's clock, so the subtraction is exact — unlike a deadline expressed
   // on one clock and read against another.
@@ -80,32 +90,30 @@ export function mapTornTelemetry(
       maximum: chain.max,
       timeoutSeconds: chain.timeout,
       modifier: chain.modifier,
-      cooldownSeconds: chain.cooldown,
+      cooldownSeconds: Math.max(0, chain.cooldown - checkedAtSeconds),
       startedAt: chain.start,
       endedAt: chain.end,
-      state: operationalState(chain),
+      state: operationalState(chain, checkedAtSeconds),
     },
     message: mode === "offline"
       ? "Offline test fixture. No request was sent to Torn and no values on this screen are live."
-      : "Verified Torn API data. Automatic updates respect Torn's service cache; Sync now requests an uncached snapshot.",
+      : "Verified Torn API data. Active-chain checks request uncached snapshots for timer accuracy.",
   };
 }
 
 /**
- * Torn reports `timeout` and `cooldown` as seconds remaining, not as unix
- * timestamps. Comparing `cooldown` against the current epoch second — as this
- * did — is always false, so the cooldown state could never be reached.
- *
  * `timeout` is the only unambiguous liveness signal: it is the countdown to the
  * chain dropping, so it is above zero while and only while a chain is running.
  * `end` is deliberately not used to decide this. It was previously treated as
  * "zero until the chain finishes", and a live chain that already carried an end
  * timestamp was therefore reported as idle while its hit count kept climbing.
  */
-function operationalState(chain: OngoingChainResponse["chain"]): ChainOperationalState {
+function operationalState(chain: OngoingChainResponse["chain"], checkedAtSeconds: number): ChainOperationalState {
   const running = chain.id > 0 && chain.timeout > 0;
   if (running && chain.current > 0) return "active";
-  if (chain.cooldown > 0) return "cooldown";
+  // The current OpenAPI schema defines `cooldown` as the timestamp at which the
+  // cooldown ends, unlike `timeout`, which is a remaining duration.
+  if (chain.cooldown > checkedAtSeconds) return "cooldown";
   return "idle";
 }
 

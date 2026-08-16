@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, BarChart3, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, Users, WalletCards, ShieldAlert } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { submitAccessRequest } from "@/app/(platform)/licensing/actions";
@@ -128,12 +129,76 @@ function PendingAccess({ access, factionName }: { access: FactionAccessSummary; 
 }
 
 function ActiveAccess({ access, factionName }: { access: FactionAccessSummary; factionName: string | null }) {
+  const [copied, setCopied] = useState(false);
+  const lifetime = !access.expiresAt;
+  const activated = access.startedAt ? formatLicenceDate(access.startedAt) : "Unavailable";
+  const accessEnd = access.expiresAt ? formatLicenceDate(access.expiresAt) : "No expiry";
   const futureCoverage = access.expiresAt
     ? "While this licence remains active, every new Chainward feature released during that term is added automatically with no extra in-game charge."
     : "Your lifetime access grows with Chainward. Every new feature released while the service remains actively maintained and moderated is added automatically with no extra in-game charge.";
-  return <div className="unlock-workspace unlock-state-page">
-    <header className="unlock-state-hero unlock-state-hero--active"><span><Crown size={25} /><ShieldCheck size={13} /></span><div><p className="eyebrow">Protected faction workspace</p><h1>{access.label}</h1><p>{factionName ?? "This faction"} has complete Chainward operations access.</p></div><em><Check size={14} />Active</em></header>
-    <section className="unlock-active-grid"><article><small>Licence reference</small><strong title={access.reference ?? undefined}>{access.reference ?? "Unavailable"}</strong></article><article><small>Activated</small><strong>{access.startedAt ? new Date(access.startedAt).toLocaleDateString("en-GB") : "Unavailable"}</strong></article><article><small>Access end</small><strong>{access.expiresAt ? new Date(access.expiresAt).toLocaleDateString("en-GB") : "No expiry"}</strong></article><article><small>Scope</small><strong>One verified faction</strong></article></section>
-    <section className="unlock-included-panel"><div><p className="eyebrow">Included capabilities</p><h2>Everything your faction needs to operate.</h2><p>Your access covers the complete Chainward feature set—not a reduced or per-seat edition.</p></div><ul>{licenceBenefits.map((benefit) => <li key={benefit}><Check size={14} />{benefit}</li>)}</ul><footer><span><Gem size={18} /></span><p><strong>Future releases are covered</strong><small>{futureCoverage}</small></p><em><Sparkles size={12} />Always included</em></footer></section>
+  async function copyReference(): Promise<void> {
+    if (!access.reference) return;
+    try {
+      await navigator.clipboard.writeText(access.reference);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2_000);
+      notify({ title: "Licence reference copied", description: access.reference, tone: "success" });
+    } catch {
+      notify({ title: "Copy was blocked", description: `Select and copy ${access.reference} manually.`, tone: "warning" });
+    }
+  }
+
+  return <div className="unlock-workspace unlock-state-page unlock-access-view">
+    <header className="unlock-access-hero">
+      <span className="unlock-access-crest"><i><Crown size={27} /></i><ShieldCheck size={16} /></span>
+      <div className="unlock-access-hero__copy">
+        <p className="eyebrow">{lifetime ? "Permanent faction entitlement" : "Protected faction entitlement"}</p>
+        <h1>{access.label}</h1>
+        <p><strong>{factionName ?? "This faction"}</strong> has the complete Chainward operations suite, with every approved member covered.</p>
+        <div className="unlock-access-proof" role="list" aria-label="Access assurances">
+          <span role="listitem"><Check size={12} /> No per-seat limits</span>
+          <span role="listitem"><Check size={12} /> Complete feature set</span>
+          <span role="listitem"><Check size={12} /> Faction scoped</span>
+        </div>
+      </div>
+      <div className="unlock-access-status" role="status" aria-label={`Licence active${lifetime ? ", no renewal required" : ""}`}>
+        <span><CircleCheckBig size={21} /></span>
+        <p><small>Licence state</small><strong>Active</strong><em>{lifetime ? "No renewal required" : `Through ${accessEnd}`}</em></p>
+      </div>
+      <nav className="unlock-access-shortcuts" aria-label="Active access shortcuts">
+        <Link href="/dashboard"><BarChart3 size={15} /><span><small>Workspace</small><strong>Open dashboard</strong></span><ArrowRight size={14} /></Link>
+        <Link href="/live-chain"><History size={15} /><span><small>Operations</small><strong>Open live chain</strong></span><ArrowRight size={14} /></Link>
+        <Link href="/faction"><Users size={15} /><span><small>Access</small><strong>Manage faction</strong></span><ArrowRight size={14} /></Link>
+      </nav>
+    </header>
+
+    <section className="unlock-licence-record" aria-labelledby="licence-record-title">
+      <header><div><p className="eyebrow">Entitlement record</p><h2 id="licence-record-title">Licence details</h2><p>The permanent record attached to this connected faction.</p></div><span><ShieldCheck size={13} /> Owner approved</span></header>
+      <div className="unlock-licence-facts">
+        <article className="unlock-licence-fact--reference">
+          <span><Fingerprint size={17} /></span>
+          <p><small>Licence reference</small><strong title={access.reference ?? undefined}>{access.reference ?? "Unavailable"}</strong></p>
+          <button type="button" disabled={!access.reference} onClick={() => void copyReference()} aria-label="Copy licence reference">{copied ? <CircleCheckBig size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
+        </article>
+        <article><span><Clock3 size={17} /></span><p><small>Activated</small><strong>{activated}</strong></p></article>
+        <article><span><Crown size={17} /></span><p><small>Access term</small><strong>{accessEnd}</strong></p></article>
+        <article><span><Users size={17} /></span><p><small>Coverage</small><strong>All approved members</strong></p></article>
+      </div>
+    </section>
+
+    <section className="unlock-access-suite" aria-labelledby="included-suite-title">
+      <header><div><p className="eyebrow">Complete operating suite</p><h2 id="included-suite-title">Every core workspace is included.</h2><p>Move directly into the tools your faction uses most. There are no reduced tiers or separately billed seats.</p></div><span><Sparkles size={13} /> 4 workspaces</span></header>
+      <div className="unlock-capability-grid">
+        <Link href="/analytics"><span><BarChart3 size={18} /></span><p><small>01 · Intelligence</small><strong>Analytics & reports</strong><em>Chain trends, roster signals, and final-source reporting.</em></p><ArrowRight size={14} /></Link>
+        <Link href="/rewards"><span><Crown size={18} /></span><p><small>02 · Governance</small><strong>Reward control</strong><em>Versioned schemes with explainable member outcomes.</em></p><ArrowRight size={14} /></Link>
+        <Link href="/payouts"><span><WalletCards size={18} /></span><p><small>03 · Settlement</small><strong>Payout operations</strong><em>Useful ledgers, recipients, corrections, and audit context.</em></p><ArrowRight size={14} /></Link>
+        <Link href="/members"><span><Users size={18} /></span><p><small>04 · People</small><strong>Members & access</strong><em>Verified roster activity, roles, and managed workspace access.</em></p><ArrowRight size={14} /></Link>
+      </div>
+      <footer><span><Gem size={19} /></span><p><small>{lifetime ? "Lifetime release promise" : "Release coverage"}</small><strong>Future Chainward releases stay included.</strong><em>{futureCoverage}</em></p><b><Sparkles size={12} /> Always included</b></footer>
+    </section>
   </div>;
+}
+
+function formatLicenceDate(value: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 }

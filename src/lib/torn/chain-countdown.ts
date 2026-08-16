@@ -29,6 +29,16 @@ export interface CountdownAnchor {
   atPerf: number;
 }
 
+/** The chain identity and hit count attached to a countdown reading. */
+export interface ChainCountdownReading {
+  anchor: CountdownAnchor;
+  key: string;
+  current: number;
+}
+
+/** Hit 10 completes warm-up; it and every later successful hit reset timeout. */
+export const FIRST_RESETTING_HIT = 10;
+
 /**
  * Disagreement below this is measurement noise, not news.
  *
@@ -39,9 +49,9 @@ export interface CountdownAnchor {
 export const NOISE_TOLERANCE_MS = 1_500;
 
 /**
- * A jump larger than this is a real event: a hit restarts Torn's window, which
- * adds far more than a second. Below it, an increase is treated as noise, so
- * the display never counts upward without cause.
+ * A confirmed hit that adds at least this much time is a real reset. The hit
+ * count is the confirmation; the size only prevents sub-second response noise
+ * around a very early hit from making the display tick upward.
  */
 export const RESET_THRESHOLD_MS = 5_000;
 
@@ -96,11 +106,12 @@ export function project(anchor: CountdownAnchor, nowPerf: number): number {
  *
  * The rules, in order:
  *
- *   - A large increase is a genuine window reset, so it is adopted at once.
- *   - A small increase is ignored. Because every reading is an upper bound, an
- *     increase carries no information — it only means this reading is staler
- *     than the one already held. Adopting it would also make the countdown tick
- *     upward, which reads as broken.
+ *   - A large increase is adopted only when a higher chain count confirms a
+ *     hit at or beyond hit 10. Duration alone cannot distinguish a reset from
+ *     the same cached response arriving again.
+ *   - Every other increase is ignored. Because each reading is an upper bound,
+ *     an uncorroborated increase carries no information — it may only mean the
+ *     response is staler than the bound already held.
  *   - A small decrease is ignored as noise, so the display does not twitch.
  *   - A larger decrease is adopted in full. It is not drift to be eased in: a
  *     lower bound is strictly better information, and holding the higher figure
@@ -110,15 +121,55 @@ export function project(anchor: CountdownAnchor, nowPerf: number): number {
  * counted down by the time the next arrives, so the two bounds are usually
  * within a second or two of each other.
  */
-export function reconcileAnchor(anchor: CountdownAnchor, incomingRemainingMs: number, nowPerf: number): CountdownAnchor {
+export function reconcileAnchor(
+  anchor: CountdownAnchor,
+  incomingRemainingMs: number,
+  nowPerf: number,
+  resetConfirmed = false,
+): CountdownAnchor {
   const projected = project(anchor, nowPerf);
   const incoming = Math.max(0, incomingRemainingMs);
   const delta = incoming - projected;
 
-  if (delta >= RESET_THRESHOLD_MS) return createAnchor(incoming, nowPerf);
+  // A repeated cached response keeps reporting the old, larger duration while
+  // the local projection counts down. Its delta will eventually be enormous,
+  // so duration alone can never prove that a hit occurred. Only a higher Torn
+  // chain count may authorize an upward reset.
+  if (resetConfirmed && delta >= RESET_THRESHOLD_MS) return createAnchor(incoming, nowPerf);
   if (delta >= -NOISE_TOLERANCE_MS) return createAnchor(projected, nowPerf);
 
   return createAnchor(incoming, nowPerf);
+}
+
+/**
+ * Reconciles Torn's hit count and timeout as one atomic reading.
+ *
+ * The hit count is the only reliable proof that a reset happened. Hits 1-9
+ * share the initial warm-up timer, while hit 10 and every higher hit restart
+ * the five-minute window. Keeping that rule here prevents a repeated or
+ * out-of-order response from moving the clock in the wrong direction.
+ */
+export function reconcileChainReading(
+  previous: ChainCountdownReading,
+  incoming: ChainCountdownReading,
+  nowPerf: number,
+): ChainCountdownReading {
+  if (incoming.key !== previous.key) return incoming;
+
+  if (incoming.current < previous.current) {
+    return {
+      anchor: createAnchor(project(previous.anchor, nowPerf), nowPerf),
+      key: previous.key,
+      current: previous.current,
+    };
+  }
+
+  const resetConfirmed = incoming.current > previous.current && incoming.current >= FIRST_RESETTING_HIT;
+  return {
+    anchor: reconcileAnchor(previous.anchor, incoming.anchor.remainingMs, nowPerf, resetConfirmed),
+    key: incoming.key,
+    current: incoming.current,
+  };
 }
 
 /**

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   anchorFromReading,
+  type ChainCountdownReading,
   createAnchor,
   displaySeconds,
+  FIRST_RESETTING_HIT,
   NOISE_TOLERANCE_MS,
   project,
   reconcileAnchor,
+  reconcileChainReading,
   RESET_THRESHOLD_MS,
 } from "./chain-countdown";
 
@@ -50,8 +53,21 @@ describe("reconciling a new reading", () => {
   const anchor = createAnchor(120_000, 0);
 
   it("adopts a large increase, which is a hit restarting the window", () => {
-    const next = reconcileAnchor(anchor, 300_000, 10_000);
+    const next = reconcileAnchor(anchor, 300_000, 10_000, true);
     expect(project(next, 10_000)).toBe(300_000);
+  });
+
+  it("does not mistake a repeated cached response for a hit", () => {
+    let current = createAnchor(300_000, 0);
+
+    // Torn can repeat the exact same 300-second body for up to 30 seconds.
+    // The old duration-only heuristic reset to 300 on every one of these.
+    current = reconcileAnchor(current, 300_000, 10_000);
+    expect(project(current, 10_000)).toBe(290_000);
+    current = reconcileAnchor(current, 300_000, 20_000);
+    expect(project(current, 20_000)).toBe(280_000);
+    current = reconcileAnchor(current, 300_000, 30_000);
+    expect(project(current, 30_000)).toBe(270_000);
   });
 
   it("ignores a small increase rather than letting the timer tick upward", () => {
@@ -116,14 +132,75 @@ describe("reconciling a new reading", () => {
   it("still adopts a reset that lands during a noisy run", () => {
     let current = createAnchor(40_000, 0);
     current = reconcileAnchor(current, 39_400, 1_000);
-    current = reconcileAnchor(current, 300_000, 2_000);
+    current = reconcileAnchor(current, 300_000, 2_000, true);
     expect(displaySeconds(project(current, 2_000))).toBe(300);
   });
 
   it("treats the thresholds as documented", () => {
     const base = createAnchor(100_000, 0);
-    expect(project(reconcileAnchor(base, 100_000 + RESET_THRESHOLD_MS, 0), 0)).toBe(100_000 + RESET_THRESHOLD_MS);
+    expect(project(reconcileAnchor(base, 100_000 + RESET_THRESHOLD_MS, 0, true), 0)).toBe(100_000 + RESET_THRESHOLD_MS);
     expect(project(reconcileAnchor(base, 100_000 - NOISE_TOLERANCE_MS, 0), 0)).toBe(100_000);
+  });
+});
+
+describe("reconciling Torn chain hits", () => {
+  const activeKey = "7421:active";
+
+  function reading(current: number, remainingMs: number, atPerf = 0, key = activeKey): ChainCountdownReading {
+    return { anchor: createAnchor(remainingMs, atPerf), key, current };
+  }
+
+  it("keeps one shared warm-up window through hit 9", () => {
+    const previous = reading(8, 240_000);
+    const next = reconcileChainReading(previous, reading(9, 300_000, 10_000), 10_000);
+
+    expect(project(next.anchor, 10_000)).toBe(230_000);
+    expect(next.current).toBe(9);
+  });
+
+  it("accepts the five-minute reset when hit 10 completes warm-up", () => {
+    const previous = reading(FIRST_RESETTING_HIT - 1, 200_000);
+    const next = reconcileChainReading(previous, reading(FIRST_RESETTING_HIT, 300_000, 5_000), 5_000);
+
+    expect(project(next.anchor, 5_000)).toBe(300_000);
+  });
+
+  it("accepts a reset for every later successful hit", () => {
+    const previous = reading(34, 90_000);
+    const next = reconcileChainReading(previous, reading(35, 299_000, 5_000), 5_000);
+
+    expect(project(next.anchor, 5_000)).toBe(299_000);
+  });
+
+  it("treats a jump across hit 10 as a confirmed latest-hit reset", () => {
+    const previous = reading(8, 180_000);
+    const next = reconcileChainReading(previous, reading(12, 297_000, 5_000), 5_000);
+
+    expect(project(next.anchor, 5_000)).toBe(297_000);
+    expect(next.current).toBe(12);
+  });
+
+  it("does not reset when the same hit count arrives with a repeated timeout", () => {
+    const previous = reading(35, 300_000);
+    const next = reconcileChainReading(previous, reading(35, 300_000, 10_000), 10_000);
+
+    expect(project(next.anchor, 10_000)).toBe(290_000);
+  });
+
+  it("ignores an older out-of-order hit count", () => {
+    const previous = reading(35, 250_000);
+    const next = reconcileChainReading(previous, reading(34, 300_000, 10_000), 10_000);
+
+    expect(project(next.anchor, 10_000)).toBe(240_000);
+    expect(next.current).toBe(35);
+  });
+
+  it("replaces the countdown when the chain identity or state changes", () => {
+    const previous = reading(35, 250_000);
+    const next = reconcileChainReading(previous, reading(0, 120_000, 10_000, "7421:cooldown"), 10_000);
+
+    expect(next.key).toBe("7421:cooldown");
+    expect(project(next.anchor, 10_000)).toBe(120_000);
   });
 });
 

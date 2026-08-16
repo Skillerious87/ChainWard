@@ -70,7 +70,8 @@ Chainward supports two storage modes:
 
 **Settings → Live operations** controls visible-tab refresh frequency and the
 active-chain timeout warning. Background refresh pauses while the tab is hidden
-or offline; manual refresh always requests a fresh Torn snapshot.
+or offline; active chains use an uncached 10-second check and manual refresh
+also requests a fresh Torn chain snapshot.
 
 ## Member notifications
 

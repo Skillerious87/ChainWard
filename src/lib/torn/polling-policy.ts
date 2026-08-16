@@ -1,33 +1,27 @@
 /**
  * How often Chainward may ask Torn for the ongoing chain.
  *
- * Torn's guidance for the `chain` selection is to poll no faster than once
- * every 5 to 30 seconds; going below that risks an API key cooldown or a
- * temporary ban. Everything here is expressed against that floor.
+ * Torn currently documents a per-user ceiling of 100 requests per minute, not
+ * a selection-specific cadence. During an active chain, Chainward makes one
+ * fresh chain request every five seconds: 12 per minute in one visible tab,
+ * comfortably below that ceiling while keeping hit detection responsive.
  *
- * The two windows are deliberately different sizes. The cache has to be
- * *shorter* than the poll interval, otherwise a poll can arrive while the
- * previous response is still valid, return that cached copy, and leave the next
- * genuine refresh a further interval away. With both set to ten seconds the app
- * only really heard from Torn every twenty — and because a hit restarts the
- * chain timeout, a reset could sit unnoticed for that whole stretch, which is
- * what made the countdown look out of step with the game.
+ * Active requests use Torn's documented `timestamp` cache bypass and skip the
+ * local response cache. The normal five-second cache still coalesces ordinary
+ * reads and simultaneous requests from multiple parts of the app.
  */
 
-/** Torn's documented floor for this selection. */
+/** Chainward's conservative application floor for this selection. */
 export const MIN_POLL_SECONDS = 5;
 
-/** Cadence while a chain is running, when `timeout` changes on every hit. */
-export const ACTIVE_CHAIN_POLL_SECONDS = 10;
+/** Cadence while a chain is running, when hit 10 and later hits reset timeout. */
+export const ACTIVE_CHAIN_POLL_SECONDS = 5;
 
-/**
- * Chain response cache. Shorter than the active cadence so each poll reaches
- * Torn, but long enough that several open tabs still share one response.
- */
+/** Normal chain response cache; explicit active-chain refreshes bypass it. */
 export const CHAIN_CACHE_SECONDS = 5;
 
 /**
- * Clamps a requested cadence to the documented floor. A saved preference, a
+ * Clamps a requested cadence to the application floor. A saved preference, a
  * misconfigured environment variable, or a future caller cannot drive the app
  * into a rate that would put the key at risk.
  */

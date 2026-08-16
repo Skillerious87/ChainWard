@@ -17,8 +17,8 @@ export interface SafeChainTelemetry {
   timeoutSeconds: number;
   modifier: number;
   /**
-   * Seconds remaining of the post-chain cooldown, as reported at `checkedAt`.
-   * Torn returns a duration here, not a timestamp.
+   * Seconds remaining of the post-chain cooldown, derived from Torn's absolute
+   * `cooldown` timestamp at `checkedAt`.
    */
   cooldownSeconds: number;
   startedAt: number;

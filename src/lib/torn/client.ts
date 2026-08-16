@@ -30,8 +30,8 @@ export interface TornClientOptions {
   requestTimeoutMs?: number;
   liveCacheSeconds?: number;
   /**
-   * Torn resets a chain's `timeout` on every hit, so this response goes stale
-   * faster than any other live value and is cached for less time.
+   * Hit 10 and each later hit reset `timeout`, so this response goes stale
+   * faster than other live values and is cached for less time.
    */
   chainCacheSeconds?: number;
   historyCacheSeconds?: number;

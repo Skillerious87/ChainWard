@@ -25,17 +25,17 @@ describe("workspace telemetry", () => {
     expect(result.message).toContain("No operational values");
   });
 
-  it("passes explicit freshness options to both operational endpoints", async () => {
+  it("can apply separate freshness policies to the two operational endpoints", async () => {
     const client = {
       getFactionBasic: vi.fn().mockResolvedValue({ basic: { id: 51_393, name: "Verified faction", tag: "VF", members: 47 } }),
       getCurrentChain: vi.fn().mockResolvedValue({ chain: { id: 58_429_107, current: 742, max: 1_000, timeout: 161, modifier: 1, cooldown: 0, start: 1_786_196_400, end: 0 } }),
     };
-    const options = { forceRefresh: true, bypassUpstreamCache: true };
+    const chainOptions = { forceRefresh: true, bypassUpstreamCache: true };
 
-    await loadWorkspaceTelemetry(client, new Date("2026-08-08T17:00:00.000Z"), options);
+    await loadWorkspaceTelemetry(client, new Date("2026-08-08T17:00:00.000Z"), { chain: chainOptions });
 
-    expect(client.getFactionBasic).toHaveBeenCalledWith(undefined, options);
-    expect(client.getCurrentChain).toHaveBeenCalledWith(undefined, options);
+    expect(client.getFactionBasic).toHaveBeenCalledWith(undefined, undefined);
+    expect(client.getCurrentChain).toHaveBeenCalledWith(undefined, chainOptions);
   });
 });
 
@@ -56,14 +56,18 @@ describe("chain operational state", () => {
     expect(await stateFor({ current: 12, timeout: 240 })).toMatchObject({ state: "active" });
   });
 
-  it("reports cooldown from the remaining-seconds field Torn actually returns", async () => {
-    // `cooldown` is a duration. Comparing it to the current epoch second, as the
-    // service once did, made this state unreachable.
-    expect(await stateFor({ current: 250, timeout: 0, end: 1_786_196_400, cooldown: 1_800 })).toMatchObject({ state: "cooldown", cooldownSeconds: 1_800 });
+  it("derives cooldown from Torn's absolute cooldown deadline", async () => {
+    const cooldownAt = Math.floor(checkedAt.getTime() / 1_000) + 1_800;
+    expect(await stateFor({ current: 250, timeout: 0, end: 1_786_196_400, cooldown: cooldownAt })).toMatchObject({ state: "cooldown", cooldownSeconds: 1_800 });
   });
 
   it("does not treat a finished chain as active even while hits remain reported", async () => {
     expect(await stateFor({ current: 250, timeout: 0, end: 1_786_196_400 })).toMatchObject({ state: "idle" });
+  });
+
+  it("does not keep cooldown active after its deadline", async () => {
+    const expiredCooldown = Math.floor(checkedAt.getTime() / 1_000) - 1;
+    expect(await stateFor({ current: 250, timeout: 0, cooldown: expiredCooldown })).toMatchObject({ state: "idle", cooldownSeconds: 0 });
   });
 
   it("stays active while the timeout is counting down, even if an end timestamp is present", async () => {
@@ -81,7 +85,8 @@ describe("chain operational state", () => {
   });
 
   it("prefers the active state over a stale cooldown value", async () => {
-    expect(await stateFor({ current: 30, timeout: 300, cooldown: 60 })).toMatchObject({ state: "active" });
+    const futureCooldown = Math.floor(checkedAt.getTime() / 1_000) + 60;
+    expect(await stateFor({ current: 30, timeout: 300, cooldown: futureCooldown })).toMatchObject({ state: "active" });
   });
 });
 

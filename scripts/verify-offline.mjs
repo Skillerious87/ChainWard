@@ -8,11 +8,14 @@
  *   node scripts/verify-offline.mjs
  */
 import { spawn, spawnSync } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const PORT = Number.parseInt(process.env.CHAINWARD_VERIFY_PORT ?? "3123", 10);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const START_TIMEOUT_MS = 180_000;
+const VERIFY_DIST_DIR = process.env.CHAINWARD_DIST_DIR ?? ".next-offline-verify";
+const NEXT_ENV_FILE = fileURLToPath(new URL("../next-env.d.ts", import.meta.url));
 
 const PUBLIC_ROUTES = ["/", "/connect"];
 const OPERATIONAL_ROUTES = [
@@ -23,6 +26,9 @@ const OPERATIONAL_ROUTES = [
   "/analytics",
   "/rewards",
   "/payouts",
+  "/payouts/ledger",
+  "/payouts/recipients",
+  "/payouts/corrections",
   "/faction",
   "/settings",
 ];
@@ -125,6 +131,9 @@ function runSeed(mode) {
 }
 
 async function run() {
+  // Next rewrites this generated file when a custom distDir starts. Preserve
+  // the normal project references so an acceptance run never dirties git.
+  const originalNextEnvironmentTypes = await readFile(NEXT_ENV_FILE, "utf8").catch(() => null);
   console.log(`\nChainward offline verification on ${ORIGIN}\n`);
 
   // Start from the locked state so the licence gate is genuinely exercised.
@@ -140,7 +149,7 @@ async function run() {
       CHAINWARD_LOCAL_TEST_MODE: "true",
       CHAINWARD_OFFLINE_TEST_MODE: "true",
       // Keeps this run independent of a development server already using `.next`.
-      CHAINWARD_DIST_DIR: process.env.CHAINWARD_DIST_DIR ?? ".next-offline-verify",
+      CHAINWARD_DIST_DIR: VERIFY_DIST_DIR,
     },
   });
   const serverLog = [];
@@ -161,7 +170,7 @@ async function run() {
     check("/connect offers the offline test identities", connect.html.includes("Faction tester") && connect.html.includes("Owner reviewer"));
     check("/connect lists the verified key selections", connect.html.includes("chainreport"));
     check("/connect declares a responsive viewport", /<meta name="viewport" content="[^"]*width=device-width/.test(connect.html));
-    check("/connect keeps the key field above the supporting steps for narrow viewports", connect.html.indexOf("onboarding-form-shell") < connect.html.indexOf("onboarding-support"), "the form markup must precede the supporting steps");
+    check("/connect keeps the key entry inside the primary login flow", connect.html.indexOf("login-intro") < connect.html.indexOf("login-card") && connect.html.indexOf("login-card") < connect.html.indexOf("login-footer"), "the intro, key entry, and footer must retain their reading order");
     const notificationWorker = await fetch(`${ORIGIN}/chainward-notifications.js`);
     const notificationWorkerSource = await notificationWorker.text();
     check("notification worker is served from the application origin", notificationWorker.ok && notificationWorkerSource.includes("notificationclick"), `status ${notificationWorker.status}`);
@@ -234,6 +243,11 @@ async function run() {
     const chainReport = await getRoute("/chains/7000003", session.cookie);
     check("chain report renders the ranked contributor chart", chainReport.html.includes("contributor-chart__rank") && chainReport.html.includes("contributor-chart__bar"));
     check("chain report states respect per hit", chainReport.html.includes("Respect per hit"));
+    check("chain report explains its verified source boundary", chainReport.html.includes("Source integrity verified") && chainReport.html.includes("Schema passed") && chainReport.html.includes("Faction matched"));
+
+    const activeAccess = await getRoute("/unlock", session.cookie);
+    check("active licence renders as an entitlement dashboard", activeAccess.html.includes("unlock-access-view") && activeAccess.html.includes("Licence details") && activeAccess.html.includes("No renewal required"));
+    check("active licence offers direct workspace routes", activeAccess.html.includes('href="/dashboard"') && activeAccess.html.includes('href="/analytics"') && activeAccess.html.includes('href="/payouts"'));
 
     const settings = await getRoute("/settings", session.cookie);
     check("settings opens straight into its console", settings.html.includes("settings-console") && !settings.html.includes("Manage one area at a time"));
@@ -242,9 +256,15 @@ async function run() {
     const ownerSettings = await getRoute("/settings", ownerForSettings.cookie);
     check("licence testing tools are offered to the owner in local test mode", ownerSettings.html.includes("Developer tools"));
 
-    const payouts = await getRoute("/payouts", session.cookie);
-    check("payout ledger ranks recipients", payouts.html.includes("payout-recipient__rank") && payouts.html.includes("Recipients"));
-    check("payout ledger keeps a withdrawal on the record", payouts.html.includes("Withdrawn acknowledgements") && payouts.html.includes("re-issuing after the next faction bank run"), "a reverted settlement must not vanish from the ledger");
+    const payoutOverview = await getRoute("/payouts", session.cookie);
+    check("payout overview links real child views", payoutOverview.html.includes('href="/payouts/ledger"') && payoutOverview.html.includes('href="/payouts/recipients"') && payoutOverview.html.includes('href="/payouts/corrections"'));
+    check("payout overview surfaces settlement controls", payoutOverview.html.includes("Operational posture") && payoutOverview.html.includes("Unresolved settlement share"));
+    const payoutLedger = await getRoute("/payouts/ledger", session.cookie);
+    check("payout register owns its auditable record view", payoutLedger.html.includes("Member payout ledger") && payoutLedger.html.includes("Persisted records only"));
+    const payoutRecipients = await getRoute("/payouts/recipients", session.cookie);
+    check("payout recipient view ranks member exposure", payoutRecipients.html.includes("payout-recipient__rank") && payoutRecipients.html.includes("Recipient analysis"));
+    const payoutCorrections = await getRoute("/payouts/corrections", session.cookie);
+    check("payout corrections keep withdrawals on the record", payoutCorrections.html.includes("Withdrawn acknowledgements") && payoutCorrections.html.includes("re-issuing after the next faction bank run"), "a reverted settlement must not vanish from the ledger");
 
     console.log("\nPermission enforcement");
     const memberBackup = await fetch(`${ORIGIN}/api/data/backup`, { headers: { cookie: session.cookie } });
@@ -290,6 +310,12 @@ async function run() {
     child.kill("SIGTERM");
     await new Promise((resolve) => setTimeout(resolve, 400));
     if (child.exitCode === null) child.kill("SIGKILL");
+    if (originalNextEnvironmentTypes !== null) {
+      const generatedNextEnvironmentTypes = await readFile(NEXT_ENV_FILE, "utf8").catch(() => null);
+      if (generatedNextEnvironmentTypes !== originalNextEnvironmentTypes) {
+        await writeFile(NEXT_ENV_FILE, originalNextEnvironmentTypes, "utf8");
+      }
+    }
   }
 
   console.log(`\n${passed} passed, ${failures.length} failed`);

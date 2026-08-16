@@ -228,14 +228,26 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         return;
       }
       saveMemberNotificationPreferences({ enabled: true });
-      await showWindowsNotification("Chainward member monitoring is ready", {
+      const shown = await showWindowsNotification("Chainward member monitoring is ready", {
         body: "Critical inactivity, watch-list, and expired-holiday signals can now reach Windows while Chainward is open.",
         icon: "/icon.svg",
         badge: "/icon.svg",
         tag: "chainward-notification-test",
         data: { url: "/members" },
       });
-      notify({ title: "Windows notifications enabled", description: "Member monitoring is active with the alert rules below.", tone: "success" });
+      notify({
+        title: shown ? "Windows notifications enabled" : "Monitoring enabled, but the test was not shown",
+        description: shown ? "Member monitoring is active with the alert rules below." : "Permission was granted, but Windows did not display the confirmation. Use Send test to try again.",
+        tone: shown ? "success" : "warning",
+      });
+    } catch (error) {
+      saveMemberNotificationPreferences({ enabled: false });
+      setNotificationPermission(getBrowserNotificationPermission());
+      notify({
+        title: "Notifications could not be enabled",
+        description: error instanceof Error ? error.message : "The browser notification request did not complete.",
+        tone: "danger",
+      });
     } finally {
       setNotificationWorking(false);
     }
@@ -252,6 +264,12 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         data: { url: "/settings" },
       });
       notify({ title: shown ? "Test notification sent" : "Test notification was not sent", description: shown ? "Check the Windows notification area if it did not appear immediately." : "Confirm this site still has notification permission.", tone: shown ? "success" : "warning" });
+    } catch (error) {
+      notify({
+        title: "Test notification failed",
+        description: error instanceof Error ? error.message : "The browser could not send the notification.",
+        tone: "danger",
+      });
     } finally {
       setNotificationPermission(getBrowserNotificationPermission());
       setNotificationWorking(false);
@@ -286,17 +304,17 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
           <dl className="settings-detail-list"><div><dt>Faction</dt><dd>{telemetry.faction?.name ?? "Unavailable"}</dd></div><div><dt>Faction ID</dt><dd>{telemetry.faction?.id ?? "—"}</dd></div><div><dt>Last server check</dt><dd>{new Date(telemetry.checkedAt).toLocaleString("en-GB")}</dd></div><div><dt>Operational status</dt><dd>{telemetry.message}</dd></div></dl>
           <div className="settings-assurance-grid" aria-label="Connection safeguards">
             <article><span><ShieldCheck size={17} /></span><div><strong>Server-verified identity</strong><p>Faction and player identity come from a server-side Torn check, never a browser claim.</p></div></article>
-            <article><span><RefreshCw size={17} /></span><div><strong>Deliberate freshness</strong><p>Automatic checks respect Torn caching; manual sync explicitly requests a fresh snapshot.</p></div></article>
+            <article><span><RefreshCw size={17} /></span><div><strong>Deliberate freshness</strong><p>Active-chain checks and manual sync request an uncached chain snapshot.</p></div></article>
             <article><span><LockKeyhole size={17} /></span><div><strong>Credential isolation</strong><p>The API key is never displayed, returned in telemetry, or included in portable backups.</p></div></article>
           </div>
           <div className="settings-view-actions"><Link className="button button--secondary" href="/connect"><KeyRound size={15} /> {telemetry.source === "live" ? "Replace connection" : "Connect Torn API"}</Link></div>
         </section>}
 
         {activeView === "operations" && <section className="settings-view-content">
-          <div className="settings-status-hero"><span><RefreshCw size={22} /></span><div><p className="eyebrow">Live Torn telemetry</p><h3>{preferences.autoRefresh ? `Refresh every ${preferences.refreshIntervalSeconds} seconds` : "Automatic refresh paused"}</h3><p>Background checks run only while this browser tab is visible and online.</p></div><em className={`database-health database-health--${preferences.autoRefresh ? "ready" : "attention"}`}><i />{preferences.autoRefresh ? "Live" : "Manual"}</em></div>
+          <div className="settings-status-hero"><span><RefreshCw size={22} /></span><div><p className="eyebrow">Live Torn telemetry</p><h3>{preferences.autoRefresh ? `General refresh every ${preferences.refreshIntervalSeconds} seconds` : "Automatic refresh paused"}</h3><p>{preferences.autoRefresh ? "Active chains tighten to an uncached check every 5 seconds while this tab is visible and online." : "Use manual sync whenever a fresh chain snapshot is needed."}</p></div><em className={`database-health database-health--${preferences.autoRefresh ? "ready" : "attention"}`}><i />{preferences.autoRefresh ? "Live" : "Manual"}</em></div>
           <div className="preference-list"><PreferenceToggle icon={RefreshCw} title="Automatic live refresh" description="Keep faction and active-chain telemetry current while this tab is in use." checked={preferences.autoRefresh} onChange={(value) => saveAppearancePreferences({ autoRefresh: value })} /></div>
           <div className="settings-option-grid"><label><span><Clock3 size={15} /> Refresh interval</span><small>Controls visible-tab background checks. Manual refresh always requests a fresh snapshot.</small><select value={preferences.refreshIntervalSeconds} disabled={!preferences.autoRefresh} onChange={(event) => saveAppearancePreferences({ refreshIntervalSeconds: Number(event.target.value) as 30 | 60 | 120 })}><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></label><label><span><AlertTriangle size={15} /> Chain timeout warning</span><small>Show a workspace warning when the active chain falls below this remaining time.</small><select value={preferences.chainWarningSeconds} onChange={(event) => saveAppearancePreferences({ chainWarningSeconds: Number(event.target.value) as 60 | 120 | 180 | 300 })}><option value="60">1 minute</option><option value="120">2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option></select></label></div>
-          <div className="settings-explanation"><span><ShieldCheck size={20} /></span><div><strong>API-conscious polling</strong><p>Checks stop in hidden tabs, retain the last verified snapshot during network failures, and respect the server cache window.</p></div></div>
+          <div className="settings-explanation"><span><ShieldCheck size={20} /></span><div><strong>API-conscious polling</strong><p>Checks stop in hidden tabs, retain the last verified snapshot during network failures, and bypass Torn&apos;s service cache only for active chains or a manual sync.</p></div></div>
         </section>}
 
         {activeView === "notifications" && <section className="settings-view-content">

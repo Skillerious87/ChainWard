@@ -6,6 +6,7 @@ import { ChainPaymentControl } from "@/components/chain/chain-payment-control";
 import { ContributionTable } from "@/components/chain/contribution-table";
 import { ExportButton } from "@/components/ui/action-controls";
 import { MemberAvatar } from "@/components/ui/member-avatar";
+import { RewardAmount } from "@/components/ui/reward-amount";
 import { calculateChainRewardPreview, getChainSettlement } from "@/lib/rewards/chain-settlement";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getRewardWorkspace } from "@/lib/rewards/reward-store";
@@ -39,12 +40,12 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
       <div><small>Duration</small><strong>{formatDuration(report.endedAt - report.startedAt)}</strong><span>{formatTime(report.startedAt)} – {formatTime(report.endedAt)} TCT</span></div>
       <div><small>Contributors</small><strong>{report.contributorCount}</strong><span>{report.targetCount.toLocaleString()} distinct targets</span></div>
       <div><small>Respect gained</small><strong>{report.respect.toFixed(2)}</strong><span>Reported by Torn</span></div>
-      <div><small>Reward liability</small><strong>{preview.available ? preview.totalAmount.toLocaleString() : "—"}</strong><span>{preview.rewardUnit ?? "Configure a scheme"}</span></div>
+      <div><small>Reward liability</small>{preview.available && preview.rewardUnit ? <RewardAmount amount={preview.totalAmount} unit={preview.rewardUnit} paid={settlement?.status === "PAID"} size="summary" artwork="liability" /> : <><strong>—</strong><span>Configure a scheme</span></>}</div>
     </section>
 
     <section className={settlement?.status === "PAID" ? "reward-calculation-summary reward-calculation-summary--paid" : "reward-calculation-summary"}>
       <header><span>{settlement?.status === "PAID" ? <BadgeCheck size={22} /> : <CircleDollarSign size={22} />}</span><div><p className="eyebrow">{settlement?.status === "PAID" ? "Immutable paid snapshot" : "Reward calculation"}</p><h2>{preview.available ? `${preview.schemeName} · version ${preview.schemeVersion}` : "Reward scheme required"}</h2><p>{preview.message}</p></div></header>
-      <dl><div><dt>Eligible records</dt><dd>{preview.members.length}</dd></div><div><dt>Total liability</dt><dd>{preview.available ? `${preview.totalAmount.toLocaleString()} ${preview.rewardUnit}` : "Unavailable"}</dd></div><div><dt>Payout status</dt><dd className={settlement?.status === "PAID" ? "paid-copy" : undefined}>{settlement?.status === "PAID" ? "PAID" : "Not marked"}</dd></div></dl>
+      <dl><div><dt>Eligible records</dt><dd>{preview.members.length}</dd></div><div><dt>Total liability</dt><dd>{preview.available && preview.rewardUnit ? <RewardAmount amount={preview.totalAmount} unit={preview.rewardUnit} paid={settlement?.status === "PAID"} size="compact" artwork="liability" /> : "Unavailable"}</dd></div><div><dt>Payout status</dt><dd className={settlement?.status === "PAID" ? "paid-copy" : undefined}>{settlement?.status === "PAID" ? "PAID" : "Not marked"}</dd></div></dl>
     </section>
 
     <div className="report-grid">
@@ -65,9 +66,34 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
           {leaders.length === 0 && <li className="contributor-chart__empty">Torn returned no attacker records for this chain.</li>}
         </ol>
       </section>
-      <section className="panel snapshot-card">
-        <div className="section-heading"><div><h2>Report provenance</h2><p>Validated API response</p></div><span className="snapshot-lock"><ShieldCheck size={12} /> Verified</span></div>
-        <dl><div><dt>Chain ID</dt><dd>#{report.id}</dd></div><div><dt>Faction ID</dt><dd>{report.factionId}</dd></div><div><dt>Started</dt><dd>{formatDateTime(report.startedAt)}</dd></div><div><dt>Completed</dt><dd>{formatDateTime(report.endedAt)}</dd></div><div><dt>Distinct targets</dt><dd>{report.targetCount.toLocaleString()}</dd></div><div><dt>Respect per hit</dt><dd>{respectPerHit.toFixed(2)}</dd></div></dl>
+      <section className="panel snapshot-card" aria-labelledby="report-provenance-title">
+        <header className="snapshot-card__header">
+          <div className="snapshot-card__title">
+            <span><FileCheck2 size={19} /></span>
+            <div><p className="eyebrow">Source record</p><h2 id="report-provenance-title">Report provenance</h2><p>Validated Torn API v2 response</p></div>
+          </div>
+          <span className="snapshot-verification" role="status" aria-label="Source integrity verified">
+            <i><ShieldCheck size={15} /></i>
+            <span><small>Integrity check</small><strong>Verified</strong></span>
+          </span>
+        </header>
+        <div className="snapshot-assurance" role="list" aria-label="Verification checks">
+          <span role="listitem"><BadgeCheck size={13} /> Schema passed</span>
+          <span role="listitem"><BadgeCheck size={13} /> Faction matched</span>
+          <span role="listitem"><BadgeCheck size={13} /> Final report</span>
+        </div>
+        <dl className="snapshot-facts">
+          <div><dt>Chain record</dt><dd>#{report.id}</dd></div>
+          <div><dt>Faction record</dt><dd>#{report.factionId}</dd></div>
+          <div className="snapshot-fact--wide"><dt>Started</dt><dd>{formatDateTime(report.startedAt)}</dd></div>
+          <div className="snapshot-fact--wide"><dt>Completed</dt><dd>{formatDateTime(report.endedAt)}</dd></div>
+          <div><dt>Distinct targets</dt><dd>{report.targetCount.toLocaleString()}</dd></div>
+          <div><dt>Respect per hit</dt><dd>{respectPerHit.toFixed(2)}</dd></div>
+        </dl>
+        <footer className="snapshot-card__footer">
+          <span><ShieldCheck size={16} /></span>
+          <p><strong>Source boundary intact</strong><small>Report values come from Torn; Chainward calculates rewards separately from the saved scheme version.</small></p>
+        </footer>
       </section>
     </div>
     <ContributionTable members={report.contributions} title="Member rewards and final contributions" emptyMessage={result.message} rewards={preview.available ? memberRewards : undefined} rewardUnit={preview.rewardUnit} payoutStatus={settlement?.status ?? null} />

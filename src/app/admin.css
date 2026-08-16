@@ -512,6 +512,64 @@
 .admin-console .admin-kpis > div { padding: 17px 19px; }
 .admin-console .admin-kpis strong { font-size: 22px; letter-spacing: -.5px; }
 
+/* Access intelligence ------------------------------------------------------ */
+.access-intelligence {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 78px;
+  padding: 12px 14px;
+  border: 1px solid rgba(103, 211, 145, .22);
+  border-radius: 10px;
+  background: linear-gradient(100deg, rgba(103, 211, 145, .045), transparent 58%), #0d1316;
+}
+.access-intelligence--review { border-color: rgba(245, 185, 76, .24); background: linear-gradient(100deg, rgba(245, 185, 76, .045), transparent 58%), #0d1316; }
+.access-intelligence--critical { border-color: rgba(242, 109, 109, .26); background: linear-gradient(100deg, rgba(242, 109, 109, .05), transparent 58%), #0d1316; }
+.access-intelligence__icon { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgba(103, 211, 145, .24); border-radius: 9px; color: var(--success); }
+.access-intelligence--review .access-intelligence__icon { border-color: rgba(245, 185, 76, .25); color: var(--warning); }
+.access-intelligence--critical .access-intelligence__icon { border-color: rgba(242, 109, 109, .28); color: var(--danger); }
+.access-intelligence > div { display: flex; min-width: 0; flex-direction: column; }
+.access-intelligence > div .eyebrow { margin-bottom: 3px; font-size: 9.5px !important; }
+.access-intelligence > div > strong { color: #e2e8e5; font-size: 13px; font-weight: 680; }
+.access-intelligence > div > small { margin-top: 3px; color: #88958e; font-size: 11px; line-height: 1.45; }
+.access-intelligence > dl { display: grid; grid-template-columns: repeat(3, minmax(64px, auto)); margin: 0; overflow: hidden; border: 1px solid #303941; border-radius: 8px; }
+.access-intelligence > dl > div { min-width: 72px; padding: 7px 10px; border-right: 1px solid #303941; text-align: center; }
+.access-intelligence > dl > div:last-child { border-right: 0; }
+.access-intelligence dt { color: #728078; font-size: 9.5px; text-transform: uppercase; }
+.access-intelligence dd { margin: 3px 0 0; color: #d7ded9; font-size: 13px; font-weight: 720; font-variant-numeric: tabular-nums; }
+.access-bulk-impact { color: #8b9891; font-size: 10.5px; white-space: nowrap; }
+
+.access-change-preview { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 12px; border: 1px solid #384249; border-radius: 8px; background: #0b1013; }
+.access-change-preview > span { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #3a464d; border-radius: 7px; color: #8e9ba3; }
+.access-change-preview > div { min-width: 0; }
+.access-change-preview strong { color: #dce3df; font-size: 12.5px; }
+.access-change-preview p { margin-top: 3px; color: #8a9790; font-size: 11.5px !important; line-height: 1.45; }
+.access-change-preview > div > small { display: block; margin-top: 9px; color: #6f7d75; font-size: 10.5px; line-height: 1.45; }
+.access-change-preview dl { display: grid; gap: 7px; margin: 10px 0 0; }
+.access-change-preview dl > div { display: grid; grid-template-columns: 58px 1fr; align-items: start; gap: 7px; }
+.access-change-preview dt { padding-top: 3px; color: #718078; font-size: 9.5px; font-weight: 700; text-transform: uppercase; }
+.access-change-preview dd { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
+.access-change-preview em { padding: 3px 6px; border: 1px solid #344047; border-radius: 999px; color: #aeb8b2; font-size: 10px; font-style: normal; }
+.access-change-preview--positive { border-color: rgba(103, 211, 145, .23); }
+.access-change-preview--positive > span { border-color: rgba(103, 211, 145, .25); color: var(--success); }
+.access-change-preview--warning { border-color: rgba(245, 185, 76, .24); }
+.access-change-preview--warning > span { border-color: rgba(245, 185, 76, .26); color: var(--warning); }
+.access-change-preview--danger { border-color: rgba(242, 109, 109, .27); }
+.access-change-preview--danger > span { border-color: rgba(242, 109, 109, .29); color: var(--danger); }
+
+@media (max-width: 980px) {
+  .access-intelligence { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .access-intelligence > dl { grid-column: 2 / -1; grid-row: 2; }
+}
+
+@media (max-width: 620px) {
+  .access-intelligence { grid-template-columns: 36px minmax(0, 1fr); }
+  .access-intelligence > dl { grid-column: 1 / -1; }
+  .access-intelligence > .button { grid-column: 1 / -1; width: 100%; }
+  .access-bulk-impact { flex: 1 1 100%; }
+}
+
 @media (max-width: 1240px) {
   .admin-console .admin-procedure ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-console .admin-procedure li:nth-child(2) { border-right: 0; }

@@ -8,14 +8,12 @@ import {
 } from "./polling-policy";
 
 describe("chain polling policy", () => {
-  it("keeps the cache shorter than the active cadence", () => {
-    // Equal windows meant a poll could land while the previous response was
-    // still valid, so Torn was really only reached every other interval and a
-    // hit that restarted the timeout went unnoticed for up to twice as long.
-    expect(CHAIN_CACHE_SECONDS).toBeLessThan(ACTIVE_CHAIN_POLL_SECONDS);
+  it("checks an active chain every five seconds", () => {
+    expect(ACTIVE_CHAIN_POLL_SECONDS).toBe(5);
+    expect(60 / ACTIVE_CHAIN_POLL_SECONDS).toBe(12);
   });
 
-  it("never polls faster than Torn's documented floor", () => {
+  it("never polls faster than the application's safety floor", () => {
     expect(ACTIVE_CHAIN_POLL_SECONDS).toBeGreaterThanOrEqual(MIN_POLL_SECONDS);
     expect(CHAIN_CACHE_SECONDS).toBeGreaterThanOrEqual(MIN_POLL_SECONDS);
   });

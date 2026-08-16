@@ -48,6 +48,7 @@
   .command-results { min-height: 0; flex: 1; }
   .command-palette > footer { flex-wrap: wrap; }
   .data-source-banner { height: auto; min-height: 30px; padding: 6px 12px; line-height: 1.35; text-align: center; }
+  .topbar-popover--user { right: -2px; width: min(326px, calc(100vw - 24px)); max-height: calc(100dvh - 76px); }
 
   /* Dense page chrome needs to wrap into a usable control stack rather than
      forcing labels and actions into a single clipped row. */
