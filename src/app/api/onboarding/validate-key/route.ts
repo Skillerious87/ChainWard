@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  reportUnexpectedOnboardingValidationFailure,
+  type OnboardingValidationStage,
+} from "@/lib/diagnostics/onboarding-validation";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 import { consumeGlobalRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
@@ -28,6 +32,7 @@ export async function POST(request: Request) {
     return errorResponse("Enter the 16-character API key from Torn Settings, not the key name or your password.", "INVALID_FORMAT", 400);
   }
 
+  let stage: OnboardingValidationStage = "torn-api-validation";
   try {
     const connection = await validateTornConnection(parsed.data.apiKey, {
       baseUrl: process.env.TORN_API_BASE_URL,
@@ -36,24 +41,39 @@ export async function POST(request: Request) {
       liveCacheSeconds: parsePositiveInteger(process.env.TORN_LIVE_CACHE_SECONDS, 30),
       historyCacheSeconds: parsePositiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 60),
     });
-    const remembered = parsed.data.remember
-      ? await createRememberedConnection(parsed.data.apiKey, connection)
-      : null;
+    let session:
+      | { kind: "remembered"; value: Awaited<ReturnType<typeof createRememberedConnection>> }
+      | { kind: "temporary"; value: string };
+    if (parsed.data.remember) {
+      stage = "remembered-connection";
+      session = {
+        kind: "remembered",
+        value: await createRememberedConnection(parsed.data.apiKey, connection),
+      };
+    } else {
+      stage = "temporary-session";
+      session = {
+        kind: "temporary",
+        value: createConnectionSession(parsed.data.apiKey, connection.player.id, connection.faction.id),
+      };
+    }
+
+    stage = "response-construction";
     const response = NextResponse.json({
       ...connection,
       connected: true,
       session: {
-        remembered: Boolean(remembered),
-        expiresAt: new Date(remembered?.expiresAt ?? Date.now() + CONNECTION_MAX_AGE_SECONDS * 1_000).toISOString(),
+        remembered: session.kind === "remembered",
+        expiresAt: new Date(session.kind === "remembered" ? session.value.expiresAt : Date.now() + CONNECTION_MAX_AGE_SECONDS * 1_000).toISOString(),
       },
     }, {
       headers: { "cache-control": "no-store" },
     });
-    if (remembered) {
-      response.cookies.set(REMEMBERED_CONNECTION_COOKIE, remembered.token, connectionCookieOptions(REMEMBERED_CONNECTION_MAX_AGE_SECONDS));
+    if (session.kind === "remembered") {
+      response.cookies.set(REMEMBERED_CONNECTION_COOKIE, session.value.token, connectionCookieOptions(REMEMBERED_CONNECTION_MAX_AGE_SECONDS));
       response.cookies.set(CONNECTION_COOKIE, "", connectionCookieOptions(0));
     } else {
-      response.cookies.set(CONNECTION_COOKIE, createConnectionSession(parsed.data.apiKey, connection.player.id, connection.faction.id), connectionCookieOptions(CONNECTION_MAX_AGE_SECONDS));
+      response.cookies.set(CONNECTION_COOKIE, session.value, connectionCookieOptions(CONNECTION_MAX_AGE_SECONDS));
       response.cookies.set(REMEMBERED_CONNECTION_COOKIE, "", connectionCookieOptions(0));
     }
     return response;
@@ -71,12 +91,34 @@ export async function POST(request: Request) {
         || error.category === "INSUFFICIENT_PERMISSION" ? 200 : 502;
       return errorResponse(userFacingTornError(error), error.category, status);
     }
-    return errorResponse("The Torn connection could not be validated safely. Check the key and try again.", "VALIDATION_FAILED", 400);
+    const diagnosticId = reportUnexpectedOnboardingValidationFailure({
+      apiKey: parsed.data.apiKey,
+      error,
+      rememberRequested: parsed.data.remember,
+      stage,
+    });
+    return errorResponse(
+      `The Torn connection could not be validated safely. Diagnostic reference: ${diagnosticId}.`,
+      "VALIDATION_FAILED",
+      400,
+      undefined,
+      diagnosticId,
+    );
   }
 }
 
-function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number) {
-  return NextResponse.json({ connected: false, error: message, code }, { status, headers: { "cache-control": "no-store", ...(retryAfterSeconds ? { "retry-after": String(retryAfterSeconds) } : {}) } });
+function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number, diagnosticId?: string) {
+  return NextResponse.json(
+    { connected: false, error: message, code, ...(diagnosticId ? { diagnosticId } : {}) },
+    {
+      status,
+      headers: {
+        "cache-control": "no-store",
+        ...(retryAfterSeconds ? { "retry-after": String(retryAfterSeconds) } : {}),
+        ...(diagnosticId ? { "x-chainward-diagnostic-id": diagnosticId } : {}),
+      },
+    },
+  );
 }
 
 function normalizeApiKey(value: string): string {
