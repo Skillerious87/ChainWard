@@ -11,7 +11,7 @@ export const getFactionRoster = cache(async (): Promise<TornDataResult<TornRoste
     const client = await getConfiguredTornClient();
     if (!client) return unavailable([], "Connect a Torn API key to retrieve the faction roster.");
     const response = await client.getFactionMembers();
-    return available(response.members.map(mapMember), "Roster retrieved from Torn API v2.");
+    return available(response.members.map(mapMember), client.dataMode === "offline" ? "Roster loaded from the offline test fixture." : "Roster retrieved from Torn API v2.");
   } catch (error: unknown) {
     return unavailable([], safeError(error));
   }
@@ -28,7 +28,7 @@ export const getCompletedChainHistory = cache(async (): Promise<TornDataResult<T
       respect: chain.respect,
       startedAt: chain.start,
       endedAt: chain.end,
-    })).toSorted((left, right) => right.endedAt - left.endedAt || right.id - left.id), "Completed chains retrieved from Torn API v2.");
+    })).toSorted((left, right) => right.endedAt - left.endedAt || right.id - left.id), client.dataMode === "offline" ? "Completed chains loaded from the offline test fixture." : "Completed chains retrieved from Torn API v2.");
   } catch (error: unknown) {
     return unavailable([], safeError(error));
   }
@@ -49,7 +49,7 @@ export const getChainReportView = cache(async (chainId: number): Promise<TornDat
     if (report.chainreport.faction_id !== faction.basic.id) {
       return unavailable(null, "This chain report does not belong to the connected faction.");
     }
-    return available(mapReport(report, members), "Final chain report retrieved from Torn API v2.");
+    return available(mapReport(report, members), client.dataMode === "offline" ? "Final chain report loaded from the offline test fixture." : "Final chain report retrieved from Torn API v2.");
   } catch (error: unknown) {
     return unavailable(null, safeError(error));
   }
@@ -71,7 +71,7 @@ export const getCurrentChainReportView = cache(async (): Promise<TornDataResult<
     if (report.chainreport.faction_id !== faction.basic.id) {
       return unavailable(null, "The current report did not match the connected faction.");
     }
-    return available(mapReport(report, members), "Current matching chain report retrieved from Torn API v2.");
+    return available(mapReport(report, members), client.dataMode === "offline" ? "Current chain report loaded from the offline test fixture." : "Current matching chain report retrieved from Torn API v2.");
   } catch (error: unknown) {
     return unavailable(null, safeError(error));
   }

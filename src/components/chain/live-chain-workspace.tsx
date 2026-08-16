@@ -21,10 +21,20 @@ export function LiveChainWorkspace({ telemetry, report, reportMessage }: { telem
   const [viewMode, setViewMode] = useState<ViewMode>("comfortable");
   const members = useMemo(() => viewMode === "risk" ? (report?.contributions ?? []).filter((member) => member.status !== "Okay") : (report?.contributions ?? []), [report, viewMode]);
   function changeView(value: string): void { const next = value as ViewMode; setViewMode(next); const selection = viewOptions.find((option) => option.value === next); notify({ title: `${selection?.label ?? "View"} enabled`, description: selection?.description, tone: "info" }); }
+
+  // Torn keeps serving the most recent chain report after a chain ends, so the
+  // same rows describe a live chain or a finished one. Labelling them "current"
+  // in both cases contradicted the "No active chain" state shown right above.
+  const live = telemetry.chain?.state === "active";
+  const reportLabel = live ? "Matching Torn report" : "Last completed chain report";
+  const tableTitle = viewMode === "risk"
+    ? "At-risk roster states"
+    : live ? "Live report contributors" : `Final contributors · chain #${report?.id ?? "—"}`;
+
   return <div className="page-stack">
-    <PageHeader eyebrow="Live operations" title="Active chain" description="Current chain fields and matching report data retrieved from Torn API v2." actions={<><ExportButton filename="chainward-live-contributions.csv" label="Export" rows={members.map((member) => ({ rank: member.rank, player: member.name, tornId: member.tornId, chainHits: member.hits, contribution: `${member.contribution.toFixed(2)}%`, respect: member.respect, status: member.status ?? "Unavailable" }))} /><MenuButton label="View options" icon="settings" selected={viewMode} onSelect={changeView} reflectSelection={false} className="button button--secondary" options={viewOptions} /></>} />
-    <div className={`notice-bar ${report ? "notice-bar--info" : "notice-bar--warning"}`}><Radio size={16} /><span><strong>{report ? `Matching Torn report #${report.id}.` : "No matching current report."}</strong> {report ? "Contribution rows use qualifying leave, mug, and hospitalize attacks from the report." : reportMessage}</span></div>
-    <ChainHero key={telemetry.checkedAt} telemetry={telemetry} detailed />
-    <ContributionTable members={members} compact={viewMode === "compact"} title={viewMode === "risk" ? "At-risk roster states" : "Current report contributors"} emptyMessage={reportMessage} />
+    <PageHeader eyebrow="Live operations" title="Active chain" description={live ? "Live chain fields and the matching report retrieved from Torn API v2." : "Torn reports no chain in progress. The most recent completed report is shown below."} actions={<><ExportButton filename="chainward-live-contributions.csv" label="Export" rows={members.map((member) => ({ rank: member.rank, player: member.name, tornId: member.tornId, chainHits: member.hits, contribution: `${member.contribution.toFixed(2)}%`, respect: member.respect, status: member.status ?? "Unavailable" }))} /><MenuButton label="View options" icon="settings" selected={viewMode} onSelect={changeView} reflectSelection={false} className="button button--secondary" options={viewOptions} /></>} />
+    <div className={`notice-bar ${report ? (live ? "notice-bar--info" : "notice-bar--muted") : "notice-bar--warning"}`}><Radio size={16} /><span><strong>{report ? `${reportLabel} #${report.id}.` : "No matching chain report."}</strong> {report ? `${report.hits.toLocaleString()} recorded hits from ${report.contributorCount} contributor${report.contributorCount === 1 ? "" : "s"}. Rows count qualifying leave, mug, and hospitalize attacks.` : reportMessage}</span></div>
+    <ChainHero telemetry={telemetry} detailed />
+    <ContributionTable members={members} compact={viewMode === "compact"} title={tableTitle} emptyMessage={reportMessage} />
   </div>;
 }

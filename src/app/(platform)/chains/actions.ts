@@ -5,7 +5,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
-import { calculateChainRewardPreview, getChainSettlement, savePaidChainSettlement, settlementFromPreview } from "@/lib/rewards/chain-settlement";
+import { calculateChainRewardPreview, getChainSettlement, revertChainSettlement, savePaidChainSettlement, settlementFromPreview } from "@/lib/rewards/chain-settlement";
 import { getRewardWorkspace } from "@/lib/rewards/reward-store";
 import { getChainReportView } from "@/lib/torn/workspace-data-service";
 
@@ -23,4 +23,33 @@ export async function markChainPaid(input: unknown): Promise<{ chainId: number; 
   revalidatePath("/chains");
   revalidatePath(`/chains/${chainId}`);
   return { chainId, paidAt: settlement.paidAt!, totalAmount: settlement.totalAmount, rewardUnit: settlement.rewardUnit! };
+}
+
+/**
+ * Returns a chain to its unpaid state. Marking a chain paid asserts that the
+ * rewards were sent, and that assertion can be made in error, so the operator
+ * who can record a payment can also withdraw one.
+ */
+export async function revertChainPayment(input: unknown): Promise<{ chainId: number }> {
+  // A stated reason is required: a withdrawal that leaves no explanation is
+  // indistinguishable from tampering when the ledger is reviewed later.
+  const { chainId, reason } = z.object({
+    chainId: z.number().int().positive(),
+    reason: z.string().trim().min(8, "Describe why this payout is being withdrawn.").max(300),
+  }).parse(input);
+  const { actor, faction } = await requireFactionPermission("payout:manage");
+  const existing = await getChainSettlement(faction.id, chainId);
+  if (!existing || existing.status !== "PAID") throw new Error("This chain is not currently marked as paid.");
+  await revertChainSettlement(faction.id, chainId, {
+    reason,
+    totalAmount: existing.totalAmount,
+    rewardUnit: existing.rewardUnit,
+    revertedAt: new Date().toISOString(),
+    revertedByTornId: actor.tornUserId,
+    revertedByName: actor.name,
+  });
+  revalidatePath("/chains");
+  revalidatePath(`/chains/${chainId}`);
+  revalidatePath("/payouts");
+  return { chainId };
 }

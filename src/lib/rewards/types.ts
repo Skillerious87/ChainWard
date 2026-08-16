@@ -76,3 +76,21 @@ export interface TierValidationIssue {
   message: string;
   tierIds: string[];
 }
+
+/**
+ * A hit count that no enabled tier claims. Members who finish inside a gap are
+ * paid nothing, which is legitimate but is almost always unintended, so it is
+ * reported separately from the blocking validation issues.
+ */
+export interface RewardCoverageGap {
+  fromHits: number;
+  toHits: number | null;
+}
+
+export interface RewardCoverageReport {
+  enabledTierCount: number;
+  gaps: RewardCoverageGap[];
+  coversUnlimited: boolean;
+  lowestCoveredHits: number | null;
+  highestCoveredHits: number | null;
+}

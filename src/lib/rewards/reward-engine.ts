@@ -3,6 +3,8 @@ import type {
   MemberContributionInput,
   MemberRewardCalculation,
   RewardCalculation,
+  RewardCoverageGap,
+  RewardCoverageReport,
   RewardSchemeInput,
   RewardTierInput,
   TierValidationIssue,
@@ -88,6 +90,53 @@ export function validateRewardTiers(
   }
 
   return issues;
+}
+
+/**
+ * Reports the hit counts no enabled tier claims. Overlaps and invalid bounds
+ * are handled by `validateRewardTiers`; this describes the opposite failure,
+ * where a member finishes a chain inside a range that pays nothing at all.
+ */
+export function analyzeRewardCoverage(
+  tiers: readonly RewardTierInput[],
+): RewardCoverageReport {
+  const enabled = tiers
+    .filter((tier) => tier.enabled && Number.isInteger(tier.minimumHits) && tier.minimumHits >= 0)
+    .toSorted((left, right) => left.minimumHits - right.minimumHits);
+
+  if (enabled.length === 0) {
+    return { enabledTierCount: 0, gaps: [{ fromHits: 0, toHits: null }], coversUnlimited: false, lowestCoveredHits: null, highestCoveredHits: null };
+  }
+
+  const gaps: RewardCoverageGap[] = [];
+  let nextUncovered = 0;
+  let coversUnlimited = false;
+  let highestCoveredHits: number | null = null;
+
+  for (const tier of enabled) {
+    if (coversUnlimited) break;
+    if (tier.minimumHits > nextUncovered) {
+      gaps.push({ fromHits: nextUncovered, toHits: tier.minimumHits - 1 });
+    }
+    if (tier.maximumHits === null) {
+      coversUnlimited = true;
+      highestCoveredHits = null;
+      break;
+    }
+    const upper = Math.max(tier.minimumHits, tier.maximumHits);
+    nextUncovered = Math.max(nextUncovered, upper + 1);
+    highestCoveredHits = upper;
+  }
+
+  if (!coversUnlimited) gaps.push({ fromHits: nextUncovered, toHits: null });
+
+  return {
+    enabledTierCount: enabled.length,
+    gaps,
+    coversUnlimited,
+    lowestCoveredHits: enabled[0]?.minimumHits ?? null,
+    highestCoveredHits,
+  };
 }
 
 export function calculateRewards(

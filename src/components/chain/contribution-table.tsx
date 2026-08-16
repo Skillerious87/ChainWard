@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
+import { RewardAmount } from "@/components/ui/reward-amount";
 import { TornUserLink } from "@/components/ui/torn-user-link";
 import type { TornContribution } from "@/lib/torn/workspace-types";
 
@@ -65,14 +66,14 @@ export function ContributionTable({ members, title = "Chain contribution", compa
       </div>
       <div className="table-scroll">
         <table className="data-table contribution-table">
-          <thead><tr><SortableHeader label="Rank" sortKey="rank" activeKey={sortKey} direction={sortDirection} onSort={changeSort} /><SortableHeader label="Player" sortKey="name" activeKey={sortKey} direction={sortDirection} onSort={changeSort} /><SortableHeader label="Chain hits" sortKey="hits" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />{!compact && <SortableHeader label="Contribution" sortKey="contribution" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />}<SortableHeader label="Respect" sortKey="respect" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />{rewards && <th className="numeric">Member reward</th>}{!compact && <th>Torn status</th>}</tr></thead>
+          <thead><tr><SortableHeader label="Rank" sortKey="rank" activeKey={sortKey} direction={sortDirection} onSort={changeSort} /><SortableHeader label="Player" sortKey="name" activeKey={sortKey} direction={sortDirection} onSort={changeSort} /><SortableHeader label="Chain hits" sortKey="hits" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />{!compact && <SortableHeader label="Contribution" sortKey="contribution" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />}<SortableHeader label="Respect" sortKey="respect" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />{rewards && <th className="numeric reward-column">Member reward</th>}{!compact && <th>Torn status</th>}</tr></thead>
           <tbody>{renderedMembers.map((member) => <tr key={member.tornId}>
             <td data-label="Rank"><span className={`rank${member.rank <= 3 ? " rank--top" : ""}`}>{member.rank}</span></td>
             <td data-label="Player"><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail="View Torn profile" /></td>
             <td className="numeric" data-label="Chain hits"><strong>{member.hits.toLocaleString()}</strong></td>
             {!compact && <td className="numeric" data-label="Contribution"><span className="contribution-value">{member.contribution.toFixed(1)}%</span><span className="mini-progress"><i style={{ width: `${Math.min(member.contribution, 100)}%` }} /></span></td>}
             <td className="numeric" data-label="Respect"><strong>{member.respect.toFixed(2)}</strong></td>
-            {rewards && <td className="numeric" data-label="Member reward"><span className={payoutStatus === "PAID" ? "member-reward member-reward--paid" : "member-reward"}><strong>{(rewards[member.tornId]?.amount ?? 0).toLocaleString()}</strong><small>{rewardUnit ?? "units"} · {rewards[member.tornId]?.tierLabel ?? "No tier"}</small>{payoutStatus === "PAID" && <Check size={11} />}</span></td>}
+            {rewards && <td className="numeric reward-column" data-label="Member reward"><RewardAmount amount={rewards[member.tornId]?.amount ?? 0} unit={rewardUnit ?? "units"} detail={rewards[member.tornId]?.tierLabel ?? "No tier"} paid={payoutStatus === "PAID"} /></td>}
             {!compact && <td data-label="Torn status">{member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Unavailable</span>}</td>}
           </tr>)}</tbody>
         </table>

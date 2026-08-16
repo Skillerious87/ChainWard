@@ -4,6 +4,8 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
+import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
+import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 
 export const runtime = "nodejs";
 
@@ -16,14 +18,16 @@ const backupSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
   let context;
   try { context = await requireFactionPermission("faction:manage"); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Workspace restore access was denied." }, { status: 403 }); }
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return NextResponse.json({ error: "Create a local database before restoring a backup." }, { status: 503 });
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > 5_000_000) return NextResponse.json({ error: "The backup exceeds the 5 MB restore limit." }, { status: 413 });
-  const parsed = backupSchema.safeParse(await request.json().catch(() => null));
+  let input: unknown;
+  try { input = await readLimitedJson(request, 5_000_000); }
+  catch (error) { return NextResponse.json({ error: error instanceof RequestBodyTooLargeError ? "The backup exceeds the 5 MB restore limit." : "The backup could not be read." }, { status: 413 }); }
+  const parsed = backupSchema.safeParse(input);
   if (!parsed.success) return NextResponse.json({ error: "This is not a valid Chainward workspace backup." }, { status: 400 });
   if (parsed.data.faction.tornFactionId !== context.faction.id) return NextResponse.json({ error: "The backup belongs to a different Torn faction." }, { status: 409 });
 

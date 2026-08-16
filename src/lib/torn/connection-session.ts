@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { connectionSecretPath, migrateLegacyConnectionSecret } from "@/lib/data/app-data";
 import { decryptCredential, encryptCredential } from "@/lib/security/credential-encryption";
 
 export const CONNECTION_COOKIE = "chainward_connection";
@@ -39,18 +40,24 @@ export function readConnectionSession(value: string | undefined): ConnectionSess
 
 export function connectionEncryptionSecret(): string {
   const configured = process.env.SESSION_SECRET?.trim();
-  if (configured) return createHash("sha256").update(configured).digest("base64");
+  if (configured) {
+    if (process.env.NODE_ENV === "production" && Buffer.byteLength(configured, "utf8") < 32) {
+      throw new Error("SESSION_SECRET must contain at least 32 bytes in production.");
+    }
+    return createHash("sha256").update(configured).digest("base64");
+  }
   if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET must be configured before accepting Torn API connections.");
   globalSession.chainwardEphemeralSessionSecret ??= readOrCreateLocalSecret();
   return globalSession.chainwardEphemeralSessionSecret;
 }
 
 function readOrCreateLocalSecret(): string {
-  const secretPath = path.join(process.cwd(), "data", ".chainward-session-secret");
+  const secretPath = connectionSecretPath();
+  migrateLegacyConnectionSecret();
   if (existsSync(secretPath)) {
     const stored = readFileSync(secretPath, "utf8").trim();
     if (Buffer.from(stored, "base64").length === 32) return stored;
-    throw new Error("The local Chainward session secret is malformed. Remove it and reconnect the Torn API.");
+    throw new Error("The Chainward AppData encryption secret is malformed. Remove it and reconnect the Torn API.");
   }
 
   mkdirSync(path.dirname(secretPath), { recursive: true });

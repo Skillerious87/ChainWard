@@ -1,10 +1,11 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { createLocalDatabase, openLocalDatabase } from "@/lib/data/local-database";
 import { decryptCredential, encryptCredential } from "@/lib/security/credential-encryption";
+import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import type { ValidatedTornConnection } from "./connection-service";
 import { connectionEncryptionSecret } from "./connection-session";
+import { openCredentialDatabase } from "./credential-database";
 
 export const REMEMBERED_CONNECTION_COOKIE = "chainward_remembered_connection";
 export const REMEMBERED_CONNECTION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
@@ -32,7 +33,7 @@ export async function createRememberedConnection(
   const token = randomBytes(32).toString("base64url");
   const tokenHash = hashToken(token);
   const expiresAt = Date.now() + REMEMBERED_CONNECTION_MAX_AGE_SECONDS * 1_000;
-  const encrypted = encryptCredential(apiKey, connectionEncryptionSecret());
+  const encrypted = encryptCredential(apiKey, credentialEncryptionSecret());
 
   if (process.env.DATABASE_URL?.trim()) {
     await createPostgresConnection(tokenHash, expiresAt, encrypted, connection);
@@ -62,8 +63,7 @@ function createLocalConnection(
   encrypted: ReturnType<typeof encryptCredential>,
   connection: ValidatedTornConnection,
 ): void {
-  const database = openLocalDatabase() ?? (createLocalDatabase(), openLocalDatabase());
-  if (!database) throw new Error("The local connection store could not be opened.");
+  const database = openCredentialDatabase();
   const now = new Date().toISOString();
   try {
     database.prepare(`
@@ -95,8 +95,7 @@ function createLocalConnection(
 }
 
 function readLocalConnection(tokenHash: string): RememberedConnection | null {
-  const database = openLocalDatabase();
-  if (!database) return null;
+  const database = openCredentialDatabase();
   try {
     const row = database.prepare(`
       SELECT torn_user_id, faction_id, encrypted_key, encryption_iv, expires_at, last_seen_at
@@ -113,7 +112,7 @@ function readLocalConnection(tokenHash: string): RememberedConnection | null {
       database.prepare("UPDATE remembered_torn_connections SET last_seen_at = ? WHERE token_hash = ?").run(new Date().toISOString(), tokenHash);
     }
     return {
-      apiKey: decryptCredential(row.encrypted_key, row.encryption_iv, connectionEncryptionSecret()),
+      apiKey: decryptAndMigrateLocalCredential(database, tokenHash, row),
       tornUserId: row.torn_user_id,
       factionId: row.faction_id,
       expiresAt,
@@ -127,8 +126,7 @@ function readLocalConnection(tokenHash: string): RememberedConnection | null {
 }
 
 function revokeLocalConnection(tokenHash: string): void {
-  const database = openLocalDatabase();
-  if (!database) return;
+  const database = openCredentialDatabase();
   try {
     const row = database.prepare("SELECT torn_user_id FROM remembered_torn_connections WHERE token_hash = ?").get(tokenHash) as unknown as { torn_user_id: number } | undefined;
     if (row) database.prepare("DELETE FROM remembered_torn_connections WHERE torn_user_id = ?").run(row.torn_user_id);
@@ -204,7 +202,7 @@ async function readPostgresConnection(tokenHash: string): Promise<RememberedConn
   }
   try {
     return {
-      apiKey: decryptCredential(credential.encryptedKey, credential.encryptionIv, connectionEncryptionSecret()),
+      apiKey: await decryptAndMigratePostgresCredential(credential),
       tornUserId: session.user.tornUserId,
       factionId: credential.faction.tornFactionId,
       expiresAt: session.expiresAt.getTime(),
@@ -227,4 +225,49 @@ async function revokePostgresConnection(tokenHash: string): Promise<void> {
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function decryptAndMigrateLocalCredential(
+  database: ReturnType<typeof openCredentialDatabase>,
+  tokenHash: string,
+  row: LocalRememberedRow,
+): string {
+  const dedicatedSecret = credentialEncryptionSecret();
+  try {
+    return decryptCredential(row.encrypted_key, row.encryption_iv, dedicatedSecret);
+  } catch {
+    const plaintext = decryptCredential(row.encrypted_key, row.encryption_iv, connectionEncryptionSecret());
+    const migrated = encryptCredential(plaintext, dedicatedSecret);
+    database.prepare(`
+      UPDATE remembered_torn_connections
+      SET encrypted_key = ?, encryption_iv = ?, key_fingerprint = ?, key_last_four = ?
+      WHERE token_hash = ?
+    `).run(migrated.encryptedKey, migrated.encryptionIv, migrated.fingerprint, migrated.lastFour, tokenHash);
+    return plaintext;
+  }
+}
+
+async function decryptAndMigratePostgresCredential(credential: {
+  id: string;
+  encryptedKey: Uint8Array;
+  encryptionIv: Uint8Array;
+}): Promise<string> {
+  const dedicatedSecret = credentialEncryptionSecret();
+  try {
+    return decryptCredential(credential.encryptedKey, credential.encryptionIv, dedicatedSecret);
+  } catch {
+    const plaintext = decryptCredential(credential.encryptedKey, credential.encryptionIv, connectionEncryptionSecret());
+    const migrated = encryptCredential(plaintext, dedicatedSecret);
+    const { db } = await import("@/lib/db");
+    await db.factionApiCredential.update({
+      where: { id: credential.id },
+      data: {
+        encryptedKey: Uint8Array.from(migrated.encryptedKey),
+        encryptionIv: Uint8Array.from(migrated.encryptionIv),
+        keyFingerprint: migrated.fingerprint,
+        keyLastFour: migrated.lastFour,
+      },
+    });
+    return plaintext;
+  }
 }

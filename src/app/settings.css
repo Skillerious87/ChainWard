@@ -1,0 +1,202 @@
+/* ---------------------------------------------------------------------------
+   Settings console. Loaded after polish.css, so this file supersedes the
+   earlier `.professional-settings-*` sizing.
+
+   The screen previously opened with a page header ("Workspace / Settings /
+   Manage one area at a time") sitting directly above a panel header
+   ("Workspace settings · 1 of 6") sitting directly above the section list —
+   three restatements of the same thing before any setting appeared. The console
+   now opens straight into the navigation and the active section, and fills the
+   view the way the reward console does.
+   --------------------------------------------------------------------------- */
+
+/* Settings runs edge to edge inside the workspace column: the centred page
+   padding that suits document-style screens only produced a dead border around
+   a console that is already its own container. The rail on the left is the
+   application navigation and is untouched. */
+.page-content:has(.settings-console) {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+.app-scroll:has(.settings-console) { overflow: hidden; }
+
+.settings-console {
+  /* Topbar (72) + route bar (2) + data banner (31). No page padding remains. */
+  --console-chrome: 105px;
+  display: flex;
+  height: calc(100dvh - var(--console-chrome));
+  min-height: 520px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.settings-console .professional-settings-layout {
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 300px minmax(0, 1fr);
+  border: 0;
+  border-radius: 0;
+  background: #0b0f12;
+  box-shadow: none;
+}
+
+/* Navigation rail ----------------------------------------------------------- */
+.settings-console .professional-settings-nav {
+  min-height: 0;
+  padding-top: 14px;
+  border-right: 1px solid #2a333a;
+}
+/* `flex: 1` on a grid stretches its rows, which spread the six sections down
+   the full rail height. The list packs to the top and scrolls if it overflows. */
+.settings-console .professional-settings-nav nav {
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: 6px;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+}
+.settings-console .professional-settings-nav nav button {
+  min-height: 68px;
+  grid-template-columns: 38px minmax(0, 1fr) 24px;
+  gap: 11px;
+  padding: 10px 11px;
+  border-radius: 10px;
+}
+.settings-console .professional-settings-nav nav button > span { width: 37px; height: 37px; border-radius: 9px; }
+.settings-console .professional-settings-nav nav button strong { font-size: 13px; font-weight: 640; }
+.settings-console .professional-settings-nav nav button small { font-size: 11.5px; }
+.settings-console .professional-settings-nav nav button em { width: 23px; height: 23px; font-size: 11px; font-weight: 640; }
+.settings-console .professional-settings-nav nav .professional-settings-nav__active { box-shadow: inset 3px 0 var(--accent); }
+.settings-console .professional-settings-nav > footer { gap: 10px; padding: 15px 16px; }
+.settings-console .professional-settings-nav > footer strong { font-size: 12px; }
+.settings-console .professional-settings-nav > footer small { font-size: 11px; line-height: 1.45; }
+
+/* Section view -------------------------------------------------------------- */
+.settings-console .professional-settings-view { min-height: 0; }
+.settings-console .professional-settings-view__header {
+  display: grid;
+  min-height: 0;
+  flex: 0 0 auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #232b32;
+  background: linear-gradient(110deg, rgba(var(--accent-rgb), .03), transparent 52%);
+}
+.settings-console .professional-settings-view__header > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), .24);
+  border-radius: 11px;
+  background: rgba(var(--accent-rgb), .06);
+  color: var(--accent);
+}
+.settings-console .professional-settings-view__header > div { min-width: 0; }
+.settings-console .professional-settings-view__header h2 { margin-top: 0; font-size: 20px; font-weight: 650; letter-spacing: -.4px; }
+.settings-console .professional-settings-view__header p { margin-top: 3px; color: var(--text-muted); font-size: 12.5px !important; }
+.settings-view-step {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.settings-view-step i { margin: 0 2px; color: #4d5860; font-style: normal; }
+
+/* The only scrolling region on the page. */
+.professional-settings-view__scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 24px;
+  scrollbar-gutter: stable;
+}
+.settings-console .settings-view-content { animation: settings-view-in 220ms cubic-bezier(.22, .82, .28, 1) both; }
+@keyframes settings-view-in { from { opacity: 0; transform: translate3d(0, 5px, 0); } to { opacity: 1; transform: none; } }
+
+.settings-console .settings-cycle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 24px;
+  border-top: 1px solid #232b32;
+  background: rgba(6, 9, 11, .45);
+}
+.settings-console .settings-cycle > div { display: flex; align-items: center; gap: 9px; }
+.settings-console .settings-cycle span { padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.settings-console .settings-cycle strong { color: var(--text-secondary); font-size: 12.5px; font-weight: 620; }
+
+/* Section surfaces use the working canvas while keeping line lengths bounded. */
+.settings-console .settings-view-content { width: 100%; max-width: 1280px; }
+.settings-assurance-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.settings-assurance-grid article { display: grid; min-width: 0; min-height: 92px; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 11px; padding: 14px; border: 1px solid #2c363e; border-radius: 9px; background: linear-gradient(135deg, rgba(var(--accent-rgb), .025), transparent 65%), #0b1013; }
+.settings-assurance-grid article > span { display: grid; width: 33px; height: 33px; place-items: center; border: 1px solid rgba(var(--accent-rgb), .2); border-radius: 8px; background: rgba(var(--accent-rgb), .045); color: var(--success); }
+.settings-assurance-grid strong { color: #cbd4cf; font-size: 11.5px; font-weight: 650; }
+.settings-assurance-grid p { margin-top: 4px; color: #748179; font-size: 10.5px; line-height: 1.45; text-wrap: pretty; }
+.notification-permission-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-option-grid--notifications { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.settings-option-grid--notifications > label { min-height: 142px; grid-template-columns: 1fr; }
+.settings-option-grid--notifications > label > small { grid-column: 1; }
+.settings-option-grid--notifications select { width: 100%; grid-column: 1; grid-row: auto; align-self: end; }
+.quiet-hours-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 10px; }
+.quiet-hours-grid label { display: grid; gap: 6px; padding: 13px 14px; border: 1px solid #303a42; border-radius: 8px; background: #0b1013; }
+.quiet-hours-grid span { color: #9ca8a1; font-size: 11px; font-weight: 650; }
+.quiet-hours-grid input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #3a464f; border-radius: 7px; outline: 0; background: #10171b; color: #cbd3d7; color-scheme: dark; }
+.quiet-hours-grid input:focus-visible { border-color: rgba(var(--accent-rgb), .5); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .07); }
+.quiet-hours-grid input:disabled { cursor: not-allowed; opacity: .45; }
+.settings-alert { display: flex; align-items: flex-start; gap: 10px; padding: 13px 14px; border: 1px solid #303a42; border-radius: 8px; background: #0b1013; color: var(--text-secondary); }
+.settings-alert > svg { flex: 0 0 auto; margin-top: 1px; }
+.settings-alert strong { font-size: 12px; }
+.settings-alert p { margin-top: 3px; color: #859189; font-size: 11px; line-height: 1.5; }
+.settings-alert--warning { border-color: rgba(245,185,76,.28); background: rgba(245,185,76,.045); }
+.settings-alert--warning > svg { color: var(--warning); }
+.settings-console .professional-settings-nav { background: linear-gradient(180deg, #0a0e11, #090c0f); }
+.settings-console .professional-settings-view { background: #0d1114; }
+
+@media (max-width: 1180px) {
+  .settings-console .professional-settings-layout { grid-template-columns: 254px minmax(0, 1fr); }
+}
+
+@media (max-width: 960px) {
+  .settings-console { height: auto; min-height: 0; }
+  .app-scroll:has(.settings-console) { overflow-y: auto; }
+  .page-content:has(.settings-console) { padding-bottom: 24px; }
+  .settings-console .professional-settings-layout { min-height: 0; grid-template-columns: 1fr; }
+  .settings-console .professional-settings-nav { border-right: 0; border-bottom: 1px solid #2a333a; }
+  .settings-console .professional-settings-nav nav { display: grid; max-height: 260px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-console .professional-settings-nav nav button { min-height: 60px; }
+  .settings-assurance-grid { grid-template-columns: 1fr; }
+  .settings-assurance-grid article { min-height: 0; }
+  .settings-option-grid--notifications { grid-template-columns: 1fr; }
+  .settings-option-grid--notifications > label { min-height: 0; }
+}
+
+@media (max-width: 620px) {
+  .settings-console .professional-settings-nav nav { display: flex; max-height: none; gap: 8px; padding: 0 12px 14px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .settings-console .professional-settings-nav nav::-webkit-scrollbar { display: none; }
+  .settings-console .professional-settings-nav nav button { min-width: 220px; min-height: 58px; flex: 0 0 auto; }
+  .settings-console .professional-settings-view__header { grid-template-columns: 42px minmax(0, 1fr); row-gap: 10px; padding: 15px 16px; }
+  .settings-view-step { grid-column: 2; width: fit-content; }
+  .professional-settings-view__scroll { padding: 16px; }
+  .settings-console .settings-cycle { flex-wrap: wrap; padding: 12px 16px; }
+  .settings-console .settings-cycle > div { order: -1; width: 100%; justify-content: center; }
+  .settings-console .settings-cycle .button { flex: 1; justify-content: center; }
+  .quiet-hours-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-console .settings-view-content { animation: none; }
+}
+:root.reduced-motion .settings-console .settings-view-content { animation: none; }

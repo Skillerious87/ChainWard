@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { Prisma } from "@/generated/prisma/client";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
 import { calculateRewards } from "./reward-engine";
@@ -134,6 +136,135 @@ export async function savePaidChainSettlement(settlement: ChainSettlement, repor
     const snapshot = await tx.chainRewardSnapshot.create({ data: { chainId: chain.id, rewardSchemeId: scheme.id, schemeName: settlement.schemeName!, schemeVersion: settlement.schemeVersion!, status: "FINAL", calculation, liabilityTotals, calculatedAt: new Date(settlement.calculatedAt) } });
     await tx.memberPayout.createMany({ data: settlement.members.map((member) => ({ factionId: faction.id, snapshotId: snapshot.id, contributionId: contributionIds.get(member.tornUserId)!, rewardDefinitionId, tornUserId: member.tornUserId, memberName: member.memberName, amount: member.amount, status: "PAID" as const, processedById: processedBy.id, processedAt: new Date(settlement.paidAt!), note: `Chain #${settlement.chainId} payout acknowledgement` })) });
   });
+}
+
+/**
+ * Withdraws a paid acknowledgement so the chain returns to its calculated but
+ * unpaid state. Marking a chain paid is an operator assertion that the rewards
+ * were actually sent, and an operator can assert that by mistake; without a way
+ * back the ledger would permanently disagree with reality.
+ *
+ * The reward scheme keeps its history lock. That lock only forces an edit to
+ * create a new version, and other chains may already reference the same
+ * version, so releasing it here could silently rewrite another settled chain's
+ * rules.
+ */
+export async function revertChainSettlement(factionId: number, chainId: number, correction: PayoutCorrection): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    if (!localDatabaseExists()) throw new Error("The local database is unavailable.");
+    const database = openLocalDatabase();
+    if (!database) throw new Error("The local database is unavailable.");
+    try {
+      const previous = database.prepare("SELECT scheme_name, scheme_version, reward_unit, total_amount, member_count, paid_at, paid_by_name FROM chain_settlements WHERE faction_id = ? AND chain_id = ?").get(factionId, chainId) as unknown as LocalRevertedRow | undefined;
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        database.prepare(`INSERT INTO chain_settlement_reverts (id, faction_id, chain_id, reason, scheme_name, scheme_version, reward_unit, total_amount, member_count, paid_at, paid_by_name, reverted_at, reverted_by_torn_id, reverted_by_name)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(randomUUID(), factionId, chainId, correction.reason, previous?.scheme_name ?? null, previous?.scheme_version ?? null, previous?.reward_unit ?? null, previous?.total_amount ?? null, previous?.member_count ?? null, previous?.paid_at ?? null, previous?.paid_by_name ?? null, correction.revertedAt, correction.revertedByTornId, correction.revertedByName);
+        database.prepare("DELETE FROM chain_settlements WHERE faction_id = ? AND chain_id = ?").run(factionId, chainId);
+        database.exec("COMMIT");
+      } catch (error) {
+        try { database.exec("ROLLBACK"); } catch { /* The transaction never began. */ }
+        throw error;
+      }
+    } finally { database.close(); }
+    return;
+  }
+
+  const { db } = await import("@/lib/db");
+  await db.$transaction(async (tx) => {
+    const chain = await tx.chain.findFirst({ where: { tornChainId: chainId, faction: { tornFactionId: factionId } } });
+    if (!chain) throw new Error("No stored chain record matches this payout.");
+    const snapshots = await tx.chainRewardSnapshot.findMany({ where: { chainId: chain.id, status: "FINAL" }, select: { id: true } });
+    if (snapshots.length === 0) throw new Error("No final payout snapshot exists for this chain.");
+    const snapshotIds = snapshots.map((snapshot) => snapshot.id);
+    // The payouts are removed and the snapshot superseded rather than deleted,
+    // so the record that a settlement once existed survives the correction.
+    await tx.memberPayout.deleteMany({ where: { snapshotId: { in: snapshotIds } } });
+    await tx.chainRewardSnapshot.updateMany({ where: { id: { in: snapshotIds } }, data: { status: "SUPERSEDED", supersededAt: new Date() } });
+    await tx.factionSetting.deleteMany({ where: { faction: { tornFactionId: factionId }, key: settlementKey(chainId) } });
+    const actor = await tx.user.upsert({ where: { tornUserId: correction.revertedByTornId }, update: { name: correction.revertedByName }, create: { tornUserId: correction.revertedByTornId, name: correction.revertedByName } });
+    await tx.auditLog.create({
+      data: {
+        factionId: chain.factionId,
+        actorId: actor.id,
+        action: "chain_payout.reverted",
+        entityType: "ChainRewardSnapshot",
+        entityId: snapshotIds[0]!,
+        metadata: { chainId, reason: correction.reason, totalAmount: correction.totalAmount ?? null, rewardUnit: correction.rewardUnit ?? null, revertedAt: correction.revertedAt },
+      },
+    });
+  });
+}
+
+export interface PayoutCorrection {
+  /** The operator's stated reason, kept with the withdrawal record. */
+  reason: string;
+  totalAmount?: number;
+  rewardUnit?: string | null;
+  revertedAt: string;
+  revertedByTornId: number;
+  revertedByName: string;
+}
+
+interface LocalRevertedRow {
+  scheme_name: string | null;
+  scheme_version: number | null;
+  reward_unit: string | null;
+  total_amount: number | null;
+  member_count: number | null;
+  paid_at: string | null;
+  paid_by_name: string | null;
+}
+
+export interface PayoutRevertRecord {
+  id: string;
+  chainId: number;
+  reason: string;
+  totalAmount: number | null;
+  rewardUnit: string | null;
+  revertedAt: string;
+  revertedByName: string;
+}
+
+/** Recent payout withdrawals from either persistence backend, newest first. */
+export async function getPayoutReverts(factionId: number, limit = 10): Promise<PayoutRevertRecord[]> {
+  if (!process.env.DATABASE_URL) return getLocalPayoutReverts(factionId, limit);
+  try {
+    const { db } = await import("@/lib/db");
+    const events = await db.auditLog.findMany({
+      where: { faction: { tornFactionId: factionId }, action: "chain_payout.reverted" },
+      include: { actor: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return events.flatMap<PayoutRevertRecord>((event) => {
+      if (!event.metadata || typeof event.metadata !== "object" || Array.isArray(event.metadata)) return [];
+      const metadata = event.metadata as Record<string, unknown>;
+      if (typeof metadata.chainId !== "number" || typeof metadata.reason !== "string") return [];
+      return [{
+        id: event.id,
+        chainId: metadata.chainId,
+        reason: metadata.reason,
+        totalAmount: typeof metadata.totalAmount === "number" ? metadata.totalAmount : null,
+        rewardUnit: typeof metadata.rewardUnit === "string" ? metadata.rewardUnit : null,
+        revertedAt: typeof metadata.revertedAt === "string" ? metadata.revertedAt : event.createdAt.toISOString(),
+        revertedByName: event.actor?.name ?? "Unknown operator",
+      }];
+    });
+  } catch { return []; }
+}
+
+/** Recent payout withdrawals, newest first. */
+export function getLocalPayoutReverts(factionId: number, limit = 10): PayoutRevertRecord[] {
+  if (process.env.DATABASE_URL || !localDatabaseExists()) return [];
+  const database = openLocalDatabase();
+  if (!database) return [];
+  try {
+    const rows = database.prepare("SELECT id, chain_id, reason, total_amount, reward_unit, reverted_at, reverted_by_name FROM chain_settlement_reverts WHERE faction_id = ? ORDER BY reverted_at DESC LIMIT ?").all(factionId, limit) as unknown as Array<{ id: string; chain_id: number; reason: string; total_amount: number | null; reward_unit: string | null; reverted_at: string; reverted_by_name: string }>;
+    return rows.map((row) => ({ id: row.id, chainId: row.chain_id, reason: row.reason, totalAmount: row.total_amount, rewardUnit: row.reward_unit, revertedAt: row.reverted_at, revertedByName: row.reverted_by_name }));
+  } catch { return []; }
+  finally { database.close(); }
 }
 
 export function settlementFromPreview(preview: ChainRewardPreview, factionId: number, chainId: number, paidByTornId: number, now = new Date()): ChainSettlement {

@@ -1,9 +1,18 @@
 import "server-only";
 
+import { cache } from "react";
 import type { FactionAccessSummary } from "./types";
 
-export async function getFactionAccessSummary(tornFactionId: number | null): Promise<FactionAccessSummary> {
-  if (!tornFactionId || !process.env.DATABASE_URL) return inactive();
+export const getFactionAccessSummary = cache(async (tornFactionId: number | null): Promise<FactionAccessSummary> => {
+  if (!tornFactionId) return inactive();
+  if (!process.env.DATABASE_URL?.trim()) {
+    try {
+      const { getLocalFactionAccessSummary } = await import("./local-license-store");
+      return getLocalFactionAccessSummary(tornFactionId);
+    } catch {
+      return inactive();
+    }
+  }
   try {
     const { db } = await import("@/lib/db");
     const now = new Date();
@@ -32,7 +41,7 @@ export async function getFactionAccessSummary(tornFactionId: number | null): Pro
   } catch {
     return inactive();
   }
-}
+});
 
 function inactive(): FactionAccessSummary {
   return { state: "inactive", label: "Faction-wide licence", expiresAt: null, reference: null, startedAt: null, plan: null, payment: null, message: null };

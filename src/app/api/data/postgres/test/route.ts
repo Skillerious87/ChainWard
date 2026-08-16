@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
+import { readLimitedJson } from "@/lib/security/request-body";
+import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 
 export const runtime = "nodejs";
 
@@ -17,11 +19,12 @@ const connectionSchema = z.object({
 }).strict();
 
 export async function POST(request: Request) {
+  if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
   const actor = await getCurrentActor();
   if (!actor.tornUserId) return NextResponse.json({ error: "Connect a verified Torn API key before testing workspace storage." }, { status: 401 });
   if (!isPlatformOwner(actor)) return NextResponse.json({ error: "Only the platform owner can test a server-side database connection." }, { status: 403 });
 
-  const input: unknown = await request.json().catch(() => null);
+  const input = await readLimitedJson(request, 4_096).catch(() => null);
   const parsed = connectionSchema.safeParse(input);
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid PostgreSQL host, port, database, and username." }, { status: 400 });
 

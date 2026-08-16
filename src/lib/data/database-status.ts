@@ -1,6 +1,7 @@
 import "server-only";
 
-import { localDatabaseExists, localDatabaseInfo, openLocalDatabase } from "./local-database";
+import { cache } from "react";
+import { localDatabaseExists, localDatabaseInfo, openLocalDatabase, openLocalTestDatabase } from "./local-database";
 
 export interface DatabaseStatus {
   configured: boolean;
@@ -11,7 +12,7 @@ export interface DatabaseStatus {
   filename: string | null;
 }
 
-export async function getDatabaseStatus(): Promise<DatabaseStatus> {
+export const getDatabaseStatus = cache(async (): Promise<DatabaseStatus> => {
   const connectionString = process.env.DATABASE_URL?.trim();
   if (connectionString) try {
     const { db } = await import("@/lib/db");
@@ -22,6 +23,7 @@ export async function getDatabaseStatus(): Promise<DatabaseStatus> {
   } catch {
     return { configured: true, available: false, label: "Connection unavailable", message: "DATABASE_URL is set, but PostgreSQL did not respond.", provider: "postgresql", filename: null };
   }
+  openLocalTestDatabase()?.close();
   if (localDatabaseExists()) {
     let database: ReturnType<typeof openLocalDatabase> = null;
     try {
@@ -29,13 +31,13 @@ export async function getDatabaseStatus(): Promise<DatabaseStatus> {
       if (!database) throw new Error("The local database disappeared before it could be opened.");
       database?.prepare("SELECT 1").get();
       const info = localDatabaseInfo();
-      return { configured: true, available: true, label: "Local SQLite file", message: `${info.filename} is ready on this device.`, provider: "sqlite", filename: info.filename };
+      return { configured: true, available: true, label: "Temporary project SQLite", message: `${info.filename} is ready for local testing.`, provider: "sqlite", filename: info.filename };
     } catch {
       return { configured: true, available: false, label: "Local file unavailable", message: "The local SQLite file exists but could not be opened safely. Retry after any backup or restore operation finishes.", provider: "sqlite", filename: safeLocalFilename() };
     } finally { database?.close(); }
   }
-  return { configured: false, available: false, label: "No local database", message: "Create a private SQLite database file on this device to save rewards and paid-chain records.", provider: "none", filename: null };
-}
+  return { configured: false, available: false, label: "No local database", message: "Enable local test mode or configure PostgreSQL before saving workspace records.", provider: "none", filename: null };
+});
 
 function safeLocalFilename(): string {
   try { return localDatabaseInfo().filename; } catch { return "chainward-local.sqlite"; }

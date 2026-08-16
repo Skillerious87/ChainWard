@@ -96,7 +96,11 @@ export function AccessRequestTable({ initialRequests, databaseConfigured, messag
             <td><div className="access-row-actions">{(request.status === "Pending" || request.status === "Information") && <><button className="button access-approve-button" onClick={() => openReview(request.requestId, "Approved")}><ShieldCheck size={14} /> Review payment</button><button className="icon-button" onClick={() => openReview(request.requestId, "Information")} title="Request information" aria-label={`Request information from ${request.faction}`}><MessageCircleQuestion size={15} /></button><button className="icon-button access-reject-button" onClick={() => openReview(request.requestId, "Rejected")} title="Reject request" aria-label={`Reject ${request.faction}`}><X size={15} /></button></>}</div></td>
           </tr>)}</tbody>
         </table>
-        {visible.length === 0 && <div className="table-empty">{databaseConfigured ? "No stored access requests match this view." : "Connect PostgreSQL to accept and review licence requests."}</div>}
+        {visible.length === 0 && <div className="queue-empty">
+          <span><ClipboardCheck size={22} /></span>
+          <strong>{databaseConfigured ? "Nothing waiting on you" : "Storage required"}</strong>
+          <p>{databaseConfigured ? "No stored access request matches this view. New faction requests appear here the moment they are submitted." : "Connect PostgreSQL to accept and review licence requests."}</p>
+        </div>}
       </div>
       <div className="table-footer"><span title="Torn user ID 3212954"><ShieldCheck size={12} /> Only Skillerious can change licence state</span><span>{message}</span></div>
     </section>

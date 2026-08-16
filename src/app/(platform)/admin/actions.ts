@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requirePlatformOwner } from "@/lib/auth/platform-owner";
 import { licensePlans } from "@/lib/licensing/pricing";
+import { reviewLocalAccessRequest } from "@/lib/licensing/local-license-store";
 import { parseRequestMetadata, type AccessRequestViewStatus, type TornIdentityView } from "@/lib/licensing/request-store";
 
 const reviewSchema = z.object({
@@ -25,12 +26,26 @@ export interface ReviewAccessResult { requestId: string; status: AccessRequestVi
 export async function reviewAccessRequest(input: unknown): Promise<ReviewAccessResult> {
   const actor = await getCurrentActor();
   requirePlatformOwner(actor);
-  if (!process.env.DATABASE_URL?.trim()) throw new Error("PostgreSQL is required for the central licence register.");
   const parsed = reviewSchema.parse(input);
-  const { db } = await import("@/lib/db");
   const reviewedAt = new Date();
 
-  const result = await db.$transaction(async (tx) => {
+  const result = process.env.DATABASE_URL?.trim()
+    ? await reviewPostgresAccessRequest(actor, parsed, reviewedAt)
+    : reviewLocalAccessRequest({ actor, ...parsed, reviewedAt, plans: licensePlans });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
+  return { requestId: parsed.requestId, status: parsed.decision, reviewedBy: result.reviewedBy, reviewedAt: reviewedAt.toISOString() };
+}
+
+async function reviewPostgresAccessRequest(
+  actor: Awaited<ReturnType<typeof getCurrentActor>>,
+  parsed: z.infer<typeof reviewSchema>,
+  reviewedAt: Date,
+): Promise<{ reviewedBy: TornIdentityView }> {
+  const { db } = await import("@/lib/db");
+  return db.$transaction(async (tx) => {
     const existing = await tx.accessRequest.findUnique({ where: { id: parsed.requestId }, include: { faction: true, submittedBy: true } });
     if (!existing) throw new Error("Access request not found.");
     if (!(["PENDING", "INFORMATION_REQUESTED"] as string[]).includes(existing.status)) throw new Error(`This request is already ${existing.status.toLowerCase().replaceAll("_", " ")}.`);
@@ -57,11 +72,6 @@ export async function reviewAccessRequest(input: unknown): Promise<ReviewAccessR
     await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: `ACCESS_REQUEST_${status}`, entityType: "AccessRequest", entityId: existing.id, metadata: { reference: existing.reference, decision: parsed.decision, submittedByTornId: existing.submittedBy.tornUserId, paymentMatched: parsed.decision === "Approved" } } });
     return { reviewedBy: { name: actor.name, tornUserId: actor.tornUserId } };
   });
-
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
-  revalidatePath("/", "layout");
-  return { requestId: parsed.requestId, status: parsed.decision, reviewedBy: result.reviewedBy, reviewedAt: reviewedAt.toISOString() };
 }
 
 function withReviewMessage(value: string | null, reviewMessage: string): string {

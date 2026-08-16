@@ -1,7 +1,7 @@
 # Torn API integration findings
 
 Verified against Torn's official API documentation and OpenAPI document on
-9 August 2026.
+14 August 2026.
 
 ## Specification
 
@@ -39,6 +39,75 @@ An ongoing chain currently contains exactly `id`, `current`, `max`, `timeout`,
 `modifier`, `cooldown`, `start`, and `end`. The service must not invent a target
 or elapsed duration beyond what can be derived from those values.
 
+### Chain field semantics
+
+| Field | Meaning | How Chainward uses it |
+| --- | --- | --- |
+| `current` | Hits in the chain so far. | Chain progress, and part of the liveness test. |
+| `timeout` | **Seconds remaining** before the chain drops. Hit 10 and each later hit reset it. | The unambiguous active-chain signal and countdown source. |
+| `cooldown` | **Unix timestamp** at which post-chain cooldown ends. | Selects cooldown only while the timestamp is in the future; converted to a duration for the client. |
+| `max` | The next chain bonus target. | Labelled "next bonus at", never a faction ceiling. |
+
+The current official OpenAPI schema explicitly describes `timeout` as seconds
+until the chain breaks and `cooldown` as a timestamp. Deciding active-chain
+liveness from `end` still reports some live chains as idle, so `timeout > 0`
+remains the active signal.
+
+### Observed behaviour of the ongoing-chain endpoint
+
+Measured against a live faction with `scripts/observe-chain-endpoint.mts`:
+
+```
+elapsed  current  timeout  server date
+     0s        1       76  23:59:02
+    10s        1       76  23:59:12
+    20s        1       76  23:59:22
+    30s        1       45  23:59:33   <- one step of 31s
+    40s        1       45  23:59:43
+    50s        1       45  23:59:53
+```
+
+Three findings, all load-bearing:
+
+1. **Identical requests can be served from Torn's service cache for up to thirty
+   seconds.** `timeout` then holds a value and steps rather than counting down.
+2. **The `Date` header advances in real time even while the body is stale**, so
+   it cannot be used to age the response.
+3. **`end` was a non-zero timestamp while the chain was live** (`1786492818`
+   alongside `timeout` 76), confirming that `end` must not be used to decide
+   whether a chain is running. `timeout` is the only reliable signal.
+
+Torn documents a `timestamp` query parameter as the supported way to make a
+request unique and bypass this service cache. Chainward now uses it for active
+chain checks. Reconciliation still treats a normal reading as an upper bound:
+it adopts lower bounds immediately, ignores uncorroborated increases, and only
+allows an upward reset when `current` has also increased at hit 10 or later.
+This chain-count confirmation is load-bearing: the old duration-only threshold
+mistook a repeated cached `300` response for a new hit every ten seconds.
+
+The official chain rules also distinguish the warm-up: hits 1–10 share the
+initial five-minute window. Hit 10 and each subsequent successful hit reset the
+five-minute timer.
+
+### Polling limits
+
+Torn currently documents a ceiling of 100 individual requests per minute per
+user across all keys, rather than a chain-specific polling interval. Chainward
+uses a conservative ten-second active cadence (at most six unique chain calls
+per minute) and a five-second application floor. It returns to the saved
+workspace preference when no chain is active.
+
+The local chain cache remains shorter than the poll interval so concurrent tabs
+can share ordinary reads. Active checks deliberately force-refresh that local
+entry and add a unique upstream timestamp. Faction identity keeps its normal
+cache, so an active check consumes only one uncached Torn request.
+
+A countdown cannot be corrected without knowing how stale its reading is, so
+telemetry carries `dataAgeMs`: how long ago Torn answered, measured entirely
+within the server's own clock. The browser subtracts it and projects the
+remainder with `performance.now()`, a monotonic clock, so no two machines ever
+have to agree about the time.
+
 A completed-chain list item contains `id`, `chain`, `respect`, `start`, and
 `end`. Contributor totals come from the report rather than the chain list.
 
@@ -69,17 +138,18 @@ hits do not consume quota.
 
 Chainward therefore defaults to:
 
-- at least 30 seconds for live-chain reads;
+- a unique current-chain check every 10 seconds while active, with an immediate
+  check when the active view mounts;
+- a 5-second local chain cache for ordinary/shared reads;
 - 30 seconds for faction basic data and member lists used by operational screens;
 - 60 seconds for completed-chain lists and key identity data;
 - local permanent storage for finalized chain reports;
 - request coalescing for concurrent identical calls;
 - exponential retry for only rate-limit and transient availability failures.
 
-Normal polling deliberately does not add a unique `timestamp` parameter. An
-explicit user-triggered **Sync now** request uses Torn's documented `timestamp`
-parameter once to request an uncached operational snapshot, then replaces the
-canonical local cache entry with that response.
+Active polling and **Sync now** add Torn's documented `timestamp` parameter to
+the chain request, then replace the canonical local cache entry. Idle polling
+does not bypass the service cache.
 
 ## Error handling
 

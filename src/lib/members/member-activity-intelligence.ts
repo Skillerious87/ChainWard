@@ -24,10 +24,32 @@ export interface MemberActivityAlertSummary {
   criticalAfterDays: number;
   attentionCount: number;
   criticalCount: number;
+  dueSoonCount: number;
+  expiredHolidayCount: number;
   holidayCount: number;
   watchedCount: number;
   memberNames: string[];
+  alerts: MemberActivityAlert[];
+  fingerprint: string;
   checkedAt: string;
+}
+
+export type MemberActivityAlertSeverity = "attention" | "critical";
+export type MemberActivityAlertTrigger = "inactivity" | "watch" | "holiday-expired";
+
+export interface MemberActivityAlert {
+  tornUserId: number;
+  memberName: string;
+  severity: MemberActivityAlertSeverity;
+  trigger: MemberActivityAlertTrigger;
+  daysInactive: number;
+  riskScore: number;
+  reason: string;
+}
+
+export interface MemberActivityMonitorSnapshot extends MemberActivityAlertSummary {
+  factionId: number;
+  factionName: string;
 }
 
 export function assessMemberActivity(member: TornRosterMember, record: MemberActivityRecord | undefined, checkedAtSeconds: number, thresholdDays: number): MemberActivityAssessment {
@@ -52,13 +74,13 @@ export function assessMemberActivity(member: TornRosterMember, record: MemberAct
           ? "Recent"
           : "Active";
   const reason = holidayActive
-    ? record?.holidayUntil ? `Holiday protected until ${new Date(record.holidayUntil).toLocaleDateString("en-GB")}` : "Open-ended holiday protection"
-    : watched
-      ? record.note || "Manually added to the watch list"
-      : holidayExpired
-        ? "Holiday protection has expired"
-        : critical
-          ? `${Math.floor(daysInactive)} days inactive; critical escalation reached`
+    ? record?.holidayUntil ? `Holiday protected through ${new Date(record.holidayUntil).toLocaleDateString("en-GB", { timeZone: "UTC" })}` : "Open-ended holiday protection"
+    : holidayExpired
+      ? "Holiday protection has expired"
+      : critical
+        ? `${Math.floor(daysInactive)} days inactive; critical escalation reached${watched && record.note ? ` · ${record.note}` : ""}`
+        : watched
+          ? record.note || "Manually added to the watch list"
           : thresholdExceeded
             ? `${Math.floor(daysInactive)} days inactive; owner threshold exceeded`
             : band === "Due soon"
@@ -73,15 +95,28 @@ export function buildMemberActivityAlert(members: TornRosterMember[], workspace:
   const checkedAtSeconds = Math.floor((Number.isNaN(parsedCheckedAt) ? Date.now() : parsedCheckedAt) / 1_000);
   const recordById = new Map(workspace.records.map((record) => [record.tornUserId, record]));
   const assessments = members.map((member) => assessMemberActivity(member, recordById.get(member.tornId), checkedAtSeconds, workspace.policy.thresholdDays));
-  const attention = assessments.filter((item) => item.needsAttention).toSorted((left, right) => right.riskScore - left.riskScore || right.daysInactive - left.daysInactive);
+  const attention = assessments.filter((item) => item.needsAttention).toSorted((left, right) => Number(right.critical) - Number(left.critical) || right.riskScore - left.riskScore || right.daysInactive - left.daysInactive);
+  const alerts = attention.map<MemberActivityAlert>((item) => ({
+    tornUserId: item.member.tornId,
+    memberName: item.member.name,
+    severity: item.critical ? "critical" : "attention",
+    trigger: item.holidayExpired ? "holiday-expired" : item.daysInactive >= workspace.policy.thresholdDays ? "inactivity" : "watch",
+    daysInactive: Number(item.daysInactive.toFixed(2)),
+    riskScore: item.riskScore,
+    reason: item.reason,
+  }));
   return {
     thresholdDays: workspace.policy.thresholdDays,
     criticalAfterDays: criticalThreshold(workspace.policy.thresholdDays),
     attentionCount: attention.length,
     criticalCount: attention.filter((item) => item.critical).length,
+    dueSoonCount: assessments.filter((item) => item.band === "Due soon").length,
+    expiredHolidayCount: assessments.filter((item) => item.holidayExpired).length,
     holidayCount: assessments.filter((item) => item.holidayActive).length,
     watchedCount: assessments.filter((item) => item.record?.state === "WATCH").length,
     memberNames: attention.slice(0, 3).map((item) => item.member.name),
+    alerts,
+    fingerprint: alerts.map((item) => `${item.tornUserId}:${item.severity}:${item.trigger}`).toSorted().join("|"),
     checkedAt: Number.isNaN(parsedCheckedAt) ? new Date().toISOString() : checkedAt,
   };
 }

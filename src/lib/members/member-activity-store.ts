@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
 
 export type ManagedMemberActivityState = "HOLIDAY" | "WATCH";
@@ -57,12 +58,12 @@ interface ActivityTarget { tornUserId: number; memberName: string }
 interface ActivityActor { tornUserId: number; name: string; isPlatformAdmin: boolean }
 interface ActivityUpdate { state: MemberActivityInputState; holidayUntil: string | null; note: string }
 
-export async function getMemberActivityWorkspace(factionId: number | null): Promise<MemberActivityWorkspace> {
+export const getMemberActivityWorkspace = cache(async (factionId: number | null): Promise<MemberActivityWorkspace> => {
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return empty(false, false, "Create local storage in Settings to manage holiday and watch records.");
   if (!factionId) return empty(true, true, "Connect a verified faction to manage member activity.");
   return hasPostgres ? getPostgresWorkspace(factionId) : getLocalWorkspace(factionId);
-}
+});
 
 export async function setMemberActivity(
   faction: FactionIdentity,

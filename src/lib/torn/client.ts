@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { ZodType } from "zod";
 import { TornApiError } from "./errors";
+import { CHAIN_CACHE_SECONDS } from "./polling-policy";
 import {
   chainReportResponseSchema,
   chainsResponseSchema,
@@ -23,10 +24,16 @@ import {
 
 export interface TornClientOptions {
   apiKey: string;
+  dataMode?: "torn" | "offline";
   baseUrl?: string;
   comment?: string;
   requestTimeoutMs?: number;
   liveCacheSeconds?: number;
+  /**
+   * Hit 10 and each later hit reset `timeout`, so this response goes stale
+   * faster than other live values and is cached for less time.
+   */
+  chainCacheSeconds?: number;
   historyCacheSeconds?: number;
   fetchImplementation?: typeof fetch;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -39,30 +46,57 @@ export interface TornRequestOptions {
 
 interface CacheEntry {
   expiresAt: number;
+  /** When Torn actually answered, which is what a countdown must run from. */
+  fetchedAt: number;
   value: unknown;
 }
 
+const RESPONSE_CACHE_LIMIT = 400;
 const responseCache = new Map<string, CacheEntry>();
 const pendingRequests = new Map<string, Promise<unknown>>();
 
+/**
+ * The response cache is process-wide and keyed by credential fingerprint, so a
+ * long-running server would otherwise retain one entry per key per endpoint for
+ * the lifetime of the process. Expired entries are dropped first; if every
+ * entry is still live the oldest insertions are evicted.
+ */
+function rememberResponse(cacheKey: string, entry: CacheEntry): void {
+  responseCache.set(cacheKey, entry);
+  if (responseCache.size <= RESPONSE_CACHE_LIMIT) return;
+  const now = Date.now();
+  for (const [key, value] of responseCache) {
+    if (value.expiresAt <= now) responseCache.delete(key);
+  }
+  for (const key of responseCache.keys()) {
+    if (responseCache.size <= RESPONSE_CACHE_LIMIT) break;
+    responseCache.delete(key);
+  }
+}
+
 export class TornClient {
+  readonly dataMode: "torn" | "offline";
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly comment: string;
   private readonly requestTimeoutMs: number;
   private readonly liveCacheMs: number;
+  private readonly chainCacheMs: number;
   private readonly historyCacheMs: number;
   private readonly fetchImplementation: typeof fetch;
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly keyFingerprint: string;
+  private currentChainFetchedAt: number | null = null;
 
   constructor(options: TornClientOptions) {
     if (!options.apiKey.trim()) throw new Error("A Torn API key is required.");
     this.apiKey = options.apiKey;
+    this.dataMode = options.dataMode ?? "torn";
     this.baseUrl = (options.baseUrl ?? "https://api.torn.com/v2").replace(/\/$/, "");
     this.comment = options.comment ?? "chainward";
     this.requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
     this.liveCacheMs = (options.liveCacheSeconds ?? 30) * 1_000;
+    this.chainCacheMs = (options.chainCacheSeconds ?? CHAIN_CACHE_SECONDS) * 1_000;
     this.historyCacheMs = (options.historyCacheSeconds ?? 900) * 1_000;
     this.fetchImplementation = options.fetchImplementation ?? fetch;
     this.sleep = options.sleep ?? delay;
@@ -85,9 +119,20 @@ export class TornClient {
     return this.request(path, factionBasicResponseSchema, this.liveCacheMs, {}, options);
   }
 
-  getCurrentChain(factionId?: number, options: TornRequestOptions = {}): Promise<OngoingChainResponse> {
+  async getCurrentChain(factionId?: number, options: TornRequestOptions = {}): Promise<OngoingChainResponse> {
     const path = factionId ? `/faction/${factionId}/chain` : "/faction/chain";
-    return this.request(path, ongoingChainResponseSchema, this.liveCacheMs, {}, options);
+    const { value, fetchedAt } = await this.requestWithMeta(path, ongoingChainResponseSchema, this.chainCacheMs, {}, options);
+    this.currentChainFetchedAt = fetchedAt;
+    return value;
+  }
+
+  /**
+   * Milliseconds at which the chain response now in hand was actually returned
+   * by Torn. A cached response is up to `liveCacheSeconds` old, so timing the
+   * chain countdown from "now" restarts it on every page load.
+   */
+  getCurrentChainFetchedAt(): number | null {
+    return this.currentChainFetchedAt;
   }
 
   getCompletedChains(
@@ -129,6 +174,16 @@ export class TornClient {
     query: Readonly<Record<string, string>> = {},
     options: TornRequestOptions = {},
   ): Promise<T> {
+    return this.requestWithMeta(path, schema, cacheMs, query, options).then((result) => result.value);
+  }
+
+  private requestWithMeta<T>(
+    path: string,
+    schema: ZodType<T>,
+    cacheMs: number,
+    query: Readonly<Record<string, string>> = {},
+    options: TornRequestOptions = {},
+  ): Promise<{ value: T; fetchedAt: number }> {
     const canonicalUrl = new URL(`${this.baseUrl}${path}`);
     canonicalUrl.searchParams.set("comment", this.comment);
     for (const [name, value] of Object.entries(query)) {
@@ -138,12 +193,12 @@ export class TornClient {
     const cacheKey = `${this.keyFingerprint}:${canonicalUrl.toString()}`;
     const cached = responseCache.get(cacheKey);
     if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
-      return Promise.resolve(cached.value as T);
+      return Promise.resolve({ value: cached.value as T, fetchedAt: cached.fetchedAt });
     }
 
     const pendingKey = options.forceRefresh ? `${cacheKey}:refresh` : cacheKey;
     const pending = pendingRequests.get(pendingKey);
-    if (pending) return pending as Promise<T>;
+    if (pending) return pending as Promise<{ value: T; fetchedAt: number }>;
 
     const requestUrl = new URL(canonicalUrl);
     if (options.bypassUpstreamCache) {
@@ -152,14 +207,16 @@ export class TornClient {
 
     const promise = this.fetchWithRetry(requestUrl, schema, 0)
       .then((value) => {
-        responseCache.set(cacheKey, { value, expiresAt: Date.now() + cacheMs });
-        return value;
+        const fetchedAt = Date.now();
+        rememberResponse(cacheKey, { value, expiresAt: fetchedAt + cacheMs, fetchedAt });
+        return { value, fetchedAt };
       })
       .finally(() => pendingRequests.delete(pendingKey));
 
     pendingRequests.set(pendingKey, promise);
     return promise;
   }
+
 
   private async fetchWithRetry<T>(
     url: URL,

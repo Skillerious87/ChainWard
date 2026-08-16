@@ -16,6 +16,8 @@ node_modules/
 
 # Next.js
 .next/
+.next-offline-verify/
+.next-probe/
 out/
 
 # Environment and secrets

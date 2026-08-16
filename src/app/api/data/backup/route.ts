@@ -10,7 +10,9 @@ interface LocalTierRow { label: string; minimum_hits: number; maximum_hits: numb
 
 export async function GET() {
   let context;
-  try { context = await requireFactionPermission("faction:manage"); }
+  // Exporting configuration is a read; restoring one overwrites the workspace
+  // and stays with the owner. The two now use separate permissions.
+  try { context = await requireFactionPermission("faction:backup"); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Workspace backup access was denied." }, { status: 403 }); }
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return NextResponse.json({ error: "Create a local database before downloading a backup." }, { status: 503 });

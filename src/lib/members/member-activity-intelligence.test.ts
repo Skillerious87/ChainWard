@@ -16,6 +16,16 @@ describe("member activity intelligence", () => {
   it("creates an owner alert summary using the saved policy", () => {
     const workspace: MemberActivityWorkspace = { databaseConfigured: true, databaseAvailable: true, policy: { ...DEFAULT_MEMBER_ACTIVITY_POLICY, thresholdDays: 5 }, records: [], audit: [], message: "Ready" };
     const alert = buildMemberActivityAlert([member], workspace, new Date(now * 1_000).toISOString());
-    expect(alert).toMatchObject({ thresholdDays: 5, criticalAfterDays: 10, attentionCount: 1, criticalCount: 0, memberNames: ["Robin"] });
+    expect(alert).toMatchObject({ thresholdDays: 5, criticalAfterDays: 10, attentionCount: 1, criticalCount: 0, dueSoonCount: 0, memberNames: ["Robin"] });
+    expect(alert.alerts).toEqual([expect.objectContaining({ tornUserId: 42, severity: "attention", trigger: "inactivity" })]);
+    expect(alert.fingerprint).toBe("42:attention:inactivity");
+  });
+
+  it("treats a critically inactive watched member as an inactivity escalation", () => {
+    const watched = { tornUserId: 42, memberName: "Robin", state: "WATCH" as const, holidayUntil: null, note: "Leadership follow-up", updatedByTornId: 1, updatedByName: "Owner", updatedAt: new Date().toISOString() };
+    const workspace: MemberActivityWorkspace = { databaseConfigured: true, databaseAvailable: true, policy: { ...DEFAULT_MEMBER_ACTIVITY_POLICY, thresholdDays: 3 }, records: [watched], audit: [], message: "Ready" };
+    const alert = buildMemberActivityAlert([member], workspace, new Date(now * 1_000).toISOString());
+    expect(alert.alerts[0]).toMatchObject({ severity: "critical", trigger: "inactivity" });
+    expect(alert.alerts[0]?.reason).toContain("critical escalation reached");
   });
 });
