@@ -153,6 +153,15 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       return item;
     }) }));
   const searchableItems = visibleNavigation.flatMap((group) => group.items);
+  const mobileNavigation: NavigationItem[] = workspaceLocked
+    ? [
+        { label: "Access", href: "/unlock", icon: LockKeyhole },
+        { label: "Settings", href: "/settings", icon: SlidersHorizontal },
+        { label: "Connect", href: "/connect", icon: KeyRound },
+      ]
+    : ["/dashboard", "/live-chain", "/members", "/payouts"]
+        .map((href) => searchableItems.find((item) => item.href === href))
+        .filter((item): item is NavigationItem => Boolean(item));
   // Keyboard shortcuts must not resubscribe on every render, so the latest
   // destinations are read through a ref instead of an effect dependency.
   const searchableItemsRef = useRef(searchableItems);
@@ -490,7 +499,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar${mobileOpen ? " sidebar--mobile-open" : ""}`}>
+      <aside id="workspace-navigation" className={`sidebar${mobileOpen ? " sidebar--mobile-open" : ""}`}>
         <div className="sidebar__brand-row">
           <Link href={workspaceLocked ? "/unlock" : "/dashboard"} className="sidebar__brand-link" aria-label={workspaceLocked ? "Chainward workspace locked — view unlock status" : "Chainward overview"}><BrandMark /></Link>
           <button className="icon-button sidebar__mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={19} /></button>
@@ -602,7 +611,10 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
           </div>
         </header>
 
-        <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status"><span>{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>{liveTelemetry.message}</div>
+        <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status">
+          <span className="data-source-banner__label">{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>
+          <span className="data-source-banner__message">{liveTelemetry.message}</span>
+        </div>
         <RouteProgress />
         {/* The workspace scrolls inside this element rather than the document,
             so the top bar and the provenance banner stay fixed and the
@@ -611,6 +623,40 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
           <main className="page-content">{children}</main>
         </div>
       </div>
+
+      <nav className="mobile-tabbar" aria-label="Mobile workspace navigation">
+        {mobileNavigation.map((item) => {
+          const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+          const Icon = item.icon;
+          const label = item.label === "Payout ledger" ? "Payouts" : item.label;
+          return (
+            <Link
+              href={item.href}
+              key={item.href}
+              aria-current={active ? "page" : undefined}
+              className={`mobile-tabbar__item${active ? " mobile-tabbar__item--active" : ""}`}
+              onClick={() => setMobileOpen(false)}
+            >
+              <span><Icon size={20} strokeWidth={1.8} /></span>
+              <small>{label}</small>
+              <NavigationBeacon id={`mobile-${item.href}`} />
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          className={`mobile-tabbar__item${mobileOpen ? " mobile-tabbar__item--active" : ""}`}
+          aria-expanded={mobileOpen}
+          aria-controls="workspace-navigation"
+          onClick={() => {
+            saveAppearancePreferences({ sidebarCollapsed: false });
+            setMobileOpen(true);
+          }}
+        >
+          <span><Menu size={20} strokeWidth={1.8} /></span>
+          <small>More</small>
+        </button>
+      </nav>
 
       {openPanel === "health" && (
         <ServiceStateDrawer
