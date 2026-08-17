@@ -380,6 +380,15 @@ p.login-intro__lede {
 }
 .connect-requirements li svg { color: #72bb48; }
 
+.connect-data-disclosure { margin-top: 13px; overflow: hidden; border: 1px solid #2d3932; border-radius: 8px; background: rgba(145,230,83,.025); }
+.connect-data-disclosure > header { display: flex; align-items: center; gap: 7px; padding: 10px 11px; border-bottom: 1px solid #27322c; color: #aac29d; font-size: 10.5px; }
+.connect-data-disclosure > header svg { flex: 0 0 auto; color: var(--accent); }
+.connect-data-disclosure dl { margin: 0; padding: 3px 11px 6px; }
+.connect-data-disclosure dl > div { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 9px; padding: 7px 0; border-bottom: 1px solid #222c27; font-size: 9.5px; line-height: 1.45; }
+.connect-data-disclosure dl > div:last-child { border-bottom: 0; }
+.connect-data-disclosure dt { color: #849188; font-weight: 650; }
+.connect-data-disclosure dd { margin: 0; color: #6f7d74; }
+
 .offline-test-entry > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
 .offline-test-entry button {
   display: grid;

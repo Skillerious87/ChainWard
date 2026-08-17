@@ -302,6 +302,7 @@
   .onboarding-form-shell .connect-submit { min-height: 54px; font-size: 14px; }
   .connect-requirements { margin-top: 14px; padding-top: 13px; }
   .connect-requirements li { padding: 5px 8px; font-size: 10.5px; }
+  .connect-data-disclosure dl > div { grid-template-columns: 1fr; gap: 2px; padding-block: 8px; font-size: 10.5px; }
   .onboarding-form-shell > footer { padding: 13px 18px; }
 
   .onboarding-page .onboarding-journey > li { padding: 13px 0; }

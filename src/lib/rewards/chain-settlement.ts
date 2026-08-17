@@ -52,7 +52,7 @@ export function calculateChainRewardPreview(report: TornChainReportView, workspa
 }
 
 export async function getChainSettlement(factionId: number, chainId: number): Promise<ChainSettlement | null> {
-  if (!process.env.DATABASE_URL) return getLocalSettlement(factionId, chainId);
+  if (!process.env.DATABASE_URL?.trim()) return getLocalSettlement(factionId, chainId);
   try {
     const { db } = await import("@/lib/db");
     const snapshot = await db.chainRewardSnapshot.findFirst({
@@ -70,7 +70,7 @@ export async function getChainSettlement(factionId: number, chainId: number): Pr
 export async function getChainSettlementSummaries(factionId: number, chainIds: number[]): Promise<Record<number, ChainSettlementSummary>> {
   if (chainIds.length === 0) return {};
   const settlements: ChainSettlement[] = [];
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL?.trim()) {
     const database = openLocalDatabase();
     if (!database) return {};
     try {
@@ -94,7 +94,7 @@ export async function getChainSettlementSummaries(factionId: number, chainIds: n
 }
 
 export async function savePaidChainSettlement(settlement: ChainSettlement, report: TornChainReportView, paidByName: string): Promise<void> {
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL?.trim()) {
     if (!localDatabaseExists()) throw new Error("Create the local database in Settings before marking a chain paid.");
     const database = openLocalDatabase();
     if (!database) throw new Error("The local database is unavailable.");
@@ -150,7 +150,7 @@ export async function savePaidChainSettlement(settlement: ChainSettlement, repor
  * rules.
  */
 export async function revertChainSettlement(factionId: number, chainId: number, correction: PayoutCorrection): Promise<void> {
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL?.trim()) {
     if (!localDatabaseExists()) throw new Error("The local database is unavailable.");
     const database = openLocalDatabase();
     if (!database) throw new Error("The local database is unavailable.");
@@ -229,7 +229,7 @@ export interface PayoutRevertRecord {
 
 /** Recent payout withdrawals from either persistence backend, newest first. */
 export async function getPayoutReverts(factionId: number, limit = 10): Promise<PayoutRevertRecord[]> {
-  if (!process.env.DATABASE_URL) return getLocalPayoutReverts(factionId, limit);
+  if (!process.env.DATABASE_URL?.trim()) return getLocalPayoutReverts(factionId, limit);
   try {
     const { db } = await import("@/lib/db");
     const events = await db.auditLog.findMany({
@@ -257,7 +257,7 @@ export async function getPayoutReverts(factionId: number, limit = 10): Promise<P
 
 /** Recent payout withdrawals, newest first. */
 export function getLocalPayoutReverts(factionId: number, limit = 10): PayoutRevertRecord[] {
-  if (process.env.DATABASE_URL || !localDatabaseExists()) return [];
+  if (process.env.DATABASE_URL?.trim() || !localDatabaseExists()) return [];
   const database = openLocalDatabase();
   if (!database) return [];
   try {

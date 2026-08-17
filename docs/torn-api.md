@@ -161,8 +161,17 @@ level too low (16), backend error (17), paused key (18), and temporarily closed
 ## Terms and launch constraint
 
 Torn requires a conspicuous API-use disclosure wherever a user submits a key
-when keys or retrieved data are stored/shared. Chainward's onboarding disclosure
-covers data retention, audience, purpose, key storage, and exact access scope.
+when keys or retrieved data are stored/shared. Chainward renders this disclosure
+directly below the key controls. It covers data retention, the faction and
+leadership audiences, faction-operations and personnel-record purposes, the
+temporary/remembered key-storage modes, and the exact access scope.
+
+Member reports and awards are Chainward-authored faction records rather than
+Torn profile data. They persist in the configured workspace database, retain
+their author and timestamps, and are always labelled separately from live
+roster facts returned by `GET /faction/members`. Reports may be faction-visible
+or leadership-only; only operators with `members:manage` can create reports,
+assign badges, or revoke an award. Revocation preserves the award history.
 
 Torn's documentation also tells service owners to contact Torn staff before
 charging users for usage. The in-game licensing workflow remains configurable

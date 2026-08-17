@@ -5,7 +5,9 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
+import { isMemberBadgeId } from "@/lib/members/member-badges";
 import { setMemberActivity, setMemberActivityPolicy } from "@/lib/members/member-activity-store";
+import { assignMemberAward, createMemberReport, revokeMemberAward } from "@/lib/members/member-profile-store";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 const activitySchema = z.object({
@@ -21,7 +23,68 @@ const policySchema = z.object({
   thresholdDays: z.number().int().min(1).max(30),
 });
 
+const memberRecordTargetSchema = z.object({
+  factionId: z.number().int().positive(),
+  tornUserId: z.number().int().positive(),
+});
+
+const reportSchema = memberRecordTargetSchema.extend({
+  category: z.enum(["RECOGNITION", "DEVELOPMENT", "INCIDENT", "GENERAL"]),
+  visibility: z.enum(["FACTION", "LEADERSHIP"]),
+  title: z.string().trim().min(3).max(80),
+  body: z.string().trim().min(10).max(1500),
+});
+
+const awardSchema = memberRecordTargetSchema.extend({
+  badgeId: z.string().refine(isMemberBadgeId),
+  citation: z.string().trim().min(5).max(240),
+});
+
+const revokeAwardSchema = memberRecordTargetSchema.extend({
+  awardId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(240),
+});
+
 export interface MemberActivityActionResult { ok: boolean; message: string }
+
+export async function addMemberReport(input: unknown): Promise<MemberActivityActionResult> {
+  const parsed = reportSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Add a title, a report of at least 10 characters, and a valid visibility." };
+  try {
+    const context = await requireMemberManager(parsed.data.factionId, parsed.data.tornUserId);
+    await createMemberReport(context.faction, context.member, context.actor, parsed.data);
+    revalidateMemberRecord(parsed.data.tornUserId);
+    return { ok: true, message: `${context.member.memberName}'s report was added to the permanent record.` };
+  } catch (error) {
+    return { ok: false, message: actionError(error, "The member report could not be saved safely.") };
+  }
+}
+
+export async function addMemberAward(input: unknown): Promise<MemberActivityActionResult> {
+  const parsed = awardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose a badge and add a short citation explaining why it was awarded." };
+  try {
+    const context = await requireMemberManager(parsed.data.factionId, parsed.data.tornUserId);
+    await assignMemberAward(context.faction, context.member, context.actor, parsed.data);
+    revalidateMemberRecord(parsed.data.tornUserId);
+    return { ok: true, message: `${context.member.memberName}'s badge is now displayed on their Chainward report.` };
+  } catch (error) {
+    return { ok: false, message: actionError(error, "The member badge could not be assigned safely.") };
+  }
+}
+
+export async function removeMemberAward(input: unknown): Promise<MemberActivityActionResult> {
+  const parsed = revokeAwardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Add a short reason before revoking this badge." };
+  try {
+    const context = await requireMemberManager(parsed.data.factionId, parsed.data.tornUserId);
+    await revokeMemberAward(context.faction, context.member, context.actor, parsed.data.awardId, parsed.data.reason);
+    revalidateMemberRecord(parsed.data.tornUserId);
+    return { ok: true, message: `The badge was removed from ${context.member.memberName}'s active awards and retained in the audit history.` };
+  } catch (error) {
+    return { ok: false, message: actionError(error, "The member badge could not be revoked safely.") };
+  }
+}
 
 export async function updateMemberActivity(input: unknown): Promise<MemberActivityActionResult> {
   const parsed = activitySchema.safeParse(input);
@@ -64,4 +127,26 @@ export async function updateMemberActivityPolicy(input: unknown): Promise<Member
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "The faction activity policy could not be updated safely." };
   }
+}
+
+async function requireMemberManager(factionId: number, tornUserId: number) {
+  const { actor, faction } = await requireFactionPermission("members:manage");
+  if (faction.id !== factionId) throw new Error("The selected member belongs to a different faction workspace.");
+  const roster = await getFactionRoster();
+  const member = roster.available ? roster.data.find((item) => item.tornId === tornUserId) : null;
+  if (!member) throw new Error("The selected player is not in the current verified faction roster.");
+  return {
+    actor,
+    faction: { id: faction.id, name: faction.name, tag: faction.tag },
+    member: { tornUserId: member.tornId, memberName: member.name },
+  };
+}
+
+function revalidateMemberRecord(tornUserId: number): void {
+  revalidatePath("/members");
+  revalidatePath(`/members/${tornUserId}`);
+}
+
+function actionError(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }

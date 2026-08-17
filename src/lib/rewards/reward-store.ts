@@ -34,10 +34,10 @@ export interface RewardWorkspaceView {
 }
 
 export async function getRewardWorkspace(tornFactionId: number | null): Promise<RewardWorkspaceView> {
-  if (!process.env.DATABASE_URL && !localDatabaseExists()) return empty(false, false, "Create the local database file to save reward schemes on this device.");
+  if (!process.env.DATABASE_URL?.trim() && !localDatabaseExists()) return empty(false, false, "Create the local database file to save reward schemes on this device.");
   if (!tornFactionId) return empty(true, true, "Connect a Torn faction before creating reward schemes.");
 
-  if (!process.env.DATABASE_URL) return getLocalRewardWorkspace(tornFactionId);
+  if (!process.env.DATABASE_URL?.trim()) return getLocalRewardWorkspace(tornFactionId);
 
   try {
     const { db } = await import("@/lib/db");
