@@ -33,7 +33,7 @@ export const permissionCatalogue: readonly PermissionDescriptor[] = [
   { permission: "chain:manage", label: "Chains", detail: "Operate live chains and record chain outcomes." },
   { permission: "payout:manage", label: "Payouts", detail: "Acknowledge payouts and close settled chains." },
   { permission: "rewards:manage", label: "Rewards", detail: "Create and version reward schemes." },
-  { permission: "members:manage", label: "Members", detail: "Manage member activity records and thresholds." },
+  { permission: "members:manage", label: "Members", detail: "Manage member activity, reports, awards, and alert thresholds." },
   { permission: "faction:backup", label: "Backup", detail: "Download a portable faction configuration backup." },
   { permission: "faction:manage", label: "Restore", detail: "Overwrite workspace configuration from a backup file." },
   { permission: "api:manage", label: "API credential", detail: "Replace the stored Torn API credential." },

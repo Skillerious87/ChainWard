@@ -11,6 +11,7 @@ import "./settings.css";
 import "./chain.css";
 import "./history.css";
 import "./unlock.css";
+import "./members.css";
 import "./mobile.css";
 
 /**
