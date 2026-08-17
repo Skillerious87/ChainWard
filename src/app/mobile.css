@@ -8,6 +8,70 @@
    no horizontal overflow.
    --------------------------------------------------------------------------- */
 
+/* These elements exist at every width but only become visible or condensed as
+   space runs out. Keeping their base state here avoids route-specific mobile
+   navigation and provenance styles drifting apart. */
+.mobile-tabbar { display: none; }
+.data-source-banner .data-source-banner__message {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* The fixed rail stops being useful as soon as it forces the workspace into a
+   compressed desktop layout. This is deliberately content-driven rather than
+   tied to a named device size. */
+@media (max-width: 1180px) {
+  :root,
+  :root[data-sidebar="collapsed"] { --rail-width: 0px; }
+
+  .sidebar {
+    width: var(--sidebar-width) !important;
+    max-width: min(300px, 88vw);
+    transform: translateX(-100%);
+    box-shadow: 20px 0 60px rgba(0, 0, 0, .44);
+  }
+  .sidebar--mobile-open { transform: translateX(0); }
+  .sidebar__mobile-close { display: inline-grid !important; }
+  .sidebar-backdrop {
+    position: fixed;
+    z-index: 45;
+    inset: 0;
+    border: 0;
+    background: rgba(0, 0, 0, .66);
+    cursor: pointer;
+    backdrop-filter: blur(2px);
+  }
+  .app-main { margin-left: 0 !important; }
+  .topbar__menu { display: inline-grid !important; }
+  .collapse-button,
+  .sidebar-rail-toggle { display: none !important; }
+  .route-loading-core { left: 0; }
+
+  /* A saved collapsed preference must not collapse the contents of the drawer. */
+  :root[data-sidebar="collapsed"] .sidebar__brand-row { justify-content: space-between; padding-inline: 20px; }
+  :root[data-sidebar="collapsed"] .brand__wordmark,
+  :root[data-sidebar="collapsed"] .nav-item > span,
+  :root[data-sidebar="collapsed"] .sidebar__health-copy { display: flex; max-width: 170px; opacity: 1; transform: none; }
+  :root[data-sidebar="collapsed"] .brand__wordmark { display: inline; }
+  :root[data-sidebar="collapsed"] .sidebar-command { max-height: 42px; margin: 16px 15px 2px; padding-block: 0; border-width: 1px; opacity: 1; pointer-events: auto; }
+  :root[data-sidebar="collapsed"] .nav-group__label { display: block; height: 15px; margin: 0 9px 7px; opacity: 1; }
+  :root[data-sidebar="collapsed"] .sidebar__nav { padding: 17px 12px; overflow-y: auto; }
+  :root[data-sidebar="collapsed"] .nav-item { justify-content: flex-start; padding-inline: 11px; }
+  :root[data-sidebar="collapsed"] .nav-item em { position: static; width: auto; min-width: 25px; height: auto; padding: 2px 6px; overflow: visible; border: 1px solid #2e363e; border-radius: 9px; background: none; color: #7e8994; font-size: 11px; }
+  :root[data-sidebar="collapsed"] .sidebar__health { justify-content: flex-start; padding-inline: 9px; }
+  :root[data-sidebar="collapsed"] .sidebar__health .status-dot { display: inline-block; }
+  :root[data-sidebar="collapsed"] .nav-item::after { display: none; }
+}
+
 /* Global handheld fundamentals ---------------------------------------------- */
 @media (max-width: 760px) {
   :root { --topbar-height: 58px; }
@@ -25,30 +89,100 @@
   textarea { font-size: 16px !important; }
 
   /* Comfortable, thumb-sized controls. */
+  :is(button, a, input, select, textarea) { touch-action: manipulation; }
   .button { min-height: 46px; padding-inline: 16px; font-size: 13px; }
-  .icon-button { min-width: 42px; min-height: 42px; }
+  .icon-button { min-width: 44px; min-height: 44px; }
 
-  .page-content { padding: 18px 14px calc(36px + env(safe-area-inset-bottom)); }
+  .app-scroll { scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .page-content { padding: 18px 14px calc(100px + env(safe-area-inset-bottom)); }
   .page-stack { gap: 16px; }
 }
 
 /* Application shell --------------------------------------------------------- */
 @media (max-width: 760px) {
   .topbar { height: 58px; padding-inline: 12px; gap: 8px; }
-  .topbar__left, .topbar__right { gap: 8px; }
-  .faction-selector { min-width: 0; padding-inline: 6px; }
+  .topbar__left { min-width: 0; flex: 1; gap: 7px; }
+  .topbar__right { flex: 0 0 auto; gap: 7px; }
+  .topbar__separator,
+  .chain-state,
+  .topbar-command,
+  .topbar-upgrade,
+  .data-status-control { display: none; }
+  .topbar-faction-wrap { min-width: 0; flex: 1; }
+  .faction-selector { width: 100%; min-width: 0; max-width: none; padding-inline: 6px; }
   .faction-selector__copy strong { overflow: hidden; max-width: 34vw; text-overflow: ellipsis; white-space: nowrap; }
-  .data-status-control span { display: none; }
-  .data-status-control { padding-inline: 9px; }
+  .notification-button,
+  .user-menu { min-width: 44px; min-height: 44px; }
+  .user-menu { justify-content: center; padding: 3px; }
+  .topbar-popover--faction,
+  .topbar-popover--notifications {
+    position: fixed;
+    top: calc(var(--topbar-height) + 40px);
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - 184px);
+  }
   .sidebar { width: min(300px, 86vw) !important; padding-bottom: env(safe-area-inset-bottom); }
   .nav-item { height: 48px; }
-  .toast-region { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); left: 12px; width: auto; }
+  .toast-region { right: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 12px; width: auto; }
   .command-layer { display: flex; padding: 10px; }
   .command-palette { display: flex; width: min(560px, 100%); max-height: calc(100dvh - 20px); flex-direction: column; margin: 0 auto; align-self: flex-start; }
   .command-results { min-height: 0; flex: 1; }
   .command-palette > footer { flex-wrap: wrap; }
-  .data-source-banner { height: auto; min-height: 30px; padding: 6px 12px; line-height: 1.35; text-align: center; }
-  .topbar-popover--user { right: -2px; width: min(326px, calc(100vw - 24px)); max-height: calc(100dvh - 76px); }
+  .data-source-banner { height: auto; min-height: 32px; justify-content: flex-start; padding: 6px 12px; line-height: 1.35; text-align: left; }
+  .data-source-banner__label { flex: 0 0 auto; }
+  .data-source-banner .data-source-banner__message { flex: 1; }
+  .topbar-popover--user {
+    position: fixed;
+    top: calc(var(--topbar-height) + 40px);
+    right: 12px;
+    width: min(326px, calc(100vw - 24px));
+    max-height: calc(100dvh - 184px);
+  }
+
+  .mobile-tabbar {
+    position: fixed;
+    z-index: 44;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    min-height: calc(68px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+    gap: 2px;
+    padding: 5px max(7px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
+    border-top: 1px solid rgba(255, 255, 255, .1);
+    background: rgba(8, 12, 14, .94);
+    box-shadow: 0 -12px 34px rgba(0, 0, 0, .32);
+    backdrop-filter: blur(18px) saturate(135%);
+  }
+  .mobile-tabbar__item {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 56px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 3px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 10px;
+    outline-offset: -2px;
+    background: transparent;
+    color: #78867e;
+    cursor: pointer;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-tabbar__item > span { display: grid; min-height: 23px; place-items: center; }
+  .mobile-tabbar__item small { max-width: 100%; overflow: hidden; color: inherit !important; font-size: 10px !important; font-weight: 650; line-height: 1.15 !important; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-tabbar__item--active { background: rgba(var(--accent-rgb), .08); color: var(--accent); }
+  .mobile-tabbar__item--active::before { position: absolute; top: 0; right: 20%; left: 20%; height: 2px; border-radius: 0 0 3px 3px; background: var(--accent); content: ""; box-shadow: 0 0 14px rgba(var(--accent-rgb), .34); }
+  .mobile-tabbar__item:focus-visible { outline: 2px solid var(--accent); }
+  .mobile-tabbar__item .nav-item__pending { right: 18%; bottom: 2px; left: 18%; }
 
   /* Dense page chrome needs to wrap into a usable control stack rather than
      forcing labels and actions into a single clipped row. */
@@ -63,15 +197,30 @@
   .dashboard-greeting__actions > * { flex: 1 1 140px; }
   .section-heading .search-field { width: 100%; flex: 1 1 100%; }
 
-  .dialog { width: calc(100% - 20px); max-height: calc(100dvh - 20px); }
+  /* Native dialogs become bottom sheets on a phone. Actions stay close to the
+     thumb zone and the sheet cannot collide with a display cutout. */
+  .dialog {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 12px);
+    margin: auto 0 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+  }
   .dialog__header { padding: 16px; }
   .dialog__body { max-height: calc(100dvh - 164px); overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
   .dialog__actions { flex-wrap: wrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
   .dialog__actions .button { flex: 1 1 132px; }
 
-  .table-scroll { overscroll-behavior-inline: contain; }
+  .table-scroll { overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+  :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) { scroll-snap-type: inline proximity; overscroll-behavior-inline: contain; }
   :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) button,
-  .pagination button { min-height: 44px; }
+  .pagination button { min-width: 44px; min-height: 44px; scroll-snap-align: start; }
+
+  .settings-console .professional-settings-nav nav { scroll-snap-type: inline proximity; }
+  .settings-console .professional-settings-nav nav button { min-width: min(180px, 70vw); scroll-snap-align: start; }
 }
 
 @media (max-width: 430px) {
@@ -80,6 +229,11 @@
      service drawer without letting the top bar overflow. */
   .data-status-control { display: none; }
   .faction-selector { max-width: 50vw; }
+  .faction-selector__copy { display: flex; min-width: 0; }
+  .faction-selector__copy small { display: none; }
+  .data-source-banner .data-source-banner__message { display: none; }
+  .data-source-banner { justify-content: center; }
+  .mobile-tabbar { grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); }
 }
 
 /* Observed service state ---------------------------------------------------- */

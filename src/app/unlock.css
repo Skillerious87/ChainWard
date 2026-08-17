@@ -132,7 +132,14 @@
 .unlock-benefits li svg { margin-top: 2px; color: var(--accent); }
 
 /* Term selection ------------------------------------------------------------ */
-.unlock-plans { padding: 22px 22px 24px; border: 1px solid #2b343c; border-radius: 14px; background: linear-gradient(180deg, #0f1418, #0b0e11); }
+.unlock-plans {
+  container-name: access-plans;
+  container-type: inline-size;
+  padding: 22px 22px 24px;
+  border: 1px solid #2b343c;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #0f1418, #0b0e11);
+}
 .unlock-plans .eyebrow { font-size: 10.5px !important; letter-spacing: 1.2px; }
 .unlock-plans h2 { margin-top: 8px; font-size: 21px; font-weight: 645; letter-spacing: -.7px; }
 .unlock-plans > p { margin-top: 6px; color: var(--text-muted); font-size: 12.5px !important; }
@@ -183,6 +190,20 @@
 }
 .licence-tier-card__price small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 11.5px !important; font-weight: 600; }
 
+/* The plan list can be narrow even on a wide viewport when it shares space
+   with supporting content. Respond to the component's actual width instead of
+   waiting for the entire browser to reach a phone breakpoint. */
+@container access-plans (max-width: 620px) {
+  .licence-tier-list--page > button,
+  .licence-tier-list--page > label {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    row-gap: 10px;
+    padding: 15px 16px;
+  }
+  .licence-tier-card__description { grid-column: 2 / -1; }
+  .licence-tier-card__description strong { overflow: visible; white-space: normal; }
+}
+
 /* Reservation and status ---------------------------------------------------- */
 .unlock-reservation { margin-top: 18px; padding: 18px 19px; border: 1px solid #2b343c; border-radius: 13px; background: rgba(255, 255, 255, .012); }
 .unlock-reservation .eyebrow { font-size: 10.5px !important; }
@@ -207,9 +228,17 @@
   .unlock-lock-notice > div:last-child { grid-column: 1 / -1; padding-left: 0; border-left: 0; border-top: 1px solid rgba(245, 185, 76, .16); padding-top: 15px; }
 }
 
+@media (max-width: 900px) {
+  .unlock-main-grid { grid-template-columns: minmax(0, 1fr); }
+  .unlock-plans { order: 1; }
+  .unlock-benefits { min-height: 0; order: 2; }
+  .unlock-benefits ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 760px) {
   .unlock-hero { padding: 24px 0 26px; }
   .unlock-hero h1 { letter-spacing: -1.2px; }
+  .unlock-hero > span { width: 100%; min-width: 0; }
   .unlock-benefits, .unlock-plans { padding: 18px; }
   .licence-tier-list--page > button,
   .licence-tier-list--page > label { grid-template-columns: 24px minmax(0, 1fr) auto; row-gap: 10px; padding: 15px 16px; }
@@ -220,6 +249,32 @@
   .unlock-lock-notice > div:last-child { grid-template-columns: 1fr; }
   .unlock-lock-notice li,
   .unlock-lock-notice > div:last-child > span { white-space: normal; }
+  .unlock-benefits ul { grid-template-columns: 1fr; }
+  .unlock-reservation > header,
+  .unlock-reservation > footer { align-items: flex-start; flex-direction: column; }
+  .unlock-reservation > header > strong { font-size: 24px; }
+  .unlock-reservation__reference { grid-template-columns: 32px minmax(0, 1fr); }
+  .unlock-reservation__reference button { grid-column: 2; width: 100%; min-height: 44px; justify-content: center; }
+  .unlock-reservation > ol { grid-template-columns: 1fr; gap: 10px; }
+  .unlock-reservation > ol li + li { margin-left: 0; padding-top: 10px; padding-left: 0; border-top: 1px solid #2b3731; border-left: 0; }
+  .unlock-reservation > footer .button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .unlock-hero h1 { max-width: none; font-size: clamp(31px, 10vw, 38px); }
+  .unlock-lock-notice { grid-template-columns: 1fr; padding: 17px; }
+  .unlock-lock-notice > span:first-child { width: 42px; height: 42px; }
+  .unlock-lock-notice ul,
+  .unlock-lock-notice > div:last-child { grid-column: 1; }
+  .unlock-benefits,
+  .unlock-plans { padding: 16px; }
+  .licence-tier-list--page { gap: 8px; margin-top: 16px; }
+  .licence-tier-list--page > button,
+  .licence-tier-list--page > label { gap: 11px; padding: 14px; }
+  .licence-tier-card__identity strong { font-size: 14px; }
+  .licence-tier-card__price strong,
+  .licence-tier-card__price b { font-size: 23px; }
+  .unlock-reservation { padding: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
