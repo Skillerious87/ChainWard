@@ -220,6 +220,7 @@ async function run() {
     const dashboard = await getRoute("/dashboard", session.cookie);
     check("dashboard is labelled as offline test data", dashboard.html.includes("Offline test data") || dashboard.html.includes("Offline fixture"));
     check("dashboard shows the fixture faction", dashboard.html.includes("Chainward Test Faction"));
+    check("top bar exposes a labelled server check with its timestamp", dashboard.html.includes("Offline fixture") && dashboard.html.includes("Checked "));
     check("shell resolves the saved rail width before paint", dashboard.html.includes('data-sidebar='));
     check("workspace scrolls inside the shell, not the document", dashboard.html.includes('class="app-scroll"'), "the top bar and provenance banner must stay outside the scroll region");
     check("provenance banner precedes the scroll region", dashboard.html.indexOf("data-source-banner") < dashboard.html.indexOf('class="app-scroll"'));
