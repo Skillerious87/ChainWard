@@ -22,6 +22,7 @@ const OPERATIONAL_ROUTES = [
   "/dashboard",
   "/live-chain",
   "/members",
+  "/members/9000002",
   "/chains",
   "/analytics",
   "/rewards",
@@ -126,7 +127,10 @@ async function getRoute(path, cookie) {
 function runSeed(mode) {
   return spawnSync(process.execPath, ["--conditions=react-server", "--import", "tsx", fileURLToPath(new URL("./seed-offline-license.mts", import.meta.url)), mode], {
     encoding: "utf8",
-    env: { ...process.env, CHAINWARD_LOCAL_TEST_MODE: "true", CHAINWARD_OFFLINE_TEST_MODE: "true" },
+    // A single space survives Windows environment handling and trims to false
+    // in the application. An empty value is treated as unset, allowing Next to
+    // reload a hosted DATABASE_URL from .env.local and split the fixture stores.
+    env: { ...process.env, DATABASE_URL: " ", CHAINWARD_LOCAL_TEST_MODE: "true", CHAINWARD_OFFLINE_TEST_MODE: "true" },
   });
 }
 
@@ -145,6 +149,7 @@ async function run() {
     stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
+      DATABASE_URL: " ",
       NODE_ENV: "development",
       CHAINWARD_LOCAL_TEST_MODE: "true",
       CHAINWARD_OFFLINE_TEST_MODE: "true",
@@ -169,6 +174,7 @@ async function run() {
     const connect = await getRoute("/connect");
     check("/connect offers the offline test identities", connect.html.includes("Faction tester") && connect.html.includes("Owner reviewer"));
     check("/connect lists the verified key selections", connect.html.includes("chainreport"));
+    check("/connect discloses persistent member records and their audience", connect.html.includes("member reports") && connect.html.includes("leadership-only") && connect.html.includes("30 days"));
     check("/connect declares a responsive viewport", /<meta name="viewport" content="[^"]*width=device-width/.test(connect.html));
     check("/connect keeps the key entry inside the primary login flow", connect.html.indexOf("login-intro") < connect.html.indexOf("login-card") && connect.html.indexOf("login-card") < connect.html.indexOf("login-footer"), "the intro, key entry, and footer must retain their reading order");
     const notificationWorker = await fetch(`${ORIGIN}/chainward-notifications.js`);
@@ -214,6 +220,7 @@ async function run() {
     const dashboard = await getRoute("/dashboard", session.cookie);
     check("dashboard is labelled as offline test data", dashboard.html.includes("Offline test data") || dashboard.html.includes("Offline fixture"));
     check("dashboard shows the fixture faction", dashboard.html.includes("Chainward Test Faction"));
+    check("top bar exposes a labelled server check with its timestamp", dashboard.html.includes("Offline fixture") && dashboard.html.includes("Checked "));
     check("shell resolves the saved rail width before paint", dashboard.html.includes('data-sidebar='));
     check("workspace scrolls inside the shell, not the document", dashboard.html.includes('class="app-scroll"'), "the top bar and provenance banner must stay outside the scroll region");
     check("provenance banner precedes the scroll region", dashboard.html.indexOf("data-source-banner") < dashboard.html.indexOf('class="app-scroll"'));
@@ -235,6 +242,10 @@ async function run() {
     check("member activity renders the ranked follow-up queue", membersPage.html.includes("Smart follow-up queue") && membersPage.html.includes("member-priority-queue"));
     check("member activity offers expanded escalation views", membersPage.html.includes("Due soon") && membersPage.html.includes("Expired holiday"));
     check("member activity offers a deliberate roster refresh", membersPage.html.includes("Refresh roster"));
+    check("member activity links each roster row to its Chainward report", membersPage.html.includes('href="/members/9000002"'));
+    const memberReport = await getRoute("/members/9000002", session.cookie);
+    check("member report renders verified tenure and activity facts", memberReport.html.includes("Chainward member report") && memberReport.html.includes("Faction tenure") && memberReport.html.includes("Torn API v2") === false);
+    check("member report separates faction records from Torn facts", memberReport.html.includes("Reports and notes") && memberReport.html.includes("Awards on record") && memberReport.html.includes("Offline fixture"));
 
     const history = await getRoute("/chains", session.cookie);
     check("chain history reports settlement standing", history.html.includes("history-summary__settlement") && history.html.includes("marked paid"));

@@ -182,6 +182,16 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <p>Chainward checks these selections before opening a workspace.</p>
             <ul>{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
           </details>
+          <section className="connect-data-disclosure" aria-labelledby="connect-data-disclosure-title">
+            <header><ShieldCheck size={15} /><strong id="connect-data-disclosure-title">How Chainward uses and shares data</strong></header>
+            <dl>
+              <div><dt>Stored data</dt><dd>Operational records, member reports, and awards persist in the configured Chainward database until the workspace operator removes that data. Torn roster responses are briefly cached.</dd></div>
+              <div><dt>Shared with</dt><dd>The connected faction workspace. Entries marked leadership-only are restricted to authorised member managers.</dd></div>
+              <div><dt>Purpose</dt><dd>Faction chain operations, member activity, internal personnel reports, and deliberate member recognition.</dd></div>
+              <div><dt>API key</dt><dd>Used server-side only. A temporary connection is encrypted for up to 12 hours; “Keep me signed in” stores the encrypted key server-side for up to 30 days.</dd></div>
+              <div><dt>Access requested</dt><dd>Limited Access is enough. Chainward verifies only key/info, user/basic, and faction basic, chain, chains, chainreport, and members selections.</dd></div>
+            </dl>
+          </section>
           {offlineEnabled && <details className="offline-test-entry">
             <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>
             <p>Development fixture only. Never available in production.</p>

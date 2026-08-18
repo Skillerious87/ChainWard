@@ -371,6 +371,20 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   .chain-state { min-width: 0; }
   .chain-state__copy { display: none; }
   .chain-state > i { min-width: 0; }
+
+  /* polish.css compacts this control at the same viewport range, while the
+     shell's later desktop min-width used to leave a wide, textless pill. Keep
+     the useful status and timestamp visible until the layout is truly tight. */
+  .data-status-control {
+    min-width: 132px;
+    grid-template-columns: 8px minmax(0, 1fr) 16px;
+  }
+  .data-status-control > span:nth-child(2) { display: flex; }
+}
+
+@media (max-width: 900px) {
+  .data-status-control { min-width: 104px; }
+  .data-status-control small { display: none; }
 }
 
 /* Observed service state ---------------------------------------------------- */

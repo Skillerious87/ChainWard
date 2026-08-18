@@ -50,7 +50,7 @@ export async function saveRewardScheme(input: unknown): Promise<SaveRewardScheme
   if (issues.length) throw new Error(issues[0]?.message ?? "The tier ranges are invalid.");
 
   const { faction } = await requireFactionPermission("rewards:manage");
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL?.trim()) {
     const result = saveLocalRewardScheme(parsed, faction.id);
     revalidatePath("/rewards");
     return result;
@@ -109,7 +109,7 @@ export async function setRewardSchemeArchived(input: unknown): Promise<{ id: str
   requireStorage();
   const parsed = z.object({ id: idSchema, archived: z.boolean() }).parse(input);
   const { faction } = await requireFactionPermission("rewards:manage");
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL?.trim()) {
     const database = openLocalDatabase();
     if (!database) throw new Error("Create the local database before changing rewards.");
     try {
@@ -140,7 +140,7 @@ function tierCreates(tiers: z.infer<typeof tierSchema>[], rewardDefinitionId: st
 }
 
 function requireStorage(): void {
-  if (!process.env.DATABASE_URL && !localDatabaseExists()) throw new Error("Create the local database file in Settings before saving reward schemes.");
+  if (!process.env.DATABASE_URL?.trim() && !localDatabaseExists()) throw new Error("Create the local database file in Settings before saving reward schemes.");
 }
 
 function saveLocalRewardScheme(parsed: z.infer<typeof saveSchema>, factionId: number): SaveRewardSchemeResult {

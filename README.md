@@ -87,7 +87,11 @@ browsers. Monitoring continues when the Chainward tab is in the background,
 but the browser must remain running with the site open; this is deliberately a
 same-origin browser monitor, not a third-party push service that can wake a
 closed browser. Every monitor request rechecks the active licence and the
-operator's `members:manage` permission.
+operator's `members:manage` permission. Each current roster member also has a
+source-labelled personnel report at `/members/{tornUserId}`. Authorised member
+managers can add append-only faction or leadership reports and assign/revoke
+recognition badges; Torn roster facts remain visually separate from these
+Chainward-authored records.
 
 Settings can download and restore portable faction-configuration backups. The
 JSON file contains reward schemes and selected workspace settings. It excludes
