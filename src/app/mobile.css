@@ -12,6 +12,14 @@
    space runs out. Keeping their base state here avoids route-specific mobile
    navigation and provenance styles drifting apart. */
 .mobile-tabbar { display: none; }
+:root {
+  --mobile-safe-area-top: env(safe-area-inset-top, 0px);
+  --mobile-safe-area-right: env(safe-area-inset-right, 0px);
+  --mobile-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-safe-area-left: env(safe-area-inset-left, 0px);
+  --mobile-bottom-nav-height: 0px;
+  --mobile-page-bottom-clearance: 0px;
+}
 .data-source-banner .data-source-banner__message {
   min-width: 0;
   padding: 0;
@@ -74,7 +82,22 @@
 
 /* Global handheld fundamentals ---------------------------------------------- */
 @media (max-width: 760px) {
-  :root { --topbar-height: 58px; }
+  :root {
+    --mobile-topbar-content-height: 58px;
+    --mobile-status-banner-height: 34px;
+    --mobile-bottom-nav-item-height: 56px;
+    --mobile-bottom-nav-padding-start: 5px;
+    --mobile-bottom-nav-padding-end: max(5px, var(--mobile-safe-area-bottom));
+    --mobile-bottom-nav-height: calc(
+      var(--mobile-bottom-nav-item-height)
+      + var(--mobile-bottom-nav-padding-start)
+      + var(--mobile-bottom-nav-padding-end)
+      + 1px
+    );
+    --mobile-page-end-gap: 24px;
+    --mobile-page-bottom-clearance: calc(var(--mobile-bottom-nav-height) + var(--mobile-page-end-gap));
+    --topbar-height: calc(var(--mobile-topbar-content-height) + var(--mobile-safe-area-top));
+  }
 
   /* A single stray wide child otherwise scrolls the whole document sideways.
      `clip` rather than `hidden`: `hidden` makes this element a scroll container
@@ -125,14 +148,36 @@
   .button { min-height: 46px; padding-inline: 16px; font-size: 13px; }
   .icon-button { min-width: 44px; min-height: 44px; }
 
-  .app-scroll { scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
-  .page-content { padding: 18px 14px calc(100px + env(safe-area-inset-bottom)); }
+  .app-scroll { scroll-padding-bottom: var(--mobile-page-bottom-clearance); }
+  /* The stronger shared-shell selector intentionally beats console routes that
+     zero their document padding. Every platform view therefore receives the
+     same clearance above the fixed navigation. */
+  .app-shell .app-scroll > .page-content {
+    padding-block: 18px var(--mobile-page-bottom-clearance);
+    padding-inline: max(14px, var(--mobile-safe-area-left)) max(14px, var(--mobile-safe-area-right));
+  }
+  .app-scroll :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    scroll-margin-block-end: var(--mobile-page-bottom-clearance);
+  }
   .page-stack { gap: 16px; }
+
+  .platform-route-stage select,
+  .platform-route-stage input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]),
+  .dialog select,
+  .dialog input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]) {
+    min-height: 44px;
+  }
+  .platform-route-stage .search-field { height: auto; min-height: 46px; }
 }
 
 /* Application shell --------------------------------------------------------- */
 @media (max-width: 760px) {
-  .topbar { height: 58px; padding-inline: 12px; gap: 8px; }
+  .topbar {
+    height: var(--topbar-height);
+    gap: 8px;
+    padding-block: var(--mobile-safe-area-top) 0;
+    padding-inline: max(12px, var(--mobile-safe-area-left)) max(12px, var(--mobile-safe-area-right));
+  }
   .topbar__left { min-width: 0; flex: 1; gap: 7px; }
   .topbar__right { flex: 0 0 auto; gap: 7px; }
   .topbar__separator,
@@ -140,6 +185,7 @@
   .topbar-command,
   .topbar-upgrade,
   .data-status-control { display: none; }
+  .sidebar__brand-row { height: var(--topbar-height); padding: var(--mobile-safe-area-top) 20px 0; }
   .topbar-faction-wrap { min-width: 0; flex: 1; }
   .faction-selector { width: 100%; min-width: 0; max-width: none; padding-inline: 6px; }
   .faction-selector__copy strong { overflow: hidden; max-width: 34vw; text-overflow: ellipsis; white-space: nowrap; }
@@ -149,28 +195,38 @@
   .topbar-popover--faction,
   .topbar-popover--notifications {
     position: fixed;
-    top: calc(var(--topbar-height) + 40px);
-    right: 12px;
-    left: 12px;
+    top: calc(var(--topbar-height) + var(--mobile-status-banner-height) + 8px);
+    right: max(12px, var(--mobile-safe-area-right));
+    left: max(12px, var(--mobile-safe-area-left));
     width: auto;
-    max-height: calc(100dvh - 184px);
+    max-height: calc(100dvh - var(--topbar-height) - var(--mobile-status-banner-height) - var(--mobile-bottom-nav-height) - 20px);
   }
-  .sidebar { width: min(300px, 86vw) !important; padding-bottom: env(safe-area-inset-bottom); }
+  .sidebar { width: min(300px, 86vw) !important; padding-bottom: var(--mobile-safe-area-bottom); padding-left: var(--mobile-safe-area-left); }
   .nav-item { height: 48px; }
-  .toast-region { right: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 12px; width: auto; }
-  .command-layer { display: flex; padding: 10px; }
-  .command-palette { display: flex; width: min(560px, 100%); max-height: calc(100dvh - 20px); flex-direction: column; margin: 0 auto; align-self: flex-start; }
+  .toast-region { right: max(12px, var(--mobile-safe-area-right)); bottom: calc(var(--mobile-bottom-nav-height) + 10px); left: max(12px, var(--mobile-safe-area-left)); width: auto; }
+  .command-layer {
+    display: flex;
+    padding: max(10px, var(--mobile-safe-area-top)) max(10px, var(--mobile-safe-area-right)) max(10px, var(--mobile-safe-area-bottom)) max(10px, var(--mobile-safe-area-left));
+  }
+  .command-palette {
+    display: flex;
+    width: min(560px, 100%);
+    max-height: calc(100dvh - max(10px, var(--mobile-safe-area-top)) - max(10px, var(--mobile-safe-area-bottom)));
+    flex-direction: column;
+    margin: 0 auto;
+    align-self: flex-start;
+  }
   .command-results { min-height: 0; flex: 1; }
   .command-palette > footer { flex-wrap: wrap; }
-  .data-source-banner { height: auto; min-height: 32px; justify-content: flex-start; padding: 6px 12px; line-height: 1.35; text-align: left; }
+  .data-source-banner { height: var(--mobile-status-banner-height); min-height: var(--mobile-status-banner-height); justify-content: flex-start; padding: 5px 12px; line-height: 1.35; text-align: left; }
   .data-source-banner__label { flex: 0 0 auto; }
   .data-source-banner .data-source-banner__message { flex: 1; }
   .topbar-popover--user {
     position: fixed;
-    top: calc(var(--topbar-height) + 40px);
-    right: 12px;
-    width: min(326px, calc(100vw - 24px));
-    max-height: calc(100dvh - 184px);
+    top: calc(var(--topbar-height) + var(--mobile-status-banner-height) + 8px);
+    right: max(12px, var(--mobile-safe-area-right));
+    width: min(326px, calc(100vw - var(--mobile-safe-area-left) - var(--mobile-safe-area-right) - 24px));
+    max-height: calc(100dvh - var(--topbar-height) - var(--mobile-status-banner-height) - var(--mobile-bottom-nav-height) - 20px);
   }
 
   .mobile-tabbar {
@@ -180,10 +236,10 @@
     bottom: 0;
     left: 0;
     display: grid;
-    min-height: calc(68px + env(safe-area-inset-bottom));
+    min-height: var(--mobile-bottom-nav-height);
     grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
     gap: 2px;
-    padding: 5px max(7px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
+    padding: var(--mobile-bottom-nav-padding-start) max(7px, var(--mobile-safe-area-right)) var(--mobile-bottom-nav-padding-end) max(7px, var(--mobile-safe-area-left));
     border-top: 1px solid rgba(255, 255, 255, .1);
     background: rgba(8, 12, 14, .94);
     box-shadow: 0 -12px 34px rgba(0, 0, 0, .32);
@@ -193,7 +249,7 @@
     position: relative;
     display: flex;
     min-width: 0;
-    min-height: 56px;
+    min-height: var(--mobile-bottom-nav-item-height);
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -234,34 +290,168 @@
   .dialog {
     width: 100%;
     max-width: none;
-    max-height: calc(100dvh - 12px);
+    max-height: calc(100dvh - max(12px, var(--mobile-safe-area-top)));
     margin: auto 0 0;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
     border-radius: 16px 16px 0 0;
   }
-  .dialog__header { padding: 16px; }
-  .dialog__body { max-height: calc(100dvh - 164px); overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
-  .dialog__actions { flex-wrap: wrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .dialog__header { grid-row: 1; padding: 16px max(16px, var(--mobile-safe-area-right)) 16px max(16px, var(--mobile-safe-area-left)); }
+  .dialog[open] .dialog__body { grid-row: 2; min-height: 0; max-height: none; overflow-y: auto; padding: 16px max(16px, var(--mobile-safe-area-right)) 16px max(16px, var(--mobile-safe-area-left)); overscroll-behavior: contain; }
+  .dialog__actions { grid-row: 3; flex-wrap: wrap; padding: 12px max(16px, var(--mobile-safe-area-right)) calc(12px + var(--mobile-safe-area-bottom)) max(16px, var(--mobile-safe-area-left)); }
   .dialog__actions .button { flex: 1 1 132px; }
+  .about-dialog {
+    width: min(486px, calc(100vw - var(--mobile-safe-area-left) - var(--mobile-safe-area-right) - 24px));
+    max-height: calc(100dvh - max(12px, var(--mobile-safe-area-top)) - 12px);
+  }
+  .about-dialog__surface { max-height: inherit; overflow-y: auto; overscroll-behavior: contain; }
+  .about-dialog__close { top: 8px; right: 8px; width: 44px; height: 44px; }
+
+  /* Expanded telemetry is a modal surface. Keep its close control out of
+     display cutouts and start tall content at the top so every section remains
+     reachable in a short landscape viewport. */
+  .chain-console--focus {
+    inset: max(8px, var(--mobile-safe-area-top)) max(8px, var(--mobile-safe-area-right)) max(8px, var(--mobile-safe-area-bottom)) max(8px, var(--mobile-safe-area-left));
+    max-height: none;
+    justify-content: flex-start;
+    overscroll-behavior: contain;
+  }
+  .chain-console--focus .chain-console__toolbar { padding-top: 64px; }
+  .chain-focus-exit {
+    top: calc(max(8px, var(--mobile-safe-area-top)) + 10px);
+    right: calc(max(8px, var(--mobile-safe-area-right)) + 10px);
+    min-height: 44px;
+  }
+  .chain-focus-exit kbd { display: none; }
 
   /* Wide data remains intentionally swipeable inside its own boundary while
      the document and route canvas stay fixed to the viewport. */
   .table-scroll,
-  :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) {
+  :is(.member-activity-tabs,.member-activity-sort,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) {
     width: 100%;
     min-width: 0;
     max-width: 100%;
     overflow-x: auto;
   }
   .table-scroll { overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
-  :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) { scroll-snap-type: inline proximity; overscroll-behavior-inline: contain; }
-  :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) button,
+  :is(.member-activity-tabs,.member-activity-sort,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) { scroll-snap-type: inline proximity; overscroll-behavior-inline: contain; }
+  :is(.member-activity-tabs,.member-activity-sort,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) button,
   .pagination button { min-width: 44px; min-height: 44px; scroll-snap-align: start; }
+  .member-activity-sort > span,
+  .member-activity-sort button { flex: 0 0 auto; }
 
   .settings-console .professional-settings-nav nav { scroll-snap-type: inline proximity; }
   .settings-console .professional-settings-nav nav button { min-width: min(180px, 70vw); scroll-snap-align: start; }
+
+  /* Member Activity is an operating screen, not a desktop spreadsheet. Keep
+     the summary compact, give the owner policy control its own usable row, and
+     let the filter/sort controls scroll without squeezing their labels. */
+  .member-activity-brief > div { min-width: 0; }
+  .member-activity-brief > label { min-width: 0; max-width: 260px; }
+  .member-activity-brief > label select { min-height: 46px; }
+  .member-activity-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .member-activity-stats article,
+  .member-activity-stats article:nth-child(3),
+  .member-activity-stats article:last-child {
+    grid-column: auto;
+    border-right: 1px solid #29323a;
+    border-bottom: 1px solid #29323a;
+  }
+  .member-activity-stats article:nth-child(even) { border-right: 0; }
+  .member-activity-stats article:nth-last-child(-n + 2) { border-bottom: 0; }
+  .member-filter-reset,
+  .member-row-actions > a,
+  .member-row-actions > button,
+  .row-manage-button { min-height: 44px; }
+  .filter-popover > button,
+  .menu-popover--compact > button { min-height: 44px; }
+  .menu-popover,
+  .filter-popover {
+    position: fixed;
+    inset: auto max(12px, var(--mobile-safe-area-right)) calc(var(--mobile-bottom-nav-height) + 12px) max(12px, var(--mobile-safe-area-left));
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: min(60dvh, calc(100dvh - var(--topbar-height) - var(--mobile-status-banner-height) - var(--mobile-bottom-nav-height) - 32px));
+    overflow-y: auto;
+    border-radius: 12px;
+  }
+}
+
+/* A phone-sized activity register becomes a set of compact, labelled records.
+   Larger operational tables retain their bounded horizontal scroller because
+   their column comparisons are the useful interaction. */
+@media (max-width: 620px) {
+  .member-activity-table-section > .table-scroll { overflow: visible; }
+  .member-activity-table {
+    display: block;
+    min-width: 0;
+    border-collapse: separate;
+    white-space: normal;
+  }
+  .member-activity-table thead { display: none; }
+  .member-activity-table tbody { display: grid; gap: 10px; padding: 10px; }
+  .member-activity-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 14px;
+    overflow: hidden;
+    border: 1px solid #29343b;
+    border-radius: 10px;
+    background: #0b1013;
+  }
+  .member-activity-table tbody tr:hover { box-shadow: none; }
+  .member-activity-table tbody tr.member-activity-row--attention {
+    background: linear-gradient(120deg, rgba(245, 185, 76, .055), transparent 48%), #0b1013;
+  }
+  .member-activity-table tbody tr.member-activity-row--critical {
+    background: linear-gradient(120deg, rgba(242, 109, 109, .08), transparent 52%), #0b1013;
+  }
+  .member-activity-table td,
+  .density-compact .member-activity-table td {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    white-space: normal;
+  }
+  .member-activity-table td::before {
+    color: #68757d;
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 720;
+    letter-spacing: .55px;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+  .member-activity-table td:first-child,
+  .member-activity-table td:nth-child(4),
+  .member-activity-table td:last-child { grid-column: 1 / -1; }
+  .member-activity-table td:first-child::before { display: none; }
+  .member-activity-table .cell-subtext,
+  .member-activity-table .member-activity-reason {
+    max-width: none;
+    margin-top: 1px;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .member-activity-table .member-row-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .member-activity-table .member-row-actions > * { width: 100%; }
 }
 
 @media (max-width: 430px) {
@@ -272,17 +462,35 @@
   .faction-selector { max-width: 50vw; }
   .faction-selector__copy { display: flex; min-width: 0; }
   .faction-selector__copy small { display: none; }
-  .data-source-banner .data-source-banner__message { display: none; }
-  .data-source-banner { justify-content: center; }
+  :root { --mobile-status-banner-height: 54px; }
+  .data-source-banner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-content: center;
+    gap: 2px;
+    padding: 5px max(10px, var(--mobile-safe-area-right)) 5px max(10px, var(--mobile-safe-area-left));
+    text-align: center;
+  }
+  .data-source-banner .data-source-banner__message {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .mobile-tabbar { grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); }
+  .member-activity-brief > label { width: 100%; max-width: none; }
+  .member-activity-brief > label select { width: 100%; }
 }
 
 /* Observed service state ---------------------------------------------------- */
 @media (max-width: 760px) {
-  .service-drawer__panel { width: 100%; max-height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+  .service-drawer__panel { width: 100%; height: 100dvh; max-height: 100dvh; padding-right: var(--mobile-safe-area-right); padding-left: var(--mobile-safe-area-left); }
+  .service-drawer__header { min-height: calc(72px + var(--mobile-safe-area-top)); padding-top: calc(16px + var(--mobile-safe-area-top)); }
   .service-drawer__body { padding: 14px; }
   .service-summary__facts { grid-template-columns: 1fr 1fr; }
-  .service-drawer__footer { flex-wrap: wrap; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); }
+  .service-drawer__footer { flex-wrap: wrap; padding: 12px 14px calc(12px + var(--mobile-safe-area-bottom)); }
   .service-drawer__footer .button { flex: 1; justify-content: center; }
   .service-drawer__footer time { width: 100%; margin-left: 0; text-align: center; }
 }
@@ -292,9 +500,12 @@
   .onboarding-topbar,
   .onboarding-hero,
   .onboarding-disclosure,
-  .onboarding-footer { width: min(100% - 32px, 1240px); }
+  .onboarding-footer {
+    width: auto;
+    margin-inline: max(16px, var(--mobile-safe-area-left)) max(16px, var(--mobile-safe-area-right));
+  }
 
-  .onboarding-topbar { height: 64px; padding-top: env(safe-area-inset-top); }
+  .onboarding-topbar { height: auto; min-height: calc(64px + var(--mobile-safe-area-top)); padding-top: var(--mobile-safe-area-top); }
   .onboarding-topbar .brand__wordmark { font-size: 17px; }
   .onboarding-topbar__trust { gap: 7px; }
   .onboarding-topbar__trust > span { display: none; }
@@ -358,7 +569,7 @@
   .onboarding-privacy-grid h3 { margin-top: 18px; }
   .onboarding-privacy-grid p { margin-top: 7px; font-size: 12px !important; }
   .onboarding-disclosure > footer { align-items: flex-start; flex-direction: column; gap: 7px; }
-  .onboarding-footer { align-items: flex-start; flex-direction: column; gap: 9px; min-height: 0; padding: 22px 0 calc(24px + env(safe-area-inset-bottom)); }
+  .onboarding-footer { align-items: flex-start; flex-direction: column; gap: 9px; min-height: 0; padding: 22px 0 calc(24px + var(--mobile-safe-area-bottom)); }
 
   .connection-confirmation__crest { width: 60px; height: 60px; }
   .connection-confirmation__hero h2 { font-size: 22px; }
@@ -369,13 +580,38 @@
   .connection-confirmation__actions { grid-template-columns: 1fr; margin-top: 20px; }
   .connection-confirmation__actions .button { min-height: 52px; }
   .offline-test-entry > div { grid-template-columns: 1fr; }
+
+  .welcome-page,
+  .login-page,
+  .connect-page,
+  .not-found-page { min-height: 100dvh; }
+  .welcome-nav,
+  .welcome-hero,
+  .welcome-capabilities,
+  .welcome-assurance,
+  .welcome-cta,
+  .welcome-footer,
+  .login-topbar,
+  .login-layout,
+  .login-footer {
+    width: auto;
+    margin-inline: max(14px, var(--mobile-safe-area-left)) max(14px, var(--mobile-safe-area-right));
+  }
+  .welcome-nav { min-height: calc(70px + var(--mobile-safe-area-top)); padding-top: var(--mobile-safe-area-top); }
+  .login-topbar { min-height: calc(64px + var(--mobile-safe-area-top)); padding-top: var(--mobile-safe-area-top); }
+  .welcome-footer,
+  .login-footer { padding-bottom: calc(24px + var(--mobile-safe-area-bottom)); }
+  .route-error { min-height: min(520px, calc(100dvh - var(--topbar-height) - var(--mobile-status-banner-height) - var(--mobile-page-bottom-clearance))); }
 }
 
 @media (max-width: 400px) {
   .onboarding-topbar,
   .onboarding-hero,
   .onboarding-disclosure,
-  .onboarding-footer { width: calc(100% - 24px); }
+  .onboarding-footer {
+    width: auto;
+    margin-inline: max(12px, var(--mobile-safe-area-left)) max(12px, var(--mobile-safe-area-right));
+  }
   .onboarding-form-shell .connect-form { padding-inline: 15px; }
   .onboarding-form-shell__topline,
   .onboarding-form-shell > footer { padding-inline: 15px; }
@@ -722,7 +958,7 @@
 }
 
 @media (max-width: 430px) {
-  .page-content { padding-inline: 12px; }
+  .app-shell .app-scroll > .page-content { padding-inline: max(12px, var(--mobile-safe-area-left)) max(12px, var(--mobile-safe-area-right)); }
   .page-stack { gap: 14px; }
 
   .platform-route-stage :where(.panel, .data-section) { border-radius: 10px; }
@@ -804,13 +1040,13 @@
 }
 
 @media (max-width: 360px) {
-  .topbar { padding-inline: 8px; gap: 5px; }
+  .topbar { padding-inline: max(8px, var(--mobile-safe-area-left)) max(8px, var(--mobile-safe-area-right)); gap: 5px; }
   .topbar__left,
   .topbar__right { gap: 5px; }
   .faction-selector { padding-inline: 4px; }
   .faction-selector__copy strong { max-width: 28vw; }
 
-  .page-content { padding-inline: 10px; }
+  .app-shell .app-scroll > .page-content { padding-inline: max(10px, var(--mobile-safe-area-left)) max(10px, var(--mobile-safe-area-right)); }
   .reward-tier-row { grid-template-columns: 1fr; }
   .reward-tier-row > label,
   .reward-tier-row .tier-amount,
@@ -821,4 +1057,21 @@
   .connection-confirmation__identity > div { border-right: 0; border-top: 1px solid #2b3731; }
   .connection-confirmation__identity > div:first-child { border-top: 0; }
   .connection-confirmation__identity > div:last-child { grid-column: 1; }
+}
+
+/* Short landscape viewports need the same guarantees with less fixed chrome.
+   The variables keep page clearance, toasts, and the tab bar in lockstep. */
+@media (max-width: 760px) and (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --mobile-topbar-content-height: 54px;
+    --mobile-status-banner-height: 30px;
+    --mobile-bottom-nav-item-height: 48px;
+    --mobile-bottom-nav-padding-start: 3px;
+    --mobile-bottom-nav-padding-end: max(3px, var(--mobile-safe-area-bottom));
+    --mobile-page-end-gap: 16px;
+  }
+  .mobile-tabbar__item { gap: 1px; padding-block: 2px; }
+  .mobile-tabbar__item small { font-size: 9.5px !important; }
+  .data-source-banner { padding-block: 3px; }
+  .dialog { max-height: 100dvh; border-radius: 12px 12px 0 0; }
 }

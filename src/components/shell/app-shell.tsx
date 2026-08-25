@@ -162,6 +162,9 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     : ["/dashboard", "/live-chain", "/members", "/payouts"]
         .map((href) => searchableItems.find((item) => item.href === href))
         .filter((item): item is NavigationItem => Boolean(item));
+  const mobileNavigationHasCurrentRoute = mobileNavigation.some((item) =>
+    pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)),
+  );
   // Keyboard shortcuts must not resubscribe on every render, so the latest
   // destinations are read through a ref instead of an effect dependency.
   const searchableItemsRef = useRef(searchableItems);
@@ -613,7 +616,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
 
         <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status">
           <span className="data-source-banner__label">{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>
-          <span className="data-source-banner__message">{liveTelemetry.message}</span>
+          <span className="data-source-banner__message" title={liveTelemetry.message}>{liveTelemetry.message}</span>
         </div>
         <RouteProgress />
         {/* The workspace scrolls inside this element rather than the document,
@@ -645,7 +648,8 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
         })}
         <button
           type="button"
-          className={`mobile-tabbar__item${mobileOpen ? " mobile-tabbar__item--active" : ""}`}
+          className={`mobile-tabbar__item${mobileOpen || !mobileNavigationHasCurrentRoute ? " mobile-tabbar__item--active" : ""}`}
+          aria-current={!mobileNavigationHasCurrentRoute ? "page" : undefined}
           aria-expanded={mobileOpen}
           aria-controls="workspace-navigation"
           onClick={() => {
