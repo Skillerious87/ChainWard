@@ -32,10 +32,29 @@ export function InfoTip({ children, label }: { children: ReactNode; label: strin
 
     const rect = trigger.getBoundingClientRect();
     const container = trigger.closest("dialog")?.getBoundingClientRect();
-    const safeLeft = Math.max(VIEWPORT_MARGIN, container ? container.left + VIEWPORT_MARGIN : VIEWPORT_MARGIN);
-    const safeRight = Math.min(window.innerWidth - VIEWPORT_MARGIN, container ? container.right - VIEWPORT_MARGIN : window.innerWidth - VIEWPORT_MARGIN);
-    const safeTop = Math.max(VIEWPORT_MARGIN, container ? container.top + VIEWPORT_MARGIN : VIEWPORT_MARGIN);
-    const safeBottom = Math.min(window.innerHeight - VIEWPORT_MARGIN, container ? container.bottom - VIEWPORT_MARGIN : window.innerHeight - VIEWPORT_MARGIN);
+    const visualViewport = window.visualViewport;
+    const viewportLeft = visualViewport?.offsetLeft ?? 0;
+    const viewportTop = visualViewport?.offsetTop ?? 0;
+    const viewportRight = viewportLeft + (visualViewport?.width ?? window.innerWidth);
+    const viewportBottom = viewportTop + (visualViewport?.height ?? window.innerHeight);
+    const mobileNavigation = container ? null : document.querySelector<HTMLElement>(".mobile-tabbar");
+    const mobileNavigationRect = mobileNavigation?.getBoundingClientRect();
+    const mobileNavigationVisible = Boolean(mobileNavigationRect?.height && getComputedStyle(mobileNavigation!).display !== "none");
+    const mobileNavigationStyle = mobileNavigationVisible ? getComputedStyle(mobileNavigation!) : null;
+    const safeInsetLeft = Number.parseFloat(mobileNavigationStyle?.paddingLeft ?? "0") || 0;
+    const safeInsetRight = Number.parseFloat(mobileNavigationStyle?.paddingRight ?? "0") || 0;
+    const safeLeft = container
+      ? Math.max(viewportLeft + VIEWPORT_MARGIN, container.left + VIEWPORT_MARGIN)
+      : viewportLeft + Math.max(VIEWPORT_MARGIN, safeInsetLeft);
+    const safeRight = container
+      ? Math.min(viewportRight - VIEWPORT_MARGIN, container.right - VIEWPORT_MARGIN)
+      : viewportRight - Math.max(VIEWPORT_MARGIN, safeInsetRight);
+    const safeTop = container
+      ? Math.max(viewportTop + VIEWPORT_MARGIN, container.top + VIEWPORT_MARGIN)
+      : viewportTop + VIEWPORT_MARGIN;
+    const safeBottom = container
+      ? Math.min(viewportBottom - VIEWPORT_MARGIN, container.bottom - VIEWPORT_MARGIN)
+      : Math.min(viewportBottom - VIEWPORT_MARGIN, mobileNavigationVisible ? mobileNavigationRect!.top - VIEWPORT_MARGIN : viewportBottom - VIEWPORT_MARGIN);
     const renderedWidth = Math.min(TOOLTIP_WIDTH, safeRight - safeLeft);
     const halfWidth = renderedWidth / 2;
     const left = clamp(rect.left + (rect.width / 2), safeLeft + halfWidth, safeRight - halfWidth);
@@ -70,11 +89,15 @@ export function InfoTip({ children, label }: { children: ReactNode; label: strin
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
     window.addEventListener("keydown", closeOnEscape);
+    window.visualViewport?.addEventListener("resize", reposition);
+    window.visualViewport?.addEventListener("scroll", reposition);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
       window.removeEventListener("keydown", closeOnEscape);
+      window.visualViewport?.removeEventListener("resize", reposition);
+      window.visualViewport?.removeEventListener("scroll", reposition);
     };
   }, [calculatePosition, open]);
 
