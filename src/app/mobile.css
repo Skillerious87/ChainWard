@@ -652,6 +652,7 @@
   .welcome-nav,
   .welcome-hero,
   .welcome-capabilities,
+  .welcome-pricing,
   .welcome-assurance,
   .welcome-cta,
   .welcome-footer,
@@ -671,6 +672,7 @@
   .welcome-assurance__intro > a,
   .api-key-field > small a,
   .connect-requirements summary,
+  .connect-data-disclosure summary,
   .offline-test-entry summary {
     min-width: 44px;
     min-height: 44px;
@@ -684,7 +686,8 @@
     align-items: center;
   }
   .connect-requirements summary,
-  .offline-test-entry summary { margin-block: -12px; padding-block: 12px; }
+  .connect-data-disclosure summary,
+  .offline-test-entry summary { margin-block: 0; padding-block: 0; }
   .not-found-page {
     padding-right: max(14px, var(--mobile-safe-area-right));
     padding-bottom: calc(20px + var(--mobile-safe-area-bottom));

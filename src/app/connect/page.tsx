@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowLeft, Check, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, KeyRound, ServerCog, ShieldCheck, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import { ConnectForm } from "@/components/onboarding/connect-form";
@@ -10,7 +10,11 @@ export const metadata: Metadata = {
   description: "Connect a restricted Torn API key to open your verified Chainward faction workspace.",
 };
 
-const assurances = ["Restricted key only", "No Torn password", "Revoke anytime in Torn"] as const;
+const connectionSteps = [
+  { icon: KeyRound, title: "Restricted key", detail: "Limited Access is enough; your Torn password is never used." },
+  { icon: ServerCog, title: "Server-side check", detail: "The key is encrypted and validated away from browser code." },
+  { icon: UsersRound, title: "Faction-scoped entry", detail: "You enter only the verified workspace attached to your identity." },
+] as const;
 
 export default function ConnectPage() {
   return (
@@ -25,19 +29,15 @@ export default function ConnectPage() {
 
       <section className="login-layout" aria-labelledby="login-title">
         <div className="login-intro">
-          <p className="login-intro__eyebrow"><span /> Secure faction access</p>
-          <h1 id="login-title">Open your faction workspace.</h1>
-          <p className="login-intro__lede">Use a restricted Torn API key to verify your identity and continue to Chainward.</p>
+          <p className="login-intro__eyebrow"><span /> Protected access, clearly explained</p>
+          <h1 id="login-title">Enter your faction command centre.</h1>
+          <p className="login-intro__lede">One restricted Torn key verifies who you are, identifies your faction, and opens the right workspace without ever asking for your Torn password.</p>
 
           <div className="login-assurance">
-            <span className="login-assurance__icon"><ShieldCheck size={20} /></span>
-            <div>
-              <strong>Private by design</strong>
-              <p>Your key is validated server-side and used only for requests to Torn.</p>
-              <ul aria-label="Connection assurances">
-                {assurances.map((assurance) => <li key={assurance}><Check size={12} /> {assurance}</li>)}
-              </ul>
-            </div>
+            <header><span className="login-assurance__icon"><ShieldCheck size={20} /></span><p><small>How sign in works</small><strong>Three checks. One protected workspace.</strong></p></header>
+            <ol aria-label="Secure connection steps">
+              {connectionSteps.map(({ icon: Icon, title, detail }, index) => <li key={title}><span><Icon size={15} /></span><p><strong>{title}</strong><small>{detail}</small></p><em>{index + 1}</em><Check size={13} /></li>)}
+            </ol>
           </div>
         </div>
 
@@ -47,8 +47,8 @@ export default function ConnectPage() {
       </section>
 
       <footer className="login-footer">
-        <span>Independent Torn community software</span>
-        <span>Not affiliated with or endorsed by Torn</span>
+        <span>Encrypted server-side. Scoped to one faction. Revocable in Torn.</span>
+        <span>Independent community software. Not affiliated with Torn.</span>
       </footer>
     </main>
   );

@@ -3,12 +3,16 @@ import {
   Activity,
   ArrowRight,
   BarChart3,
+  BadgeCheck,
+  CalendarCheck2,
+  CalendarDays,
   Check,
   CircleDollarSign,
   Clock3,
   Crown,
   Fingerprint,
   LockKeyhole,
+  Pill,
   ShieldCheck,
   Sparkles,
   Users,
@@ -17,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
+import { licensePlans } from "@/lib/licensing/pricing";
 
 export const metadata: Metadata = {
   title: "Faction operations, beautifully organised",
@@ -36,6 +41,13 @@ const assurances = [
   [WalletCards, "Human controlled", "Chainward records decisions; it never pretends that an in-game transfer happened automatically."],
 ] as const;
 
+const pricingPresentation = [
+  { icon: Clock3, eyebrow: "Flexible start", feature: "A low-commitment way to open the complete workspace." },
+  { icon: CalendarDays, eyebrow: "Most popular", feature: "Three months of calm operations with a built-in saving." },
+  { icon: CalendarCheck2, eyebrow: "Best recurring value", feature: "A full year for established faction leadership teams." },
+  { icon: Sparkles, eyebrow: "Permanent access", feature: "One approval, no renewal date, and every future release." },
+] as const;
+
 export default function HomePage() {
   return (
     <main className="welcome-page">
@@ -46,6 +58,7 @@ export default function HomePage() {
         <Link href="/" aria-label="Chainward home"><BrandMark /></Link>
         <nav aria-label="Welcome page">
           <a href="#capabilities">Capabilities</a>
+          <a href="#pricing">Pricing</a>
           <a href="#assurance">Built with care</a>
           <Link href="/connect">Connect</Link>
         </nav>
@@ -97,6 +110,55 @@ export default function HomePage() {
       <section className="welcome-capabilities" id="capabilities">
         <header><div><p className="eyebrow">Designed for serious faction operations</p><h2>Everything important, without the noise.</h2></div><p>Purpose-built surfaces keep live Torn facts, leadership decisions, and saved records distinct and understandable.</p></header>
         <div>{capabilities.map(({ icon: Icon, label, detail }, index) => <article key={label}><span><Icon size={19} /></span><em>0{index + 1}</em><h3>{label}</h3><p>{detail}</p><i /></article>)}</div>
+      </section>
+
+      <section className="welcome-pricing" id="pricing" aria-labelledby="welcome-pricing-title">
+        <header className="welcome-pricing__header">
+          <div>
+            <p className="eyebrow">Simple faction-wide access</p>
+            <h2 id="welcome-pricing-title">One licence. Every approved member.</h2>
+            <p>Choose the term that fits your faction. Every plan includes the complete Chainward workspace with no per-seat pricing or feature tiers.</p>
+          </div>
+          <aside>
+            <span><Pill size={18} /></span>
+            <p><strong>Paid with Torn items</strong><small>No card details, subscriptions, or surprise renewals.</small></p>
+            <BadgeCheck size={17} />
+          </aside>
+        </header>
+
+        <div className="welcome-pricing__grid">
+          {licensePlans.map((plan, index) => {
+            const presentation = pricingPresentation[index] ?? pricingPresentation[0];
+            const PlanIcon = presentation.icon;
+            const featured = plan.id === "quarterly";
+            return (
+              <article key={plan.id} className={`welcome-price-card${featured ? " welcome-price-card--featured" : ""}`}>
+                <div className="welcome-price-card__top">
+                  <span><PlanIcon size={19} /></span>
+                  <p><small>{presentation.eyebrow}</small><strong>{plan.name}</strong></p>
+                  {"badge" in plan && <em>{plan.badge}</em>}
+                </div>
+                <div className="welcome-price-card__amount">
+                  <strong>{plan.itemQuantity}</strong>
+                  <span><b>{plan.itemName}</b><small>{plan.term}</small></span>
+                </div>
+                <p className="welcome-price-card__description">{presentation.feature}</p>
+                <ul>
+                  <li><Check size={13} /> Complete operations workspace</li>
+                  <li><Check size={13} /> Unlimited approved faction members</li>
+                  <li><Check size={13} /> All features and releases in the term</li>
+                </ul>
+                <Link href="/connect">Choose {plan.name.toLowerCase()} <ArrowRight size={14} /></Link>
+              </article>
+            );
+          })}
+        </div>
+
+        <footer className="welcome-pricing__footer">
+          <span><ShieldCheck size={17} /></span>
+          <p><strong>Manual, auditable activation</strong><small>Chainward creates a unique faction reference. Access begins only after the item transfer is matched and approved by the platform owner.</small></p>
+          <Link href="/connect">Start securely <ArrowRight size={14} /></Link>
+        </footer>
       </section>
 
       <section className="welcome-assurance" id="assurance">

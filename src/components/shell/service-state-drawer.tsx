@@ -30,25 +30,32 @@ interface ServiceRow {
 interface ServiceStateDrawerProps {
   telemetry: WorkspaceTelemetry;
   database: DatabaseStatus;
+  autoRefresh: boolean;
+  refreshIntervalSeconds: number;
+  chainRunning: boolean;
   syncing: boolean;
   onSync: () => void;
   onClose: () => void;
 }
 
-export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClose }: ServiceStateDrawerProps) {
+export function ServiceStateDrawer({ telemetry, database, autoRefresh, refreshIntervalSeconds, chainRunning, syncing, onSync, onClose }: ServiceStateDrawerProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   const offline = telemetry.mode === "offline";
   const live = telemetry.source === "live";
-  const rows = buildRows(telemetry, database);
+  const rows = buildServiceRows(telemetry, database, { autoRefresh, refreshIntervalSeconds, chainRunning });
   const attention = rows.filter((row) => row.tone === "attention").length;
-  const overall: ServiceTone = attention > 0 ? "attention" : "ok";
-  const headline = offline ? "Test mode" : attention > 0 ? "Needs attention" : "Operational";
+  const healthy = rows.filter((row) => row.tone === "ok").length;
+  const incomplete = rows.filter((row) => row.tone === "neutral").length;
+  const overall: ServiceTone = attention > 0 ? "attention" : incomplete > 0 ? "neutral" : "ok";
+  const headline = offline ? "Test mode" : attention > 0 ? "Needs attention" : incomplete > 0 ? "Partially configured" : "Operational";
   const summary = offline
     ? "Deterministic local fixture data. Torn was not contacted and no value on screen is live."
     : attention > 0
       ? `${attention} of ${rows.length} checks need attention before operational data can be trusted.`
-      : "Every check Chainward performs on this device responded successfully.";
+      : incomplete > 0
+        ? `${healthy} of ${rows.length} checks are healthy; ${incomplete} optional service ${incomplete === 1 ? "is" : "are"} not active.`
+        : "Every configured Chainward service responded successfully.";
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -89,7 +96,7 @@ export function ServiceStateDrawer({ telemetry, database, syncing, onSync, onClo
             <div className="service-summary__top">
               <span className="service-summary__pulse" aria-hidden="true" />
               <strong>{headline}</strong>
-              <em>{rows.filter((row) => row.tone !== "attention").length}/{rows.length} healthy</em>
+              <em>{healthy}/{rows.length} healthy</em>
             </div>
             <p>{summary}</p>
             <dl className="service-summary__facts">
@@ -151,7 +158,11 @@ function trapDrawerFocus(event: ReactKeyboardEvent<HTMLElement>): void {
   }
 }
 
-function buildRows(telemetry: WorkspaceTelemetry, database: DatabaseStatus): ServiceRow[] {
+export function buildServiceRows(
+  telemetry: WorkspaceTelemetry,
+  database: DatabaseStatus,
+  refresh: { autoRefresh: boolean; refreshIntervalSeconds: number; chainRunning: boolean },
+): ServiceRow[] {
   const offline = telemetry.mode === "offline";
   const live = telemetry.source === "live";
   return [
@@ -182,10 +193,14 @@ function buildRows(telemetry: WorkspaceTelemetry, database: DatabaseStatus): Ser
     {
       key: "jobs",
       icon: Timer,
-      name: "Background jobs",
-      detail: "No background worker is configured; refreshes happen while the workspace is open.",
-      state: "Not configured",
-      tone: "neutral",
+      name: "Background refresh",
+      detail: refresh.autoRefresh
+        ? refresh.chainRunning
+          ? "The in-app scheduler refreshes the live chain every 5 seconds while Chainward remains open, including in a background tab."
+          : `The in-app scheduler refreshes workspace telemetry every ${refresh.refreshIntervalSeconds} seconds while Chainward remains open, including in a background tab.`
+        : "Automatic refresh is paused in Settings; manual checks remain available.",
+      state: refresh.autoRefresh ? "Active" : "Paused",
+      tone: refresh.autoRefresh ? "ok" : "neutral",
     },
   ];
 }

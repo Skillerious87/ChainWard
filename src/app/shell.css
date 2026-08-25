@@ -430,22 +430,26 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 .service-drawer__glyph { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text-secondary); }
 .service-drawer__glyph--ok { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .07); color: var(--success); }
 .service-drawer__glyph--attention { border-color: rgba(245, 185, 76, .3); background: rgba(245, 185, 76, .07); color: var(--warning); }
+.service-drawer__glyph--neutral { border-color: rgba(142, 152, 159, .26); background: rgba(142, 152, 159, .055); color: var(--text-secondary); }
 
 .service-drawer__body { min-height: 0; flex: 1; overflow-y: auto; padding: 18px; }
 
 .service-summary { padding: 16px 17px; border: 1px solid var(--border); border-radius: 12px; }
 .service-summary--ok { border-color: rgba(103, 211, 145, .22); background: linear-gradient(150deg, rgba(103, 211, 145, .075), rgba(103, 211, 145, .02)); }
 .service-summary--attention { border-color: rgba(245, 185, 76, .24); background: linear-gradient(150deg, rgba(245, 185, 76, .08), rgba(245, 185, 76, .02)); }
+.service-summary--neutral { border-color: rgba(142, 152, 159, .2); background: linear-gradient(150deg, rgba(142, 152, 159, .06), rgba(142, 152, 159, .015)); }
 .service-summary--test { border-color: rgba(98, 184, 232, .24); background: linear-gradient(150deg, rgba(98, 184, 232, .07), rgba(98, 184, 232, .02)); }
 .service-summary__top { display: flex; align-items: center; gap: 10px; }
 .service-summary__top strong { flex: 1; font-size: 21px; font-weight: 650; letter-spacing: -.5px; }
 .service-summary__top em { color: var(--text-muted); font-size: 10.5px; font-style: normal; font-weight: 600; }
 .service-summary--ok .service-summary__top strong { color: #b7ecca; }
 .service-summary--attention .service-summary__top strong { color: #f2d59a; }
+.service-summary--neutral .service-summary__top strong { color: #c9d1d5; }
 .service-summary--test .service-summary__top strong { color: #b6ddf3; }
 .service-summary__pulse { position: relative; width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: currentcolor; }
 .service-summary--ok .service-summary__pulse { color: var(--success); }
 .service-summary--attention .service-summary__pulse { color: var(--warning); }
+.service-summary--neutral .service-summary__pulse { color: var(--text-muted); }
 .service-summary--test .service-summary__pulse { color: var(--info); }
 .service-summary__pulse::after {
   position: absolute;

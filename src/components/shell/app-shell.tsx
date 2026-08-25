@@ -287,7 +287,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     let lastPollAt = Date.now();
 
     async function pollTelemetry(): Promise<void> {
-      if (document.visibilityState !== "visible" || !navigator.onLine || pollInFlight) return;
+      if (!navigator.onLine || pollInFlight) return;
       pollInFlight = true;
       lastPollAt = Date.now();
       try {
@@ -311,8 +311,8 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
       }
     }
 
-    // Returning to a tab that was hidden longer than one interval otherwise
-    // shows a stale chain count until the next tick fires.
+    // Browsers may throttle timers in a background tab. A focus event catches
+    // up immediately when that throttling delayed the normal scheduler.
     function refreshOnFocus(): void {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastPollAt < pollSeconds * 1_000) return;
@@ -666,6 +666,9 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
         <ServiceStateDrawer
           telemetry={liveTelemetry}
           database={database}
+          autoRefresh={preferences.autoRefresh}
+          refreshIntervalSeconds={preferences.refreshIntervalSeconds}
+          chainRunning={chainRunning}
           syncing={syncing}
           onSync={() => void syncWorkspace()}
           onClose={() => setOpenPanel(null)}

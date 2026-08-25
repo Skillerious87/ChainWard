@@ -68,10 +68,10 @@ Chainward supports two storage modes:
   storage. To start the included Docker service, run `npm run db:local`, add the
   copied value to `.env.local`, run `npm run db:push`, and restart Chainward.
 
-**Settings → Live operations** controls visible-tab refresh frequency and the
-active-chain timeout warning. Background refresh pauses while the tab is hidden
-or offline; active chains use an uncached 10-second check and manual refresh
-also requests a fresh Torn chain snapshot.
+**Settings → Live operations** controls automatic refresh frequency and the
+active-chain timeout warning. Background refresh continues while Chainward
+remains open and online; active chains use an uncached 5-second check, and
+manual refresh also requests a fresh Torn chain snapshot.
 
 ## Member notifications
 
