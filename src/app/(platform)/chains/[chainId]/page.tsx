@@ -85,8 +85,8 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
         <dl className="snapshot-facts">
           <div><dt>Chain record</dt><dd>#{report.id}</dd></div>
           <div><dt>Faction record</dt><dd>#{report.factionId}</dd></div>
-          <div className="snapshot-fact--wide"><dt>Started</dt><dd>{formatDateTime(report.startedAt)}</dd></div>
-          <div className="snapshot-fact--wide"><dt>Completed</dt><dd>{formatDateTime(report.endedAt)}</dd></div>
+          <div className="snapshot-fact--wide"><dt>Started</dt><dd><time dateTime={new Date(report.startedAt * 1_000).toISOString()}><span>{formatDate(report.startedAt)}</span><small>{formatTime(report.startedAt)} TCT</small></time></dd></div>
+          <div className="snapshot-fact--wide"><dt>Completed</dt><dd><time dateTime={new Date(report.endedAt * 1_000).toISOString()}><span>{formatDate(report.endedAt)}</span><small>{formatTime(report.endedAt)} TCT</small></time></dd></div>
           <div><dt>Distinct targets</dt><dd>{report.targetCount.toLocaleString()}</dd></div>
           <div><dt>Respect per hit</dt><dd>{respectPerHit.toFixed(2)}</dd></div>
         </dl>
@@ -96,11 +96,10 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
         </footer>
       </section>
     </div>
-    <ContributionTable members={report.contributions} title="Member rewards and final contributions" emptyMessage={result.message} rewards={preview.available ? memberRewards : undefined} rewardUnit={preview.rewardUnit} payoutStatus={settlement?.status ?? null} />
+    <ContributionTable members={report.contributions} title="Member rewards and final contributions" emptyMessage={result.message} rewards={preview.available ? memberRewards : undefined} rewardUnit={preview.rewardUnit} payoutStatus={settlement?.status ?? null} showRewards rewardMessage={preview.message} />
   </div>;
 }
 
 function formatDate(timestamp: number): string { return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(timestamp * 1_000); }
 function formatTime(timestamp: number): string { return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(timestamp * 1_000); }
-function formatDateTime(timestamp: number): string { return `${formatDate(timestamp)}, ${formatTime(timestamp)} TCT`; }
 function formatDuration(seconds: number): string { const hours = Math.floor(seconds / 3_600); const minutes = Math.floor((seconds % 3_600) / 60); return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`; }

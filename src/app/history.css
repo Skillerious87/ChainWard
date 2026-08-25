@@ -135,6 +135,24 @@
 .reward-calculation-summary .reward-amount__copy small { text-align: left; }
 .history-table .reward-column,
 .contribution-table .reward-column { width: 192px; min-width: 192px; }
+.contribution-reward-notice {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(245, 185, 76, .2);
+  background: linear-gradient(90deg, rgba(245, 185, 76, .065), rgba(245, 185, 76, .015));
+}
+.contribution-reward-notice > span { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(245, 185, 76, .28); border-radius: 9px; color: var(--warning); }
+.contribution-reward-notice > div { display: flex; min-width: 0; flex-direction: column; }
+.contribution-reward-notice strong { color: #ead8ae; font-size: 12px; font-weight: 660; }
+.contribution-reward-notice small { margin-top: 2px; color: #9e9178; font-size: 11px; line-height: 1.4; }
+.contribution-reward-notice > a { display: inline-flex; min-height: 34px; align-items: center; padding: 0 11px; border: 1px solid rgba(245, 185, 76, .3); border-radius: 8px; color: #e6c987; font-size: 11px; font-weight: 650; white-space: nowrap; transition: border-color 150ms ease, background 150ms ease; }
+.contribution-reward-notice > a:hover { border-color: rgba(245, 185, 76, .48); background: rgba(245, 185, 76, .07); }
+.reward-pending { display: inline-flex; min-width: 150px; flex-direction: column; align-items: flex-end; }
+.reward-pending strong { color: #b7a987 !important; font-size: 11.5px !important; }
+.reward-pending small { margin-top: 2px; color: #746e60; font-size: 10.5px; }
 .chain-history-page .history-reward-empty {
   display: inline-flex;
   align-items: center;
@@ -256,8 +274,10 @@
    The source record is intentionally compact enough to sit beside the ranked
    chart without inheriting its height. Verification reads as a small trust
    summary, rather than a generic green outline pill. */
-.report-grid { align-items: start; }
+.report-grid { grid-template-columns: minmax(0, 1.45fr) minmax(340px, .8fr); align-items: start; }
 .snapshot-card {
+  container-name: report-provenance;
+  container-type: inline-size;
   align-self: start;
   overflow: hidden;
   border-color: #2f3b35;
@@ -345,6 +365,9 @@
 .snapshot-card dt { color: #718078; font-family: var(--font-inter), Inter, "Segoe UI", sans-serif; font-size: 9.5px; font-weight: 680; letter-spacing: .55px; text-transform: uppercase; }
 .snapshot-card dd { margin: 5px 0 0; overflow: hidden; color: #dfe6e2; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .snapshot-card .snapshot-fact--wide dd { font-size: 11.5px; }
+.snapshot-card .snapshot-fact--wide time { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.snapshot-card .snapshot-fact--wide time span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snapshot-card .snapshot-fact--wide time small { color: #77867d; font-size: 10px; font-weight: 560; letter-spacing: .2px; }
 .snapshot-card__footer {
   display: grid;
   grid-template-columns: 31px minmax(0, 1fr);
@@ -381,6 +404,10 @@
   .report-overview > div:nth-child(-n+3) { border-bottom: 1px solid var(--border); }
 }
 
+@media (max-width: 1180px) {
+  .report-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 860px) {
   .history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .history-summary > div { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -400,6 +427,20 @@
   .snapshot-card .snapshot-facts { grid-template-columns: 1fr; }
   .snapshot-card .snapshot-facts > div { min-height: 60px; border-right: 0; border-bottom: 1px solid #26312c !important; }
   .snapshot-card .snapshot-facts > div:last-child { border-bottom: 0 !important; }
+}
+
+/* The provenance panel can be a narrow grid child on desktop, so its internal
+   breakpoint follows the card itself rather than the browser viewport. */
+@container report-provenance (max-width: 380px) {
+  .snapshot-card__header { align-items: flex-start; flex-direction: column; }
+  .snapshot-verification { margin-left: 49px; }
+  .snapshot-assurance { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; padding-block: 9px; }
+  .snapshot-assurance > span:last-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 680px) {
+  .contribution-reward-notice { grid-template-columns: 34px minmax(0, 1fr); }
+  .contribution-reward-notice > a { grid-column: 1 / -1; justify-content: center; min-height: 42px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
