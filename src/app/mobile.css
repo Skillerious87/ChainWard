@@ -473,3 +473,352 @@
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) {
   .platform-route-stage, .reward-editor__pane, .service-drawer__panel { animation: none; }
 }
+
+/* Mobile layout hardening ---------------------------------------------------
+   The route styles above decide which information belongs together. This
+   final layer deals with the less predictable part of a real phone: long
+   faction names, identifiers, translated dates, large reward totals, and
+   narrow 320px app windows. Content may grow vertically, but it must never
+   widen a card or the document. */
+@media (max-width: 760px) {
+  .platform-route-stage {
+    --mobile-card-padding: clamp(14px, 4vw, 18px);
+    overflow-x: clip;
+  }
+
+  /* Give every common composition boundary an explicit, shrinkable inline
+     size. Wide tables are intentionally omitted and keep scrolling inside
+     `.table-scroll`. */
+  .platform-route-stage :where(
+    .page-header,
+    .page-header__actions,
+    .section-heading,
+    .dashboard-greeting,
+    .dashboard-grid,
+    .analytics-dashboard-grid,
+    .analytics-dashboard-grid--secondary,
+    .admin-grid,
+    .admin-records-grid,
+    .report-grid,
+    .member-report-grid,
+    .member-report-context,
+    .payout-analysis-grid,
+    .payout-support-workspace,
+    .professional-settings-layout,
+    .panel,
+    .data-section,
+    .member-report,
+    .reward-console,
+    .settings-console,
+    .admin-console,
+    .unlock-workspace,
+    .unlock-access-workspace,
+    .payout-route-view
+  ) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .platform-route-stage :where(
+    .page-header,
+    .page-header__actions,
+    .section-heading,
+    .dashboard-greeting,
+    .dashboard-grid,
+    .analytics-dashboard-grid,
+    .analytics-dashboard-grid--secondary,
+    .admin-grid,
+    .admin-records-grid,
+    .report-grid,
+    .member-report-grid,
+    .member-report-context,
+    .history-summary,
+    .report-overview,
+    .analytics-stat-grid,
+    .analytics-source-strip,
+    .access-stat-grid,
+    .payout-intelligence__kpis,
+    .payout-recipient-summary,
+    .payout-correction-summary,
+    .member-report-facts,
+    .member-award-showcase__grid,
+    .unlock-licence-facts,
+    .unlock-capability-grid,
+    .member-activity-stats,
+    .settings-assurance-grid,
+    .settings-option-grid--notifications
+  ) > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Ordinary prose and identifiers wrap naturally. This does not touch the
+     intentionally single-line table cells or bottom-navigation labels. */
+  .platform-route-stage :where(h1, h2, h3, h4, p, li, dt, dd, label, legend, code) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  .platform-route-stage :where(input, select, textarea) { min-width: 0; max-width: 100%; }
+  .platform-route-stage .button:not(.icon-button) {
+    max-width: 100%;
+    justify-content: center;
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;
+  }
+
+  /* Desktop ellipsis is useful in a dense dashboard, but on a phone it hides
+     the very value the card exists to communicate. Allow these cards to gain
+     height and show the complete value and supporting copy. */
+  :is(
+    .member-report-facts strong,
+    .member-report-facts p,
+    .analytics-stat-grid p,
+    .analytics-source-strip small,
+    .access-stat-grid p,
+    .access-workspace-nav button small,
+    .operations-signal strong,
+    .operations-signal p,
+    .payout-intelligence__kpis strong,
+    .payout-intelligence__kpis em,
+    .payout-overview-links small,
+    .payout-recipient-summary strong,
+    .payout-recipient-summary em,
+    .payout-correction-summary strong,
+    .payout-correction-summary em,
+    .reward-console__meta dd,
+    .reward-editor__identity h2,
+    .reward-ladder__label strong,
+    .snapshot-card dd,
+    .snapshot-card .snapshot-fact--wide time span,
+    .unlock-access-status em,
+    .unlock-access-shortcuts strong,
+    .unlock-licence-facts strong,
+    .unlock-active-grid strong,
+    .member-activity-stats p,
+    .member-activity-audit article > div > p,
+    .licence-tier-card__description strong,
+    .connection-confirmation__identity dd,
+    .connection-confirmation__capabilities strong,
+    .service-summary__facts dd,
+    .about-dialog__facts dd
+  ) {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  :is(
+    .postgres-url-preview code,
+    .postgres-test-result small,
+    .postgres-steps-panel li code,
+    .upgrade-reference-row code,
+    .upgrade-reservation__reference code,
+    .unlock-reservation__reference code,
+    .payment-record-grid dd,
+    .access-audit-event__meta code
+  ) {
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* Member report: keep identity, dates, citations, and ownership visible. */
+  .member-report-hero__identity > div { min-width: 0; }
+  .member-report-hero__identity h1 { overflow-wrap: anywhere; }
+  .member-report-hero__source > span { min-width: 0; flex: 1 1 calc(100% - 24px); }
+  .member-report-hero__source time { margin-left: 22px; white-space: normal; }
+  .member-award-showcase__grid > article > div,
+  .member-award-showcase__grid header { min-width: 0; }
+  .member-award-showcase__grid header { flex-wrap: wrap; }
+  .member-award-showcase__grid time { white-space: normal; }
+  .member-award-showcase__grid footer { align-items: flex-start; flex-wrap: wrap; }
+  .member-award-showcase__grid footer button { min-height: 36px; margin: -8px -6px -8px auto; }
+  .member-report-entry footer { line-height: 1.5; overflow-wrap: anywhere; }
+  .member-report-context dl > div,
+  .member-report-governance li { align-items: flex-start; flex-wrap: wrap; }
+  .member-report-context dd,
+  .member-report-governance li strong { min-width: min(145px, 100%); flex: 1; overflow-wrap: anywhere; }
+
+  /* Chain provenance and rewards: values wrap within the card while actual
+     ledger tables retain their bounded horizontal scroller. */
+  .snapshot-card__title,
+  .snapshot-card__title > div,
+  .snapshot-card__footer > div,
+  .reward-calculation-summary header > div { min-width: 0; }
+  .snapshot-verification,
+  .snapshot-assurance > span,
+  .contribution-reward-notice > a { max-width: 100%; white-space: normal; }
+  .snapshot-card__footer { align-items: flex-start; }
+  .reward-calculation-summary { min-width: 0; }
+  .reward-calculation-summary header { min-width: 0; }
+  .reward-ladder__amount { max-width: 45%; white-space: normal; overflow-wrap: anywhere; }
+
+  /* Operational rows use a readable stacked action layout instead of letting
+     a right-hand button consume most of the label column. */
+  .access-assignment-list article { grid-template-columns: 34px minmax(0, 1fr); }
+  .access-assignment-list .button { grid-column: 2; grid-row: auto; width: 100%; }
+  .access-bulk-impact { white-space: normal; }
+  .role-policy-card { grid-template-columns: 38px minmax(0, 1fr); }
+  .role-policy-card__count { grid-column: 2; justify-self: start; }
+  .role-policy-card__permissions li { max-width: 100%; white-space: normal; }
+  .access-audit-event__headline { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .access-audit-event__headline time { white-space: normal; }
+
+  /* Footer controls remain full-size touch targets without compressing their
+     status text into an unreadable sliver. */
+  .table-footer,
+  .payout-register-footer {
+    min-width: 0;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    padding: 13px var(--mobile-card-padding);
+    line-height: 1.45;
+  }
+  .table-footer .pagination,
+  .payout-register-footer .pagination { width: 100%; flex-wrap: wrap; justify-content: space-between; }
+  .table-footer .pagination button,
+  .payout-register-footer .pagination button { flex: 1 1 100px; }
+  .payout-register-footer .pagination > span { flex: 0 0 auto; align-self: center; }
+
+  .payout-intelligence__activity { max-width: 100%; white-space: normal; }
+  .payout-intelligence__activity strong,
+  .payout-register-heading__source,
+  .payout-chain-analysis > header > a,
+  .payout-correction-toolbar > span { max-width: 100%; white-space: normal; }
+  .payout-chain-analysis > header { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .payout-recipient__totals { min-width: 0; }
+  .payout-recipient__totals strong,
+  .payout-recipient__totals small { white-space: normal; overflow-wrap: anywhere; }
+
+  .settings-console .professional-settings-view__header > div,
+  .settings-console .settings-cycle,
+  .quiet-hours-grid,
+  .settings-option-grid { min-width: 0; max-width: 100%; }
+  .settings-alert > div { min-width: 0; }
+
+  .admin-masthead__identity,
+  .admin-masthead__side,
+  .access-intelligence > div { min-width: 0; max-width: 100%; }
+  .access-intelligence > dl { width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .access-intelligence > dl > div { min-width: 0; padding-inline: 6px; }
+  .access-intelligence dd { overflow-wrap: anywhere; }
+
+  .unlock-access-hero__copy,
+  .unlock-licence-record > header > div,
+  .unlock-access-suite > header > div,
+  .unlock-access-suite > footer p { min-width: 0; max-width: 100%; }
+  .unlock-licence-record > header > span,
+  .unlock-access-suite > header > span,
+  .unlock-access-suite > footer b,
+  .unlock-included-panel > footer em { max-width: 100%; white-space: normal; }
+}
+
+@media (max-width: 430px) {
+  .page-content { padding-inline: 12px; }
+  .page-stack { gap: 14px; }
+
+  .platform-route-stage :where(.panel, .data-section) { border-radius: 10px; }
+  .platform-route-stage :where(.page-header h1, .report-header h1) {
+    font-size: clamp(25px, 8vw, 31px);
+    letter-spacing: -.8px;
+    line-height: 1.08;
+  }
+
+  .page-header__actions,
+  .dashboard-greeting__actions,
+  .member-report-hero__actions { display: grid; grid-template-columns: 1fr; }
+  .page-header__actions > *,
+  .dashboard-greeting__actions > *,
+  .member-report-hero__actions > * { width: 100%; }
+
+  .service-summary__facts { grid-template-columns: 1fr; }
+  .service-summary__facts > div { border-right: 0; }
+
+  .member-report-hero { padding-inline: 14px; }
+  .member-report-hero__source { margin-inline: -14px; padding-inline: 14px; }
+  .member-report-hero__source time { margin-left: 0; }
+  .member-award-showcase,
+  .member-report-journal > header,
+  .member-report-context > section { padding: 14px; }
+  .member-report-timeline { padding-right: 14px; padding-left: 12px; }
+  .member-report-timeline::before { left: 30px; }
+  .member-report-entry { grid-template-columns: 36px minmax(0, 1fr); }
+  .member-report-context dl > div,
+  .member-report-governance li { flex-direction: column; gap: 4px; }
+  .member-report-context dd,
+  .member-report-governance li strong { min-width: 0; width: 100%; text-align: left; }
+
+  .snapshot-verification { margin-left: 0; }
+  .snapshot-card__title { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; }
+  .snapshot-card__footer { grid-template-columns: 31px minmax(0, 1fr); }
+  .reward-calculation-summary { padding-inline: 14px; }
+
+  .payout-ledger-filters { grid-template-columns: 1fr; }
+  .payout-filter-reset { width: 100%; }
+  .payout-recipient-view .payout-recipient {
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: flex-start;
+    row-gap: 8px;
+    padding-block: 12px;
+  }
+  .payout-recipient-view .payout-recipient__totals {
+    grid-column: 2;
+    width: 100%;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .payout-register-footer .pagination > span { order: -1; width: 100%; text-align: center; }
+  .payout-register-footer .pagination button { flex-basis: calc(50% - 5px); }
+
+  .access-intelligence > dl { grid-template-columns: 1fr; }
+  .access-intelligence > dl > div { border-right: 0; border-bottom: 1px solid #303941; }
+  .access-intelligence > dl > div:last-child { border-bottom: 0; }
+  .access-change-preview dl > div { grid-template-columns: 1fr; }
+  .access-change-preview dt { padding-top: 0; }
+  .admin-console .admin-procedure ol { grid-template-columns: 1fr; }
+  .admin-console .admin-procedure li { border-right: 0; border-bottom: 1px solid #2c353d; }
+  .admin-console .admin-procedure li:last-child { border-bottom: 0; }
+
+  .settings-console .professional-settings-view__header { grid-template-columns: 38px minmax(0, 1fr); padding-inline: 14px; }
+  .professional-settings-view__scroll { padding: 14px; }
+  .settings-console .settings-cycle { padding-inline: 14px; }
+
+  .unlock-access-hero,
+  .unlock-licence-record > header,
+  .unlock-access-suite > header { padding-inline: 14px; }
+  .unlock-access-suite > footer { grid-template-columns: 1fr; padding: 14px; }
+  .unlock-access-suite > footer > span,
+  .unlock-access-suite > footer p,
+  .unlock-access-suite > footer b { grid-column: 1; }
+  .unlock-capability-grid > a { grid-template-columns: 36px minmax(0, 1fr); padding-inline: 14px; }
+  .unlock-capability-grid > a > svg { display: none; }
+  .unlock-capability-grid em { grid-column: 1 / -1; }
+}
+
+@media (max-width: 360px) {
+  .topbar { padding-inline: 8px; gap: 5px; }
+  .topbar__left,
+  .topbar__right { gap: 5px; }
+  .faction-selector { padding-inline: 4px; }
+  .faction-selector__copy strong { max-width: 28vw; }
+
+  .page-content { padding-inline: 10px; }
+  .reward-tier-row { grid-template-columns: 1fr; }
+  .reward-tier-row > label,
+  .reward-tier-row .tier-amount,
+  .professional-switch { grid-column: 1; }
+  .tier-order { grid-area: 1 / 1; }
+  .tier-actions { grid-area: 1 / 1; justify-self: end; }
+  .connection-confirmation__identity { grid-template-columns: 1fr; }
+  .connection-confirmation__identity > div { border-right: 0; border-top: 1px solid #2b3731; }
+  .connection-confirmation__identity > div:first-child { border-top: 0; }
+  .connection-confirmation__identity > div:last-child { grid-column: 1; }
+}
