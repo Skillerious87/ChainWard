@@ -255,6 +255,7 @@ async function run() {
     check("chain report renders the ranked contributor chart", chainReport.html.includes("contributor-chart__rank") && chainReport.html.includes("contributor-chart__bar"));
     check("chain report states respect per hit", chainReport.html.includes("Respect per hit"));
     check("chain report explains its verified source boundary", chainReport.html.includes("Source integrity verified") && chainReport.html.includes("Schema passed") && chainReport.html.includes("Faction matched"));
+    check("chain report shows calculated rewards for contributors", chainReport.html.includes("Member reward") && chainReport.html.includes("5 Xanax, Top, paid"));
 
     const activeAccess = await getRoute("/unlock", session.cookie);
     check("active licence renders as an entitlement dashboard", activeAccess.html.includes("unlock-access-view") && activeAccess.html.includes("Licence details") && activeAccess.html.includes("No renewal required"));
