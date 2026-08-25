@@ -17,9 +17,9 @@ import {
   UserRoundCog,
 } from "lucide-react";
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Spinner } from "@/components/ui/spinner";
+import { enterConnectedWorkspace } from "./workspace-navigation";
 
 type ConnectionResult = {
   player: { id: number; name: string };
@@ -39,7 +39,6 @@ type ConnectionError = { message: string; code: string | null };
 const REQUIRED_SELECTIONS = ["key/info", "user/basic", "faction/basic", "chain", "chains", "chainreport", "members"] as const;
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
-  const router = useRouter();
   const confirmationHeadingRef = useRef<HTMLHeadingElement>(null);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,6 +62,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       const response = await fetch("/api/onboarding/validate-key", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
         body: JSON.stringify({ apiKey, remember }),
       });
       const payload: unknown = await response.json();
@@ -75,7 +76,6 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       formElement.reset();
       setVisible(false);
       setResult(payload);
-      router.prefetch(connectionNextPath(payload));
     } catch (cause: unknown) {
       setError({
         message: cause instanceof Error ? cause.message : "The key could not be validated.",
@@ -94,12 +94,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       const response = await fetch("/api/onboarding/offline-session", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
         body: JSON.stringify({ identity }),
       });
       const payload: unknown = await response.json();
       if (!response.ok || !isConnectionResult(payload)) throw new Error(isErrorPayload(payload) ? payload.error : "The offline session could not be opened.");
       setResult(payload);
-      router.prefetch(payload.nextPath ?? (identity === "owner" ? "/admin" : "/unlock"));
     } catch (cause) {
       setError({ message: cause instanceof Error ? cause.message : "The offline session could not be opened.", code: null });
     } finally {
@@ -152,7 +153,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
           {error && <div className="form-error connection-confirmation__error" role="alert"><AlertTriangle size={17} /><div><strong>Session could not be cleared</strong><span>{error.message}</span></div></div>}
 
           <div className="connection-confirmation__actions">
-            <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); router.push(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open workspace <ArrowRight size={16} /></>}</button>
+            <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); enterConnectedWorkspace(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open workspace <ArrowRight size={16} /></>}</button>
             <button type="button" className="connection-confirmation__reset" disabled={loading} onClick={() => void resetConnection()}>{loading ? <Spinner size={14} label="Clearing connection" /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
           </div>
         </section>
