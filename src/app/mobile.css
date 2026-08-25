@@ -186,10 +186,26 @@
   .unlock-status-reference button,
   .login-card .connection-confirmation__reset,
   .welcome-nav__workspace,
-  .data-table .sort-button {
+  .data-table .sort-button,
+  .platform-route-stage .torn-user-link,
+  .platform-route-stage a.chain-id,
+  .platform-route-stage .history-reward-empty,
+  .platform-route-stage .payout-sort-button,
+  .platform-route-stage .section-heading > a,
+  .platform-route-stage .back-link,
+  .platform-route-stage .reward-storage-pill,
+  .platform-route-stage .payout-chain-analysis a,
+  .platform-route-stage .payout-corrections__meta a,
+  .platform-route-stage .faction-command-hero__identity a,
+  .platform-route-stage .unlock-licence-fact--reference button {
     min-width: 44px;
     min-height: 44px;
   }
+  .platform-route-stage :is(.torn-user-link, a.chain-id, .history-reward-empty, .section-heading > a, .back-link, .reward-storage-pill, .payout-chain-analysis a, .payout-corrections__meta a, .faction-command-hero__identity a) {
+    display: inline-flex;
+    align-items: center;
+  }
+  .platform-route-stage .payout-register-footer .pagination button { min-height: 44px; }
   .toast > button,
   .identifier-cell button,
   .payout-ledger-open a,
@@ -413,6 +429,19 @@
     overflow-y: auto;
     border-radius: 12px;
   }
+
+  /* Trend badges must shrink with the card instead of preserving their
+     desktop max-content width and clipping the best-chain readout. */
+  .chain-trend__readouts {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chain-trend__shift,
+  .chain-trend__best { min-width: 0; flex-wrap: wrap; }
+  .chain-trend__shift small,
+  .chain-trend__best small { min-width: 0; overflow-wrap: anywhere; }
 }
 
 /* A phone-sized activity register becomes a set of compact, labelled records.
@@ -636,6 +665,26 @@
   .login-topbar { min-height: calc(64px + var(--mobile-safe-area-top)); padding-top: var(--mobile-safe-area-top); }
   .welcome-footer,
   .login-footer { padding-bottom: calc(24px + var(--mobile-safe-area-bottom)); }
+  .welcome-nav > a:first-child,
+  .login-topbar > a:first-child,
+  .login-topbar__back,
+  .welcome-assurance__intro > a,
+  .api-key-field > small a,
+  .connect-requirements summary,
+  .offline-test-entry summary {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .welcome-nav > a:first-child,
+  .login-topbar > a:first-child,
+  .login-topbar__back,
+  .welcome-assurance__intro > a,
+  .api-key-field > small a {
+    display: inline-flex;
+    align-items: center;
+  }
+  .connect-requirements summary,
+  .offline-test-entry summary { margin-block: -12px; padding-block: 12px; }
   .not-found-page {
     padding-right: max(14px, var(--mobile-safe-area-right));
     padding-bottom: calc(20px + var(--mobile-safe-area-bottom));

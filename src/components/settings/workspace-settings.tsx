@@ -294,7 +294,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
       <main className="professional-settings-view">
         <header className="professional-settings-view__header">
           <span><ActiveIcon size={20} /></span>
-          <div><h2>{active.label}</h2><p>{active.description}</p></div>
+          <div><h1>{active.label}</h1><p>{active.description}</p></div>
           <em className="settings-view-step">{activeIndex + 1} <i>/</i> {views.length}</em>
         </header>
         <div className="professional-settings-view__scroll">

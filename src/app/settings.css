@@ -97,7 +97,7 @@
   color: var(--accent);
 }
 .settings-console .professional-settings-view__header > div { min-width: 0; }
-.settings-console .professional-settings-view__header h2 { margin-top: 0; font-size: 20px; font-weight: 650; letter-spacing: -.4px; }
+.settings-console .professional-settings-view__header h1 { margin-top: 0; font-size: 20px; font-weight: 650; letter-spacing: -.4px; }
 .settings-console .professional-settings-view__header p { margin-top: 3px; color: var(--text-muted); font-size: 12.5px !important; }
 .settings-view-step {
   flex: 0 0 auto;

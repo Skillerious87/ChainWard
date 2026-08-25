@@ -9,7 +9,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { Spinner } from "@/components/ui/spinner";
 import { TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
-import { createPaymentReference, licensePayment, licensePlans, type LicensePlanId } from "@/lib/licensing/pricing";
+import { licensePayment, licensePlans, type LicensePlanId } from "@/lib/licensing/pricing";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 
 const licenceBenefits = [
@@ -19,16 +19,16 @@ const licenceBenefits = [
   "Every approved member, with no seat limits",
 ] as const;
 
-export function UnlockWorkspace({ factionId, factionName, access }: { factionId: number | null; factionName: string | null; access: FactionAccessSummary }) {
+export function UnlockWorkspace({ factionId, factionName, access, paymentReference = null }: { factionId: number | null; factionName: string | null; access: FactionAccessSummary; paymentReference?: string | null }) {
   if (access.state === "active") return <ActiveAccess access={access} factionName={factionName} />;
   if (access.state === "pending") return <PendingAccess access={access} factionName={factionName} />;
-  return <InactiveAccess factionId={factionId} factionName={factionName} />;
+  return <InactiveAccess factionId={factionId} factionName={factionName} paymentReference={paymentReference} />;
 }
 
-function InactiveAccess({ factionId, factionName }: { factionId: number | null; factionName: string | null }) {
+function InactiveAccess({ factionId, factionName, paymentReference }: { factionId: number | null; factionName: string | null; paymentReference: string | null }) {
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<LicensePlanId>("quarterly");
-  const [reference] = useState(() => factionId ? createPaymentReference(factionId) : null);
+  const reference = paymentReference;
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const selected = licensePlans.find((plan) => plan.id === selectedPlan) ?? licensePlans[1];

@@ -274,7 +274,11 @@ function TimeoutRing({
   warmup: boolean;
 }) {
   const radius = 54;
-  const circumference = 2 * Math.PI * radius;
+  // Browser and server JavaScript engines can serialize the final few bits of
+  // trigonometric results differently. Stable SVG coordinates avoid a noisy
+  // hydration mismatch without changing anything visible in the dial.
+  const svgNumber = (value: number) => Number(value.toFixed(6));
+  const circumference = svgNumber(2 * Math.PI * radius);
   const fraction = windowSeconds > 0 ? Math.max(0, Math.min(1, seconds / windowSeconds)) : 0;
   const tone = seconds <= 0 ? "expired" : seconds < 60 ? "critical" : seconds < 120 ? "warning" : "safe";
   const label = tone === "expired" ? "Chain dropped" : tone === "critical" ? "Act now" : tone === "warning" ? "Watch window" : "Healthy";
@@ -306,10 +310,10 @@ function TimeoutRing({
               return <line
                 key={index}
                 className={major ? "timeout-ring__mark timeout-ring__mark--major" : "timeout-ring__mark"}
-                x1={64 + inner * Math.cos(angle)}
-                y1={64 + inner * Math.sin(angle)}
-                x2={64 + 44 * Math.cos(angle)}
-                y2={64 + 44 * Math.sin(angle)}
+                x1={svgNumber(64 + inner * Math.cos(angle))}
+                y1={svgNumber(64 + inner * Math.sin(angle))}
+                x2={svgNumber(64 + 44 * Math.cos(angle))}
+                y2={svgNumber(64 + 44 * Math.sin(angle))}
               />;
             })}
           </g>
@@ -320,21 +324,21 @@ function TimeoutRing({
             r={radius}
             stroke="url(#timeout-ring-sweep)"
             strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - fraction)}
+            strokeDashoffset={svgNumber(circumference * (1 - fraction))}
           />
           {/* A head on the sweep reads as a clock hand, so movement is obvious
               even when a single second barely changes the arc. */}
           {fraction > 0 && <>
             <circle
               className="timeout-ring__halo"
-              cx={64 + radius * Math.cos(fraction * 2 * Math.PI)}
-              cy={64 + radius * Math.sin(fraction * 2 * Math.PI)}
+              cx={svgNumber(64 + radius * Math.cos(fraction * 2 * Math.PI))}
+              cy={svgNumber(64 + radius * Math.sin(fraction * 2 * Math.PI))}
               r={8}
             />
             <circle
               className="timeout-ring__head"
-              cx={64 + radius * Math.cos(fraction * 2 * Math.PI)}
-              cy={64 + radius * Math.sin(fraction * 2 * Math.PI)}
+              cx={svgNumber(64 + radius * Math.cos(fraction * 2 * Math.PI))}
+              cy={svgNumber(64 + radius * Math.sin(fraction * 2 * Math.PI))}
               r={3.4}
             />
           </>}
