@@ -33,17 +33,23 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
+  applicationName: "Chainward",
   title: {
     default: "Chainward · Faction chain operations",
     template: "%s · Chainward",
   },
   description:
     "A third-party Torn faction chain tracker, reward engine, and payout operations platform.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Chainward",
+  },
 };
 
 export const viewport: Viewport = {
   colorScheme: "dark",
-  themeColor: "#0b0d0f",
+  themeColor: "#080d0f",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -79,7 +79,39 @@
   /* A single stray wide child otherwise scrolls the whole document sideways.
      `clip` rather than `hidden`: `hidden` makes this element a scroll container
      and would stop the sticky topbar from sticking. */
-  body { overflow-x: clip; max-width: 100%; }
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  /* Every route gets a definite inline containing block. Flex and grid items
+     default to their min-content width, so a long identifier or desktop table
+     can otherwise widen an ancestor even when the table itself is scrollable. */
+  .app-shell,
+  .app-main,
+  .app-scroll,
+  .platform-route-stage,
+  .page-content,
+  .page-stack,
+  .welcome-page,
+  .connect-page,
+  .login-page,
+  .onboarding-page {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .app-scroll,
+  .platform-route-stage,
+  .page-content { overflow-x: clip; }
+  .platform-route-stage > *,
+  .page-stack > *,
+  :is(.dashboard-grid,.analytics-dashboard-grid,.admin-grid,.unlock-workspace,.professional-settings-layout) > * {
+    min-width: 0;
+    max-width: 100%;
+  }
   .app-shell,
   .app-main { min-height: 100dvh; }
 
@@ -214,6 +246,15 @@
   .dialog__actions { flex-wrap: wrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
   .dialog__actions .button { flex: 1 1 132px; }
 
+  /* Wide data remains intentionally swipeable inside its own boundary while
+     the document and route canvas stay fixed to the viewport. */
+  .table-scroll,
+  :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+  }
   .table-scroll { overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
   :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) { scroll-snap-type: inline proximity; overscroll-behavior-inline: contain; }
   :is(.member-activity-tabs,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) button,
