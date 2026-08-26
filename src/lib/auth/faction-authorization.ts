@@ -3,15 +3,19 @@ import "server-only";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { requireActiveFactionLicense } from "@/lib/licensing/guards";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
+import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getCurrentActor } from "./current-actor";
 import { getFactionAccessWorkspace } from "./faction-access-store";
 import { AuthorizationError, requirePermission, type FactionRole, type Permission } from "./authorization";
 import { isPlatformOwner } from "./platform-owner";
 
 export async function requireFactionPermission(permission: Permission) {
-  const [actor, telemetry] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry()]);
-  if (!actor.tornUserId || telemetry.source !== "live" || !telemetry.faction) {
+  const [actor, telemetry, connection] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getConfiguredTornConnection()]);
+  if (!actor.tornUserId || telemetry.source !== "live" || !telemetry.faction || !connection) {
     throw new AuthorizationError("Connect a verified Torn faction before performing this action.");
+  }
+  if (connection.tornUserId !== actor.tornUserId || connection.factionId !== telemetry.faction.id) {
+    throw new AuthorizationError("Your verified Torn player and faction no longer match this connection. Reconnect before continuing.");
   }
   await requireActiveFactionLicense(telemetry.faction.id);
   if (isPlatformOwner(actor)) return { actor, faction: telemetry.faction, role: "OWNER" as const };

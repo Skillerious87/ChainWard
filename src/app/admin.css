@@ -332,6 +332,8 @@
 .admin-procedure ol small { font-size: 11.5px !important; line-height: 1.55; }
 .admin-procedure ol strong { font-size: 12.5px; }
 .license-register-list article > div strong { font-size: 12.5px; }
+.license-register-list article.license-register-row--expiring { background: linear-gradient(90deg, rgba(245,185,76,.07), transparent 44%); box-shadow: inset 2px 0 var(--warning); }
+.license-register-row--expiring > div:last-child small { display: inline-flex; align-items: center; gap: 5px; color: var(--warning); }
 .license-register-list article small { font-size: 11px !important; line-height: 1.45; }
 .license-register-list code {
   padding: 3px 7px;

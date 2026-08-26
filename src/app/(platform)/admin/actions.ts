@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requirePlatformOwner } from "@/lib/auth/platform-owner";
 import { licensePlans } from "@/lib/licensing/pricing";
+import { getLicenseRenewalNotice, renewalExpiry } from "@/lib/licensing/renewal";
 import { reviewLocalAccessRequest } from "@/lib/licensing/local-license-store";
 import { parseRequestMetadata, type AccessRequestViewStatus, type TornIdentityView } from "@/lib/licensing/request-store";
 
@@ -59,14 +60,28 @@ async function reviewPostgresAccessRequest(
       const meta = parseRequestMetadata(existing.customerNote);
       const plan = licensePlans.find((item) => item.id === meta.planId);
       if (!plan) throw new Error("The stored request does not contain a recognized licence plan.");
-      const conflicting = await tx.factionLicense.findFirst({ where: { factionId: existing.factionId, status: "ACTIVE", reference: { not: existing.reference }, OR: [{ expiresAt: null }, { expiresAt: { gt: reviewedAt } }] } });
-      if (conflicting) throw new Error(`Faction access is already active under ${conflicting.reference}. Resolve that licence before approving another.`);
-      const expiresAt = plan.durationDays === null ? null : new Date(reviewedAt.getTime() + plan.durationDays * 86_400_000);
-      await tx.factionLicense.upsert({
-        where: { reference: existing.reference },
-        update: { status: "ACTIVE", term: plan.licenseTerm, issuedAt: reviewedAt, expiresAt, approvedById: reviewer.id, paymentNotes: `Manually matched ${plan.itemQuantity} ${plan.itemName} to ${existing.reference}.`, internalNotes: parsed.note || null },
-        create: { factionId: existing.factionId, status: "ACTIVE", term: plan.licenseTerm, reference: existing.reference, issuedAt: reviewedAt, expiresAt, approvedById: reviewer.id, paymentNotes: `Manually matched ${plan.itemQuantity} ${plan.itemName} to ${existing.reference}.`, internalNotes: parsed.note || null },
+      const currentLicense = await tx.factionLicense.findFirst({ where: { factionId: existing.factionId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: reviewedAt } }] }, orderBy: { issuedAt: "desc" } });
+      const renewal = Boolean(currentLicense);
+      if (currentLicense && !getLicenseRenewalNotice(currentLicense.expiresAt, reviewedAt).renewalOpen) {
+        throw new Error(currentLicense.expiresAt
+          ? "This renewal was reviewed before the seven-day renewal window opened."
+          : "This faction already has lifetime access and cannot be renewed.");
+      }
+      const expiresAt = renewalExpiry(currentLicense?.expiresAt ?? null, plan.durationDays, reviewedAt);
+      const paymentNote = `${renewal ? "Renewal" : "Initial access"}: manually matched ${plan.itemQuantity} ${plan.itemName} to ${existing.reference}.`;
+      const licence = currentLicense
+        ? await tx.factionLicense.update({ where: { id: currentLicense.id }, data: { status: "ACTIVE", term: plan.licenseTerm, reference: existing.reference, expiresAt, approvedById: reviewer.id, paymentNotes: [currentLicense.paymentNotes, paymentNote].filter(Boolean).join("\n"), internalNotes: parsed.note || currentLicense.internalNotes } })
+        : await tx.factionLicense.create({ data: { factionId: existing.factionId, status: "ACTIVE", term: plan.licenseTerm, reference: existing.reference, issuedAt: reviewedAt, expiresAt, approvedById: reviewer.id, paymentNotes: paymentNote, internalNotes: parsed.note || null } });
+
+      const previousMembership = await tx.factionMembership.findUnique({ where: { factionId_userId: { factionId: existing.factionId, userId: existing.submittedById } } });
+      const purchaserRole = previousMembership && previousMembership.role !== "OWNER" ? previousMembership.role : renewal ? "VIEWER" : "ADMINISTRATOR";
+      const membership = await tx.factionMembership.upsert({
+        where: { factionId_userId: { factionId: existing.factionId, userId: existing.submittedById } },
+        update: { role: purchaserRole, status: "ACTIVE" },
+        create: { factionId: existing.factionId, userId: existing.submittedById, role: purchaserRole, status: "ACTIVE" },
       });
+      await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: "faction_access.purchaser_granted", entityType: "FactionMembership", entityId: membership.id, metadata: { tornUserId: existing.submittedBy.tornUserId, memberName: existing.submittedBy.name, action: previousMembership ? "UPDATED" : "GRANTED", role: purchaserRole, status: "ACTIVE", source: "verified_payment", reference: existing.reference } } });
+      await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: renewal ? "FACTION_LICENSE_RENEWED" : "FACTION_LICENSE_ACTIVATED", entityType: "FactionLicense", entityId: licence.id, metadata: { reference: existing.reference, previousReference: currentLicense?.reference ?? null, renewal, expiresAt: expiresAt?.toISOString() ?? null } } });
     }
 
     await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: `ACCESS_REQUEST_${status}`, entityType: "AccessRequest", entityId: existing.id, metadata: { reference: existing.reference, decision: parsed.decision, submittedByTornId: existing.submittedBy.tornUserId, paymentMatched: parsed.decision === "Approved" } } });

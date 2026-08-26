@@ -160,6 +160,8 @@
     scroll-margin-block-end: var(--mobile-page-bottom-clearance);
   }
   .page-stack { gap: 16px; }
+  .license-expiry-banner { grid-template-columns: 38px minmax(0, 1fr); margin-bottom: 14px; padding: 11px 12px; }
+  .license-expiry-banner > b { grid-column: 2; }
 
   .platform-route-stage select,
   .platform-route-stage input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]),
@@ -333,7 +335,21 @@
   .section-heading .table-tools { width: 100%; flex-wrap: wrap; }
   .page-header__actions > *,
   .dashboard-greeting__actions > * { flex: 1 1 140px; }
+  .report-header .page-header__actions { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr); }
+  .report-header .page-header__actions > * { width: 100%; min-width: 0; }
+  .report-header .chain-payment-button { width: 100%; min-width: 0; }
   .section-heading .search-field { width: 100%; flex: 1 1 100%; }
+
+  /* The idle-chain hero previously kept its desktop three-column composition,
+     leaving the explanation as a tall sliver between the icon and action. */
+  .chain-console--paused .chain-unavailable {
+    min-height: 0;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+    gap: 13px;
+    padding: 20px var(--mobile-card-padding);
+  }
+  .chain-console--paused .chain-unavailable > .button { grid-column: 2; width: fit-content; min-width: min(220px, 100%); justify-content: center; }
 
   /* Native dialogs become bottom sheets on a phone. Actions stay close to the
      thumb zone and the sheet cannot collide with a display cutout. */
@@ -522,6 +538,8 @@
      notifications, and the profile control. Sync remains available from the
      service drawer without letting the top bar overflow. */
   .data-status-control { display: none; }
+  .chain-console--paused .chain-unavailable { grid-template-columns: 1fr; }
+  .chain-console--paused .chain-unavailable > .button { grid-column: 1; width: 100%; }
   .faction-selector { max-width: 50vw; }
   .faction-selector__copy { display: flex; min-width: 0; }
   .faction-selector__copy small { display: none; }

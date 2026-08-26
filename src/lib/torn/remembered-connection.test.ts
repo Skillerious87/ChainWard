@@ -43,6 +43,7 @@ describe.sequential("remembered Torn connections", () => {
 
     expect(stored.token).not.toContain(apiKey);
     expect(stored.token.length).toBeGreaterThanOrEqual(40);
+    expect(stored.token.split(".")).toEqual(["v1", expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), "51393", expect.stringMatching(/^[a-f0-9]{64}$/)]);
     expect(readFileSync(credentialDatabasePath()).includes(Buffer.from(apiKey))).toBe(false);
     expect(() => readFileSync(process.env.CHAINWARD_LOCAL_DB_PATH!)).toThrow();
     await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({
@@ -57,6 +58,13 @@ describe.sequential("remembered Torn connections", () => {
 
   it("rejects malformed browser tokens without opening a session", async () => {
     await expect(readRememberedConnection("short-token")).resolves.toBeNull();
+  });
+
+  it("refuses a token whose faction scope has been changed", async () => {
+    const stored = await createRememberedConnection("A1B2C3D4E5F6G7H8", connectionFixture());
+    const parts = stored.token.split(".");
+    parts[2] = "99999";
+    await expect(readRememberedConnection(parts.join("."))).resolves.toBeNull();
   });
 });
 

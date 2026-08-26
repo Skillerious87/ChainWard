@@ -680,3 +680,25 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 :root.reduced-motion .about-dialog__surface { animation: none; }
 :root.reduced-motion .route-loading-core { animation: none; opacity: 1; }
 :root.reduced-motion[data-navigating="true"] .page-content { transform: none; }
+
+/* Licence notices live in the scrolling canvas, so they stay visible without
+   stealing fixed-header space from small screens. */
+.license-expiry-banner {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 185, 76, .3);
+  border-radius: 10px;
+  background: linear-gradient(100deg, rgba(245, 185, 76, .09), rgba(245, 185, 76, .025));
+}
+.license-expiry-banner > span:first-child { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(245, 185, 76, .28); border-radius: 8px; color: var(--warning); }
+.license-expiry-banner p { display: flex; min-width: 0; flex-direction: column; }
+.license-expiry-banner strong { color: #eadab8; font-size: 12px; }
+.license-expiry-banner small { margin-top: 2px; color: #a18f6e; font-size: 11px; }
+.license-expiry-banner > b { display: inline-flex; align-items: center; gap: 7px; color: #e4c982; font-size: 11px; white-space: nowrap; }
+.license-expiry-banner--urgent,.license-expiry-banner--final-day,.license-expiry-banner--expired { border-color: rgba(242, 109, 109, .32); background: linear-gradient(100deg, rgba(242, 109, 109, .1), rgba(242, 109, 109, .02)); }
+.license-expiry-banner--urgent > span:first-child,.license-expiry-banner--final-day > span:first-child,.license-expiry-banner--expired > span:first-child { border-color: rgba(242, 109, 109, .3); color: var(--danger); }

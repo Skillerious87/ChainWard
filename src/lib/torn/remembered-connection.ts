@@ -30,10 +30,13 @@ export async function createRememberedConnection(
   apiKey: string,
   connection: ValidatedTornConnection,
 ): Promise<{ token: string; expiresAt: number }> {
-  const token = randomBytes(32).toString("base64url");
-  const tokenHash = hashToken(token);
   const expiresAt = Date.now() + REMEMBERED_CONNECTION_MAX_AGE_SECONDS * 1_000;
   const encrypted = encryptCredential(apiKey, credentialEncryptionSecret());
+  // The random secret remains opaque, while the non-secret scope makes the
+  // database lookup unambiguous. A session opened for one faction therefore
+  // cannot silently follow a newer credential belonging to the same player.
+  const token = `v1.${randomBytes(32).toString("base64url")}.${connection.faction.id}.${encrypted.fingerprint}`;
+  const tokenHash = hashToken(token);
 
   if (process.env.DATABASE_URL?.trim()) {
     await createPostgresConnection(tokenHash, expiresAt, encrypted, connection);
@@ -45,10 +48,11 @@ export async function createRememberedConnection(
 }
 
 export async function readRememberedConnection(token: string | undefined): Promise<RememberedConnection | null> {
-  if (!token || token.length < 32) return null;
+  const scope = parseRememberedToken(token);
+  if (!token || !scope) return null;
   return process.env.DATABASE_URL?.trim()
-    ? readPostgresConnection(hashToken(token))
-    : readLocalConnection(hashToken(token));
+    ? readPostgresConnection(hashToken(token), scope)
+    : readLocalConnection(hashToken(token), scope);
 }
 
 export async function revokeRememberedConnection(token: string | undefined): Promise<void> {
@@ -94,7 +98,7 @@ function createLocalConnection(
   }
 }
 
-function readLocalConnection(tokenHash: string): RememberedConnection | null {
+function readLocalConnection(tokenHash: string, scope: RememberedTokenScope): RememberedConnection | null {
   const database = openCredentialDatabase();
   try {
     const row = database.prepare(`
@@ -102,6 +106,10 @@ function readLocalConnection(tokenHash: string): RememberedConnection | null {
       FROM remembered_torn_connections WHERE token_hash = ?
     `).get(tokenHash) as unknown as LocalRememberedRow | undefined;
     if (!row) return null;
+    if (row.faction_id !== scope.factionId) {
+      database.prepare("DELETE FROM remembered_torn_connections WHERE token_hash = ?").run(tokenHash);
+      return null;
+    }
     const expiresAt = Date.parse(row.expires_at);
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       database.prepare("DELETE FROM remembered_torn_connections WHERE token_hash = ?").run(tokenHash);
@@ -183,7 +191,7 @@ async function createPostgresConnection(
   await db.session.create({ data: { tokenHash, userId: user.id, expiresAt: new Date(expiresAt) } });
 }
 
-async function readPostgresConnection(tokenHash: string): Promise<RememberedConnection | null> {
+async function readPostgresConnection(tokenHash: string, scope: RememberedTokenScope): Promise<RememberedConnection | null> {
   const { db } = await import("@/lib/db");
   const session = await db.session.findUnique({ where: { tokenHash }, include: { user: true } });
   if (!session) return null;
@@ -192,7 +200,12 @@ async function readPostgresConnection(tokenHash: string): Promise<RememberedConn
     return null;
   }
   const credential = await db.factionApiCredential.findFirst({
-    where: { ownerTornUserId: session.user.tornUserId, status: "ACTIVE" },
+    where: {
+      ownerTornUserId: session.user.tornUserId,
+      keyFingerprint: scope.keyFingerprint,
+      faction: { tornFactionId: scope.factionId },
+      status: "ACTIVE",
+    },
     include: { faction: true },
     orderBy: { updatedAt: "desc" },
   });
@@ -225,6 +238,25 @@ async function revokePostgresConnection(tokenHash: string): Promise<void> {
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+interface RememberedTokenScope {
+  factionId: number;
+  keyFingerprint: string;
+}
+
+function parseRememberedToken(token: string | undefined): RememberedTokenScope | null {
+  if (!token) return null;
+  const [version, secret, factionIdValue, keyFingerprint] = token.split(".");
+  const factionId = Number(factionIdValue);
+  if (
+    version !== "v1"
+    || !/^[A-Za-z0-9_-]{43}$/.test(secret ?? "")
+    || !Number.isSafeInteger(factionId)
+    || factionId <= 0
+    || !/^[a-f0-9]{64}$/.test(keyFingerprint ?? "")
+  ) return null;
+  return { factionId, keyFingerprint: keyFingerprint! };
 }
 
 function decryptAndMigrateLocalCredential(

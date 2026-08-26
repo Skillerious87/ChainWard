@@ -3,13 +3,13 @@ import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
 export interface OperationalNotification {
   id: string;
-  category: "connection" | "chain" | "members";
+  category: "connection" | "chain" | "members" | "access";
   title: string;
   detail: string;
   tone: "warning" | "danger";
   priority: number;
   checkedAt: string;
-  href?: "/live-chain" | "/members" | "/connect";
+  href?: "/live-chain" | "/members" | "/connect" | "/unlock";
 }
 
 interface OperationalNotificationInput {

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { requirePlatformOwner, type PlatformActor } from "@/lib/auth/platform-owner";
 import { openLocalTestDatabase } from "@/lib/data/local-database";
+import { getLicenseRenewalNotice, renewalExpiry } from "./renewal";
 import type { FactionAccessSummary } from "./types";
 import type {
   AccessAuditView,
@@ -87,11 +88,15 @@ export function submitLocalAccessRequest(input: {
     `).run(input.faction.id, input.faction.name, input.faction.tag, submittedAt);
 
     const active = database.prepare(`
-      SELECT reference FROM licensing_faction_licenses
+      SELECT reference, expires_at FROM licensing_faction_licenses
       WHERE faction_id = ? AND status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > ?)
       LIMIT 1
-    `).get(input.faction.id, submittedAt) as unknown as { reference: string } | undefined;
-    if (active) throw new Error(`This faction already has active access under ${active.reference}.`);
+    `).get(input.faction.id, submittedAt) as unknown as { reference: string; expires_at: string | null } | undefined;
+    if (active && !getLicenseRenewalNotice(active.expires_at, input.submittedAt).renewalOpen) {
+      throw new Error(active.expires_at
+        ? "Renewal opens seven days before the current faction licence expires."
+        : "This faction already has lifetime access and does not require renewal.");
+    }
 
     const pending = database.prepare(`
       SELECT reference FROM licensing_access_requests
@@ -174,28 +179,48 @@ export function reviewLocalAccessRequest(input: {
         const metadata = parseMetadata(existing.customer_note);
         const plan = input.plans.find((item) => item.id === metadata.planId);
         if (!plan) throw new Error("The stored request does not contain a recognized licence plan.");
-        const conflicting = database.prepare(`
-          SELECT reference FROM licensing_faction_licenses
-          WHERE faction_id = ? AND status = 'ACTIVE' AND reference <> ? AND (expires_at IS NULL OR expires_at > ?)
-          LIMIT 1
-        `).get(existing.faction_id, existing.reference, reviewedAt) as unknown as { reference: string } | undefined;
-        if (conflicting) throw new Error(`Faction access is already active under ${conflicting.reference}. Resolve that licence before approving another.`);
+        const currentLicense = database.prepare(`
+          SELECT id, reference, expires_at, payment_notes, internal_notes
+          FROM licensing_faction_licenses
+          WHERE faction_id = ? AND status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > ?)
+          ORDER BY issued_at DESC LIMIT 1
+        `).get(existing.faction_id, reviewedAt) as unknown as { id: string; reference: string; expires_at: string | null; payment_notes: string | null; internal_notes: string | null } | undefined;
+        if (currentLicense && !getLicenseRenewalNotice(currentLicense.expires_at, input.reviewedAt).renewalOpen) {
+          throw new Error(currentLicense.expires_at
+            ? "This renewal was reviewed before the seven-day renewal window opened."
+            : "This faction already has lifetime access and cannot be renewed.");
+        }
 
-        const expiresAt = plan.durationDays === null
-          ? null
-          : new Date(input.reviewedAt.getTime() + plan.durationDays * 86_400_000).toISOString();
-        const paymentNotes = `Manually matched ${plan.itemQuantity} ${plan.itemName} to ${existing.reference}.`;
+        const expiresAt = renewalExpiry(currentLicense?.expires_at ? new Date(currentLicense.expires_at) : null, plan.durationDays, input.reviewedAt)?.toISOString() ?? null;
+        const renewal = Boolean(currentLicense);
+        const paymentNote = `${renewal ? "Renewal" : "Initial access"}: manually matched ${plan.itemQuantity} ${plan.itemName} to ${existing.reference}.`;
+        const licenceId = currentLicense?.id ?? randomUUID();
+        if (currentLicense) {
+          database.prepare(`
+            UPDATE licensing_faction_licenses SET status = 'ACTIVE', term = ?, reference = ?, expires_at = ?,
+              approved_by_torn_id = ?, payment_notes = ?, internal_notes = ?, updated_at = ? WHERE id = ?
+          `).run(plan.licenseTerm, existing.reference, expiresAt, input.actor.tornUserId, [currentLicense.payment_notes, paymentNote].filter(Boolean).join("\n"), input.note || currentLicense.internal_notes, reviewedAt, currentLicense.id);
+        } else {
+          database.prepare(`
+            INSERT INTO licensing_faction_licenses (
+              id, faction_id, status, term, reference, issued_at, expires_at, approved_by_torn_id,
+              payment_notes, internal_notes, created_at, updated_at
+            ) VALUES (?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(licenceId, existing.faction_id, plan.licenseTerm, existing.reference, reviewedAt, expiresAt, input.actor.tornUserId, paymentNote, input.note || null, reviewedAt, reviewedAt);
+        }
+
+        const previousAssignment = database.prepare("SELECT role, status FROM faction_access_assignments WHERE faction_id = ? AND torn_user_id = ?").get(existing.faction_id, existing.submitted_by_torn_id) as unknown as { role: string; status: string } | undefined;
+        const purchaserRole = previousAssignment && previousAssignment.role !== "OWNER" ? previousAssignment.role : renewal ? "VIEWER" : "ADMINISTRATOR";
         database.prepare(`
-          INSERT INTO licensing_faction_licenses (
-            id, faction_id, status, term, reference, issued_at, expires_at, approved_by_torn_id,
-            payment_notes, internal_notes, created_at, updated_at
-          ) VALUES (?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(reference) DO UPDATE SET
-            status = 'ACTIVE', term = excluded.term, issued_at = excluded.issued_at,
-            expires_at = excluded.expires_at, approved_by_torn_id = excluded.approved_by_torn_id,
-            payment_notes = excluded.payment_notes, internal_notes = excluded.internal_notes,
-            updated_at = excluded.updated_at
-        `).run(randomUUID(), existing.faction_id, plan.licenseTerm, existing.reference, reviewedAt, expiresAt, input.actor.tornUserId, paymentNotes, input.note || null, reviewedAt, reviewedAt);
+          INSERT INTO faction_access_assignments (faction_id, torn_user_id, member_name, role, status, assigned_by_torn_id, updated_at)
+          VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
+          ON CONFLICT(faction_id, torn_user_id) DO UPDATE SET member_name = excluded.member_name, role = excluded.role, status = 'ACTIVE', assigned_by_torn_id = excluded.assigned_by_torn_id, updated_at = excluded.updated_at
+        `).run(existing.faction_id, existing.submitted_by_torn_id, existing.submitted_by_name, purchaserRole, input.actor.tornUserId, reviewedAt);
+        database.prepare(`
+          INSERT INTO faction_access_audit (faction_id, torn_user_id, member_name, action, role, status, actor_torn_user_id, created_at)
+          VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+        `).run(existing.faction_id, existing.submitted_by_torn_id, existing.submitted_by_name, previousAssignment ? "UPDATED" : "GRANTED", purchaserRole, input.actor.tornUserId, reviewedAt);
+        insertAudit(database, { factionId: existing.faction_id, actorTornUserId: input.actor.tornUserId, action: renewal ? "FACTION_LICENSE_RENEWED" : "FACTION_LICENSE_ACTIVATED", entityId: licenceId, metadata: { reference: existing.reference, previousReference: currentLicense?.reference ?? null, renewal, expiresAt }, createdAt: reviewedAt });
       }
 
       insertAudit(database, {
@@ -272,7 +297,15 @@ export function getLocalFactionAccessSummary(tornFactionId: number): FactionAcce
       WHERE faction_id = ? AND status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > ?)
       ORDER BY issued_at DESC LIMIT 1
     `).get(tornFactionId, now) as unknown as Pick<LicenseRow, "reference" | "term" | "issued_at" | "expires_at"> | undefined;
-    if (license) return {
+    if (license) {
+      const pendingRenewal = database.prepare(`
+        SELECT status, reference, customer_note, created_at
+        FROM licensing_access_requests
+        WHERE faction_id = ? AND status IN ('PENDING', 'INFORMATION_REQUESTED')
+        ORDER BY created_at DESC LIMIT 1
+      `).get(tornFactionId) as unknown as Pick<RequestRow, "status" | "reference" | "customer_note" | "created_at"> | undefined;
+      const renewalMetadata = pendingRenewal ? parseMetadata(pendingRenewal.customer_note) : null;
+      return {
       state: "active",
       label: termLabel(license.term),
       expiresAt: license.expires_at,
@@ -281,7 +314,9 @@ export function getLocalFactionAccessSummary(tornFactionId: number): FactionAcce
       plan: license.term,
       payment: null,
       message: null,
+      renewalRequest: pendingRenewal ? { reference: pendingRenewal.reference, startedAt: pendingRenewal.created_at, plan: renewalMetadata?.plan ?? null, payment: renewalMetadata?.price ?? null, message: renewalMetadata?.reviewMessage ?? null } : null,
     };
+    }
 
     const pending = database.prepare(`
       SELECT status, reference, customer_note, created_at

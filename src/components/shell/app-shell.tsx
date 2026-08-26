@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  ArrowRight,
   BarChart3,
   Bell,
   Check,
@@ -53,8 +54,9 @@ import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { enqueueToast, notify, toastDurationMs, toastKey, type ToastDetail, type ToastQueueItem, type ToastTone } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
+import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
 import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
-import { buildOperationalNotifications } from "@/lib/notifications/notification-intelligence";
+import { buildOperationalNotifications, type OperationalNotification } from "@/lib/notifications/notification-intelligence";
 import { pollSecondsForChain } from "@/lib/torn/polling-policy";
 import { readWorkspaceTelemetryEvent, workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
@@ -107,7 +109,7 @@ const navigation: NavigationGroup[] = [
 
 type OpenPanel = "faction" | "notifications" | "user" | "health" | null;
 
-export function AppShell({ children, currentUser, telemetry, access, database, memberActivityAlert }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null }) {
+export function AppShell({ children, currentUser, telemetry, access, workspaceAuthorized, database, memberActivityAlert }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; workspaceAuthorized: boolean; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const preferences = useAppearancePreferences();
@@ -133,7 +135,21 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
     : syncState === "failed"
       ? "Check failed"
       : checkedTimeLabel(liveTelemetry.checkedAt);
-  const systemNotifications = buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, memberActivity: monitoredActivity });
+  const renewalNotice = workspaceAuthorized && access.state === "active" ? getLicenseRenewalNotice(access.expiresAt) : null;
+  const renewalNotification: OperationalNotification | null = renewalNotice?.renewalOpen ? {
+    // Include the countdown step so a notice acknowledged at seven days is
+    // surfaced again as the paid-through date approaches.
+    id: `access:${access.expiresAt ?? "expired"}:${renewalNotice.daysRemaining ?? renewalNotice.phase}`,
+    category: "access",
+    title: renewalNotice.title,
+    detail: access.renewalRequest ? `Renewal ${access.renewalRequest.reference} is awaiting owner review.` : renewalNotice.detail,
+    tone: renewalNotice.phase === "urgent" || renewalNotice.phase === "final-day" || renewalNotice.phase === "expired" ? "danger" : "warning",
+    priority: renewalNotice.phase === "final-day" || renewalNotice.phase === "expired" ? 110 : renewalNotice.phase === "urgent" ? 95 : 75,
+    checkedAt: liveTelemetry.checkedAt,
+    href: "/unlock",
+  } : null;
+  const systemNotifications = [...buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, memberActivity: monitoredActivity }), ...(renewalNotification ? [renewalNotification] : [])]
+    .toSorted((left, right) => right.priority - left.priority);
   const notifications = systemNotifications.map((item) => ({ ...item, unread: !readNotificationIds.includes(item.id) }));
   const activeNotificationIdsKey = JSON.stringify(systemNotifications.map((item) => item.id).toSorted());
   const notificationScope = String(liveTelemetry.faction?.id ?? "global");
@@ -142,7 +158,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
   const faction = liveTelemetry.faction;
   const chain = liveTelemetry.chain;
   const offlineMode = liveTelemetry.mode === "offline";
-  const workspaceLocked = access.state !== "active";
+  const workspaceLocked = !workspaceAuthorized;
   const ownerAccess = currentUser.isPlatformAdmin && currentUser.tornUserId === PLATFORM_OWNER.tornUserId;
   const visibleNavigation = navigation
     .filter((group) => group.label !== "Platform" || ownerAccess)
@@ -571,7 +587,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
           </div>
 
           <div className="topbar__right">
-            <UpgradeAccess access={access} />
+            <UpgradeAccess access={access} workspaceAuthorized={workspaceAuthorized} />
             <button className="topbar-command" onClick={openCommandPalette}><Command size={14} /><span>Quick find</span><kbd>⌘K</kbd></button>
             <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => void syncWorkspace()} disabled={syncing || workspaceLocked} aria-label={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Refresh workspace data. Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
               <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live" && !syncing} />
@@ -587,7 +603,7 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
                   <div className="popover-heading popover-heading--action"><span>Notifications {unreadCount > 0 && <em>{unreadCount} new</em>}</span><button disabled={unreadCount === 0} onClick={() => markNotificationsRead(notifications.map((item) => item.id))}>Mark all read</button></div>
                   <div className="notification-list">
                     {notifications.map((item) => <button className={item.unread ? "notification-item--unread" : undefined} key={item.id} onClick={() => { markNotificationsRead([item.id]); if (item.href) { const href = item.href; setOpenPanel(null); startNavigation(() => router.push(href)); } }}><i className={`notification-tone notification-tone--${item.tone}`} /><span><span className="notification-context">{notificationCategoryLabel(item.category)}<time dateTime={item.checkedAt}>{notificationTimeLabel(item.checkedAt)}</time></span><strong>{item.title}</strong><small>{item.detail}</small></span>{item.unread && <em aria-label="Unread" />}</button>)}
-                    {notifications.length === 0 && <div className="notification-empty"><Bell size={20} /><strong>You&apos;re all caught up</strong><small>No connection, chain, or member conditions need attention.</small></div>}
+                    {notifications.length === 0 && <div className="notification-empty"><Bell size={20} /><strong>You&apos;re all caught up</strong><small>No connection, access, chain, or member conditions need attention.</small></div>}
                   </div>
                   {ownerAccess && <Link href="/admin" onClick={() => setOpenPanel(null)} className="popover-action">Open owner operations <span>→</span></Link>}
                 </TopbarPopover>
@@ -623,7 +639,10 @@ export function AppShell({ children, currentUser, telemetry, access, database, m
             so the top bar and the provenance banner stay fixed and the
             scrollbar spans only the content beneath them. */}
         <div className="app-scroll" ref={scrollRef}>
-          <main className="page-content">{children}</main>
+          <main className="page-content">
+            {renewalNotice?.renewalOpen && <Link className={`license-expiry-banner license-expiry-banner--${renewalNotice.phase}`} href="/unlock"><span><Clock3 size={18} /></span><p><strong>{access.renewalRequest ? "Renewal awaiting owner review" : renewalNotice.title}</strong><small>{access.renewalRequest ? `Current access remains open while ${access.renewalRequest.reference} is reviewed.` : renewalNotice.detail}</small></p><b>{access.renewalRequest ? "View request" : "Renew access"}<ArrowRight size={14} /></b></Link>}
+            {children}
+          </main>
         </div>
       </div>
 
@@ -709,7 +728,8 @@ function Toast({ toast, onClose }: { toast: ToastQueueItem; onClose: () => void 
   return <div className={`toast toast--${toast.tone ?? "info"}`} role={toast.tone === "danger" ? "alert" : "status"} aria-atomic="true"><span><Icon size={15} /></span><div><strong>{toast.title}{toast.count > 1 && <em>×{toast.count}</em>}</strong>{toast.description && <small>{toast.description}</small>}</div><button onClick={onClose} aria-label={`Dismiss ${toast.title}`}><X size={14} /></button></div>;
 }
 
-function notificationCategoryLabel(category: "connection" | "chain" | "members"): string {
+function notificationCategoryLabel(category: "connection" | "chain" | "members" | "access"): string {
+  if (category === "access") return "Faction access";
   if (category === "chain") return "Live chain";
   if (category === "members") return "Member monitor";
   return "Connection";

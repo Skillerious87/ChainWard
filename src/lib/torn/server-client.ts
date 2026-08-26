@@ -8,20 +8,29 @@ import { createOfflineFixtureFetch, isOfflineFixtureKey } from "./offline-fixtur
 import { CHAIN_CACHE_SECONDS, MIN_POLL_SECONDS } from "./polling-policy";
 import { readRememberedConnection, REMEMBERED_CONNECTION_COOKIE } from "./remembered-connection";
 
+export interface ConfiguredTornConnection {
+  client: TornClient;
+  tornUserId: number;
+  factionId: number;
+}
+
 /**
  * Resolving the client decrypts a stored credential and, in local mode, opens
  * the AppData credential database. A single render calls this from the layout,
  * the page, and every workspace data loader, so the result is memoized for the
  * lifetime of one request instead of repeating that work per caller.
  */
-export const getConfiguredTornClient = cache(async (): Promise<TornClient | null> => {
+export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTornConnection | null> => {
   const cookieStore = await cookies();
   const remembered = await readRememberedConnection(cookieStore.get(REMEMBERED_CONNECTION_COOKIE)?.value);
   const session = remembered ?? readConnectionSession(cookieStore.get(CONNECTION_COOKIE)?.value);
   const apiKey = session?.apiKey;
   if (!apiKey) return null;
   const offline = isOfflineFixtureKey(apiKey);
-  return new TornClient({
+  return {
+    tornUserId: session.tornUserId,
+    factionId: session.factionId,
+    client: new TornClient({
     apiKey,
     dataMode: offline ? "offline" : "torn",
     baseUrl: process.env.TORN_API_BASE_URL,
@@ -32,8 +41,13 @@ export const getConfiguredTornClient = cache(async (): Promise<TornClient | null
     chainCacheSeconds: Math.max(MIN_POLL_SECONDS, positiveInteger(process.env.TORN_CHAIN_CACHE_SECONDS, CHAIN_CACHE_SECONDS)),
     historyCacheSeconds: positiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 600),
     ...(offline ? { fetchImplementation: createOfflineFixtureFetch(apiKey) } : {}),
-  });
+    }),
+  };
 });
+
+export const getConfiguredTornClient = cache(async (): Promise<TornClient | null> =>
+  (await getConfiguredTornConnection())?.client ?? null
+);
 
 function positiveInteger(value: string | undefined, fallback: number): number {
   const parsed = value ? Number.parseInt(value, 10) : Number.NaN;

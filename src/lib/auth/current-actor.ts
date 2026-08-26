@@ -2,15 +2,16 @@ import "server-only";
 
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { getConfiguredTornClient } from "@/lib/torn/server-client";
+import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { PLATFORM_OWNER, type PlatformActor, unauthenticatedActor } from "./platform-owner";
 
 export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
   try {
     await cookies();
-    const client = await getConfiguredTornClient();
-    if (!client) return unauthenticatedActor();
-    const { profile } = await client.getMyProfile();
+    const connection = await getConfiguredTornConnection();
+    if (!connection) return unauthenticatedActor();
+    const { profile } = await connection.client.getMyProfile();
+    if (profile.id !== connection.tornUserId) return unauthenticatedActor();
     return {
       name: profile.name,
       tornUserId: profile.id,

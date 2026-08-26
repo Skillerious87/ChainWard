@@ -7,7 +7,7 @@ import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession 
 import { offlineConnection, offlineTestModeEnabled } from "@/lib/torn/offline-fixture";
 import { REMEMBERED_CONNECTION_COOKIE } from "@/lib/torn/remembered-connection";
 
-const requestSchema = z.object({ identity: z.enum(["member", "owner"]) }).strict();
+const requestSchema = z.object({ identity: z.enum(["member", "guest", "departed", "owner"]) }).strict();
 
 export async function POST(request: Request) {
   if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();

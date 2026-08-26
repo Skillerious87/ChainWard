@@ -62,6 +62,7 @@ if (!pending) {
 }
 
 seedRewardScheme();
+seedDepartedMemberAssignment();
 await seedSettlements();
 
 /**
@@ -121,6 +122,21 @@ function seedRewardScheme(): void {
     const insert = database.prepare("INSERT INTO reward_tiers (id, scheme_id, label, minimum_hits, maximum_hits, amount, enabled, position) VALUES (?, ?, ?, ?, ?, ?, 1, ?)");
     tiers.forEach(([label, minimum, maximum, amount], position) => insert.run(randomUUID(), id, label, minimum, maximum, amount, position));
     console.log(`seeded reward scheme "${SCHEME_NAME}" with ${tiers.length} tiers`);
+  } finally {
+    database.close();
+  }
+}
+
+/** A stale assignment for a player absent from Torn's roster must never grant access. */
+function seedDepartedMemberAssignment(): void {
+  const database = openLocalDatabase();
+  if (!database) return;
+  try {
+    database.prepare(`
+      INSERT INTO faction_access_assignments (faction_id, torn_user_id, member_name, role, status, assigned_by_torn_id, updated_at)
+      VALUES (?, ?, ?, 'VIEWER', 'ACTIVE', ?, ?)
+      ON CONFLICT(faction_id, torn_user_id) DO UPDATE SET role = 'VIEWER', status = 'ACTIVE', updated_at = excluded.updated_at
+    `).run(OFFLINE_FACTION.id, 9_000_099, "Former Member", owner.tornUserId, now.toISOString());
   } finally {
     database.close();
   }

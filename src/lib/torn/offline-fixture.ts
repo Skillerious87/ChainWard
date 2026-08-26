@@ -2,7 +2,7 @@ import "server-only";
 
 import type { ValidatedTornConnection } from "./connection-service";
 
-export type OfflineIdentity = "member" | "owner";
+export type OfflineIdentity = "member" | "guest" | "departed" | "owner";
 
 export const OFFLINE_FACTION = {
   id: 98_765,
@@ -12,6 +12,8 @@ export const OFFLINE_FACTION = {
 
 const OFFLINE_IDENTITIES = {
   member: { id: 9_000_001, name: "Offline Tester", apiKey: "chainward-offline-member" },
+  guest: { id: 9_000_002, name: "Nova Chain", apiKey: "chainward-offline-guest" },
+  departed: { id: 9_000_099, name: "Former Member", apiKey: "chainward-offline-departed" },
   owner: { id: 3_212_954, name: "Skillerious", apiKey: "chainward-offline-owner" },
 } as const;
 

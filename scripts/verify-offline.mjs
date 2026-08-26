@@ -279,8 +279,14 @@ async function run() {
     check("payout corrections keep withdrawals on the record", payoutCorrections.html.includes("Withdrawn acknowledgements") && payoutCorrections.html.includes("re-issuing after the next faction bank run"), "a reverted settlement must not vanish from the ledger");
 
     console.log("\nPermission enforcement");
+    const guestSession = await openOfflineSession("guest");
+    const guestDashboard = await getRoute("/dashboard", guestSession.cookie);
+    check("an unassigned faction member is redirected to player approval", redirectTarget(guestDashboard).includes("/unlock"), `status ${guestDashboard.status} target "${redirectTarget(guestDashboard)}"`);
+    const departedSession = await openOfflineSession("departed");
+    const departedDashboard = await getRoute("/dashboard", departedSession.cookie);
+    check("a previously assigned player who left the Torn roster is denied", redirectTarget(departedDashboard).includes("/unlock"), `status ${departedDashboard.status} target "${redirectTarget(departedDashboard)}"`);
     const memberBackup = await fetch(`${ORIGIN}/api/data/backup`, { headers: { cookie: session.cookie } });
-    check("a member without an assignment cannot export a backup", memberBackup.status === 403, `status ${memberBackup.status}`);
+    check("the verified purchaser can export a backup as faction administrator", memberBackup.status === 200, `status ${memberBackup.status}`);
     const ownerSession = await openOfflineSession("owner");
     const ownerBackup = await fetch(`${ORIGIN}/api/data/backup`, { headers: { cookie: ownerSession.cookie } });
     check("the owner can export a backup", ownerBackup.status === 200, `status ${ownerBackup.status}`);
@@ -292,6 +298,10 @@ async function run() {
     const telemetryPayload = await telemetry.json();
     check("telemetry endpoint answers with live fixture data", telemetry.ok && telemetryPayload.source === "live" && telemetryPayload.mode === "offline", `status ${telemetry.status}`);
     check("telemetry never leaks a credential", !JSON.stringify(telemetryPayload).toLowerCase().includes("apikey"));
+    const guestTelemetry = await fetch(`${ORIGIN}/api/telemetry/live-chain`, { headers: { accept: "application/json", cookie: guestSession.cookie } });
+    check("telemetry rejects an unassigned member of the licensed faction", guestTelemetry.status === 403, `status ${guestTelemetry.status}`);
+    const departedTelemetry = await fetch(`${ORIGIN}/api/telemetry/live-chain`, { headers: { accept: "application/json", cookie: departedSession.cookie } });
+    check("telemetry rejects a previously assigned player who left the roster", departedTelemetry.status === 403, `status ${departedTelemetry.status}`);
     const anonymousTelemetry = await fetch(`${ORIGIN}/api/telemetry/live-chain`, { headers: { accept: "application/json" } });
     check("telemetry rejects an unauthenticated caller", anonymousTelemetry.status === 401, `status ${anonymousTelemetry.status}`);
 
@@ -300,7 +310,7 @@ async function run() {
     const activityPayload = await activityMonitor.json();
     check("owner receives a verified activity monitor snapshot", activityMonitor.ok && activityPayload.factionId === 98765 && Array.isArray(activityPayload.alerts), `status ${activityMonitor.status}`);
     check("activity monitor carries a stable alert fingerprint", typeof activityPayload.fingerprint === "string" && typeof activityPayload.checkedAt === "string");
-    const unassignedActivityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json", cookie: session.cookie } });
+    const unassignedActivityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json", cookie: guestSession.cookie } });
     check("an unassigned member cannot monitor the roster", unassignedActivityMonitor.status === 403, `status ${unassignedActivityMonitor.status}`);
     const anonymousActivityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json" } });
     check("an unauthenticated caller cannot monitor the roster", anonymousActivityMonitor.status === 403, `status ${anonymousActivityMonitor.status}`);

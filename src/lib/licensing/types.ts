@@ -7,4 +7,11 @@ export interface FactionAccessSummary {
   plan: string | null;
   payment: string | null;
   message: string | null;
+  renewalRequest?: {
+    reference: string;
+    startedAt: string;
+    plan: string | null;
+    payment: string | null;
+    message: string | null;
+  } | null;
 }

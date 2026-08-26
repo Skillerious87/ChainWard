@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BarChart3, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, Users, WalletCards, ShieldAlert } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarClock, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, TriangleAlert, Users, WalletCards, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
 import { licensePayment, licensePlans, type LicensePlanId } from "@/lib/licensing/pricing";
+import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 
 const licenceBenefits = [
@@ -19,10 +20,22 @@ const licenceBenefits = [
   "Every approved member, with no seat limits",
 ] as const;
 
-export function UnlockWorkspace({ factionId, factionName, access, paymentReference = null }: { factionId: number | null; factionName: string | null; access: FactionAccessSummary; paymentReference?: string | null }) {
-  if (access.state === "active") return <ActiveAccess access={access} factionName={factionName} />;
+export function UnlockWorkspace({ factionId, factionName, access, workspaceAuthorized = false, paymentReference = null }: { factionId: number | null; factionName: string | null; access: FactionAccessSummary; workspaceAuthorized?: boolean; paymentReference?: string | null }) {
+  if (access.state === "active" && !workspaceAuthorized) return <MemberApprovalRequired factionName={factionName} />;
+  if (access.state === "active") return <ActiveAccess access={access} factionId={factionId} factionName={factionName} paymentReference={paymentReference} />;
   if (access.state === "pending") return <PendingAccess access={access} factionName={factionName} />;
   return <InactiveAccess factionId={factionId} factionName={factionName} paymentReference={paymentReference} />;
+}
+
+function MemberApprovalRequired({ factionName }: { factionName: string | null }) {
+  return <div className="unlock-workspace unlock-state-page">
+    <header className="unlock-state-hero unlock-state-hero--restricted"><span><ShieldAlert size={25} /></span><div><p className="eyebrow">Player approval required</p><h1>This faction is licensed. Your player is not yet authorised.</h1><p>Access is bound to both your verified Torn identity and <strong>{factionName ?? "this faction"}</strong>. A licence or role from a previous faction never follows you when you move.</p></div></header>
+    <section className="unlock-status-card unlock-member-approval">
+      <header><div><small>Security boundary</small><strong>Exact player + exact faction</strong></div><span><LockKeyhole size={14} /> Workspace locked</span></header>
+      <ol><li className="unlock-status-step--done"><span><Check size={14} /></span><p><strong>Faction licence verified</strong><small>The connected faction has an active paid Chainward term.</small></p></li><li><span>2</span><p><strong>Ask a faction administrator</strong><small>They must approve this Torn player in Faction access.</small></p></li><li><span>3</span><p><strong>Reconnect after approval</strong><small>Chainward verifies that you still belong to this same faction before opening any data.</small></p></li></ol>
+      <footer><Link className="button button--secondary" href="/connect">Verify another connection</Link></footer>
+    </section>
+  </div>;
 }
 
 function InactiveAccess({ factionId, factionName, paymentReference }: { factionId: number | null; factionName: string | null; paymentReference: string | null }) {
@@ -128,7 +141,7 @@ function PendingAccess({ access, factionName }: { access: FactionAccessSummary; 
   </div>;
 }
 
-function ActiveAccess({ access, factionName }: { access: FactionAccessSummary; factionName: string | null }) {
+function ActiveAccess({ access, factionId, factionName, paymentReference }: { access: FactionAccessSummary; factionId: number | null; factionName: string | null; paymentReference: string | null }) {
   const [copied, setCopied] = useState(false);
   const lifetime = !access.expiresAt;
   const activated = access.startedAt ? formatLicenceDate(access.startedAt) : "Unavailable";
@@ -136,6 +149,7 @@ function ActiveAccess({ access, factionName }: { access: FactionAccessSummary; f
   const futureCoverage = access.expiresAt
     ? "While this licence remains active, every new Chainward feature released during that term is added automatically with no extra in-game charge."
     : "Your lifetime access grows with Chainward. Every new feature released while the service remains actively maintained and moderated is added automatically with no extra in-game charge.";
+  const renewalNotice = getLicenseRenewalNotice(access.expiresAt);
   async function copyReference(): Promise<void> {
     if (!access.reference) return;
     try {
@@ -186,6 +200,10 @@ function ActiveAccess({ access, factionName }: { access: FactionAccessSummary; f
       </div>
     </section>
 
+    {renewalNotice.renewalOpen && (access.renewalRequest
+      ? <section className="unlock-renewal-notice unlock-renewal-notice--pending" role="status"><span><Clock3 size={21} /></span><div><p className="eyebrow">Renewal reserved</p><h2>{access.renewalRequest.plan ?? "Faction access"} renewal is awaiting owner review.</h2><p>Reference <code>{access.renewalRequest.reference}</code> was reserved {formatLicenceDate(access.renewalRequest.startedAt)}. Current access stays open through {accessEnd} while the payment is reviewed.</p>{access.renewalRequest.message && <em>{access.renewalRequest.message}</em>}</div></section>
+      : <RenewalPanel factionId={factionId} factionName={factionName} reference={paymentReference} notice={renewalNotice} currentEnd={accessEnd} />)}
+
     <section className="unlock-access-suite" aria-labelledby="included-suite-title">
       <header><div><p className="eyebrow">Complete operating suite</p><h2 id="included-suite-title">Every core workspace is included.</h2><p>Move directly into the tools your faction uses most. There are no reduced tiers or separately billed seats.</p></div><span><Sparkles size={13} /> 4 workspaces</span></header>
       <div className="unlock-capability-grid">
@@ -197,6 +215,41 @@ function ActiveAccess({ access, factionName }: { access: FactionAccessSummary; f
       <footer><span><Gem size={19} /></span><p><small>{lifetime ? "Lifetime release promise" : "Release coverage"}</small><strong>Future Chainward releases stay included.</strong><em>{futureCoverage}</em></p><b><Sparkles size={12} /> Always included</b></footer>
     </section>
   </div>;
+}
+
+function RenewalPanel({ factionId, factionName, reference, notice, currentEnd }: { factionId: number | null; factionName: string | null; reference: string | null; notice: ReturnType<typeof getLicenseRenewalNotice>; currentEnd: string }) {
+  const router = useRouter();
+  const [selectedPlan, setSelectedPlan] = useState<LicensePlanId>("monthly");
+  const [copied, setCopied] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const selected = licensePlans.find((plan) => plan.id === selectedPlan) ?? licensePlans[0];
+
+  async function copyReference(): Promise<void> {
+    if (!reference) return;
+    try { await navigator.clipboard.writeText(reference); setCopied(true); window.setTimeout(() => setCopied(false), 2_000); }
+    catch { notify({ title: "Copy was blocked", description: `Select and copy ${reference} manually.`, tone: "warning" }); }
+  }
+
+  async function submitRenewal(): Promise<void> {
+    if (!reference || !factionId || submitting) return;
+    setSubmitting(true);
+    try {
+      const result = await submitAccessRequest({ planId: selectedPlan, reference });
+      notify({ title: "Renewal reserved", description: `${result.reference} is waiting for owner payment verification. No remaining paid days will be lost.`, tone: "success" });
+      router.refresh();
+    } catch (error) {
+      notify({ title: "Renewal not submitted", description: error instanceof Error ? error.message : "The renewal could not be saved.", tone: "danger" });
+    } finally { setSubmitting(false); }
+  }
+
+  return <section className={`unlock-renewal-panel unlock-renewal-panel--${notice.phase}`} aria-labelledby="renewal-title">
+    <header><span><CalendarClock size={22} /></span><div><p className="eyebrow">Seven-day renewal window</p><h2 id="renewal-title">{notice.title}</h2><p>{notice.detail} Current access remains active through <strong>{currentEnd}</strong>.</p></div><b>{notice.daysRemaining === 1 ? "Final day" : `${notice.daysRemaining} days left`}</b></header>
+    <div className="unlock-renewal-plan-grid" role="radiogroup" aria-label="Renewal plans">
+      {licensePlans.map((plan) => <button key={plan.id} type="button" role="radio" aria-checked={selectedPlan === plan.id} className={selectedPlan === plan.id ? "is-selected" : ""} onClick={() => setSelectedPlan(plan.id)}><span>{plan.id === "lifetime" ? <Crown size={17} /> : <CalendarClock size={17} />}</span><p><strong>{plan.name}</strong><small>{plan.term}</small></p><b>{plan.price}</b>{selectedPlan === plan.id && <Check size={14} />}</button>)}
+    </div>
+    <div className="unlock-renewal-checkout"><div><small>Renewal for</small><strong>{factionName ?? "verified faction"}</strong></div><div><small>Exact private reference</small><code>{reference ?? "Unavailable"}</code></div><button type="button" disabled={!reference} onClick={() => void copyReference()}>{copied ? <CircleCheckBig size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button><button type="button" className="button button--primary" disabled={!reference || submitting} onClick={() => void submitRenewal()}>{submitting ? <Spinner size={15} label="Reserving renewal" /> : <TriangleAlert size={15} />}{submitting ? "Reserving…" : `Reserve for ${selected.price}`}</button></div>
+    <footer><ShieldCheck size={15} /><p><strong>No paid time is lost.</strong> A recurring renewal begins after the current expiry. Lifetime upgrades remove the expiry entirely.</p></footer>
+  </section>;
 }
 
 function formatLicenceDate(value: string): string {

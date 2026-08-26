@@ -22,7 +22,10 @@ export const getFactionAccessSummary = cache(async (tornFactionId: number | null
       where: { factionId: faction.id, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
       orderBy: { issuedAt: "desc" },
     });
-    if (license) return {
+    if (license) {
+      const pendingRenewal = await db.accessRequest.findFirst({ where: { factionId: faction.id, status: { in: ["PENDING", "INFORMATION_REQUESTED"] } }, orderBy: { createdAt: "desc" } });
+      const renewalMeta = pendingRenewal ? parseMetadata(pendingRenewal.customerNote) : null;
+      return {
       state: "active",
       label: license.term === "PERMANENT" ? "Lifetime access" : license.term === "YEARLY" ? "Annual access" : license.term === "QUARTERLY" ? "Quarterly access" : license.term === "MONTHLY" ? "Monthly access" : "Faction access",
       expiresAt: license.expiresAt?.toISOString() ?? null,
@@ -31,7 +34,9 @@ export const getFactionAccessSummary = cache(async (tornFactionId: number | null
       plan: license.term,
       payment: null,
       message: null,
+      renewalRequest: pendingRenewal ? { reference: pendingRenewal.reference, startedAt: pendingRenewal.createdAt.toISOString(), plan: renewalMeta?.plan ?? null, payment: renewalMeta?.price ?? null, message: renewalMeta?.reviewMessage ?? null } : null,
     };
+    }
     const pending = await db.accessRequest.findFirst({ where: { factionId: faction.id, status: { in: ["PENDING", "INFORMATION_REQUESTED"] } }, orderBy: { createdAt: "desc" } });
     if (pending) {
       const meta = parseMetadata(pending.customerNote);
