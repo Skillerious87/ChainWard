@@ -7,6 +7,7 @@ describe("page loading experience", () => {
   it("renders the modern circular loader with accessible route context", () => {
     const html = renderToStaticMarkup(<PageLoadingCore title="Loading roster" hint="Fetching verified faction members" />);
     expect(html).toContain("page-loading-core__arc--primary");
+    expect(html).toContain("android-chrome-192x192.png");
     expect(html).not.toContain("page-loading-core__arc--secondary");
     expect(html).toContain('aria-label="Loading roster. Fetching verified faction members."');
     expect(html).not.toContain("Fetching verified faction members</small>");

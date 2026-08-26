@@ -230,8 +230,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
       saveMemberNotificationPreferences({ enabled: true });
       const shown = await showWindowsNotification("Chainward member monitoring is ready", {
         body: "Critical inactivity, watch-list, and expired-holiday signals can now reach Windows while Chainward is open.",
-        icon: "/icon.svg",
-        badge: "/icon.svg",
+        icon: "/icons/android-chrome-192x192.png",
+        badge: "/icons/favicon-32x32.png",
         tag: "chainward-notification-test",
         data: { url: "/members" },
       });
@@ -258,8 +258,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
     try {
       const shown = await showWindowsNotification("Chainward notification test", {
         body: "Your browser and Windows notification path are working.",
-        icon: "/icon.svg",
-        badge: "/icon.svg",
+        icon: "/icons/android-chrome-192x192.png",
+        badge: "/icons/favicon-32x32.png",
         tag: "chainward-notification-test",
         data: { url: "/settings" },
       });

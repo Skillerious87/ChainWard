@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface PageLoadingCoreProps {
   title: string;
   hint: string;
@@ -16,11 +18,7 @@ export function PageLoadingCore({ title, hint }: PageLoadingCoreProps) {
           <circle className="page-loading-core__arc page-loading-core__arc--primary" cx="80" cy="80" r="62" pathLength="100" />
         </svg>
         <span className="page-loading-core__centre">
-          <svg viewBox="0 0 64 64">
-            <path d="M24.5 16.5 17.8 23.2a14 14 0 0 0 19.8 19.8l4.4-4.4" />
-            <path d="m39.5 47.5 6.7-6.7A14 14 0 0 0 26.4 21l-4.4 4.4" />
-            <path d="m25.2 41.4 15.6-15.6" />
-          </svg>
+          <Image src="/icons/android-chrome-192x192.png" alt="" width={64} height={64} priority />
         </span>
       </div>
       <div className="page-loading-core__copy">

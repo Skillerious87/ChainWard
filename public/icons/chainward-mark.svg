@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chainward shield and chain mark">
-  <rect width="64" height="64" rx="14" fill="#080d0f"/>
-  <path d="M32 7.5 51 15v15.5c0 11.6-6.7 20.4-19 26-12.3-5.6-19-14.4-19-26V15Z" fill="#132018" stroke="#8fe957" stroke-width="2.5" stroke-linejoin="round"/>
-  <path d="M31.5 24H25a7 7 0 1 0 0 14h3" fill="none" stroke="#f0f6f2" stroke-width="4.5" stroke-linecap="round"/>
-  <path d="M32.5 38H39a7 7 0 1 0 0-14h-3" fill="none" stroke="#8fe957" stroke-width="4.5" stroke-linecap="round"/>
-  <path d="M26.5 31h11" fill="none" stroke="#b9ef94" stroke-width="4.5" stroke-linecap="round"/>
-</svg>

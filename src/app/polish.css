@@ -1771,28 +1771,23 @@ body {
 .page-loading-core__track { stroke: rgba(255,255,255,.085); stroke-width: 5; }
 .page-loading-core__arc { fill: none; stroke-linecap: round; transform-origin: 50% 50%; }
 .page-loading-core__arc--primary { stroke: var(--accent); stroke-width: 5; stroke-dasharray: 62 38; animation: page-core-spin 1.05s linear infinite; }
-.page-loading-core__centre { position: relative; z-index: 2; display: grid; width: 38%; aspect-ratio: 1; place-items: center; border: 1px solid rgba(var(--accent-rgb),.2); border-radius: 50%; background: #0c1214; box-shadow: 0 8px 22px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04); }
-.page-loading-core__centre svg { width: 54%; height: 54%; fill: none; stroke: var(--accent); stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
+.page-loading-core__centre { position: relative; z-index: 2; display: grid; width: 44%; aspect-ratio: 1; place-items: center; }
+.page-loading-core__centre img { width: 100%; height: 100%; object-fit: contain; background: transparent; filter: drop-shadow(0 8px 18px rgba(0,0,0,.3)); animation: page-core-mark 1.5s ease-in-out infinite; }
 .page-loading-core__copy { display: grid; max-width: 380px; justify-items: center; margin-top: 13px; }
 .page-loading-core__copy strong { color: #d7dfdb; font-size: 13px; font-weight: 620; letter-spacing: -.05px; }
 @keyframes page-core-spin { to { transform: rotate(360deg); } }
+@keyframes page-core-mark { 0%,100% { opacity: .82; transform: scale(.96); } 50% { opacity: 1; transform: scale(1); } }
 
-/* Loading mark. The arcs sweep their own dash as well as rotating, so the
-   motion never settles into a single readable speed. */
-.cw-spinner { display: inline-grid; flex: 0 0 auto; place-items: center; }
-.cw-spinner svg { width: 100%; height: 100%; overflow: visible; }
+/* Compact loading mark: the logo stays readable while one quiet ring moves. */
+.cw-spinner { position: relative; display: inline-grid; flex: 0 0 auto; place-items: center; }
+.cw-spinner svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .cw-spinner circle { fill: none; stroke-linecap: round; transform-origin: 50% 50%; }
-.cw-spinner__track { stroke: rgba(255,255,255,.07); stroke-width: 3; }
-.cw-spinner__arc { stroke-width: 3.4; }
-.cw-spinner--accent .cw-spinner__arc--outer { stroke: var(--accent); filter: drop-shadow(0 0 4px rgba(var(--accent-rgb),.4)); }
-.cw-spinner--accent .cw-spinner__arc--inner { stroke: rgba(var(--accent-rgb),.42); }
-.cw-spinner--muted .cw-spinner__arc--outer { stroke: #8d9aa3; }
-.cw-spinner--muted .cw-spinner__arc--inner { stroke: #5c666e; }
-.cw-spinner__arc--outer { stroke-dasharray: 44 56; animation: cw-spin-outer 1.05s cubic-bezier(.5,.16,.5,.84) infinite, cw-dash 1.9s ease-in-out infinite; }
-.cw-spinner__arc--inner { stroke-width: 2.6; stroke-dasharray: 18 39; animation: cw-spin-inner 1.5s linear infinite; }
+.cw-spinner__track { stroke: rgba(255,255,255,.09); stroke-width: 2.8; }
+.cw-spinner__arc { stroke-width: 3.4; stroke-dasharray: 28 72; animation: cw-spin-outer .9s linear infinite; }
+.cw-spinner--accent .cw-spinner__arc { stroke: var(--accent); filter: drop-shadow(0 0 4px rgba(var(--accent-rgb),.4)); }
+.cw-spinner--muted .cw-spinner__arc { stroke: #8d9aa3; }
+.cw-spinner__mark { position: relative; width: 84%; height: 84%; object-fit: contain; background: transparent; }
 @keyframes cw-spin-outer { to { transform: rotate(360deg); } }
-@keyframes cw-spin-inner { to { transform: rotate(-360deg); } }
-@keyframes cw-dash { 0%,100% { stroke-dasharray: 22 78; } 50% { stroke-dasharray: 62 38; } }
 
 @media (max-width: 900px) {
   .view-loading__stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
@@ -1813,13 +1808,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .view-loading { animation-duration: 1ms; }
   .skeleton-line { animation: none; background: #171e24; }
-  .cw-spinner__arc--outer { animation: cw-spin-outer 1.6s linear infinite; }
-  .cw-spinner__arc--inner { animation: none; }
+  .cw-spinner__arc { animation: cw-spin-outer 1.6s linear infinite; }
+  .page-loading-core__centre img { animation: none; }
   .page-loading-core__arc--primary { animation: none; }
   .page-loading-core__arc--primary { stroke-dasharray: 42 58; }
 }
 :root.reduced-motion .skeleton-line { animation: none; background: #171e24; }
-:root.reduced-motion .cw-spinner__arc--inner { animation: none; }
+:root.reduced-motion .cw-spinner__mark,
+:root.reduced-motion .page-loading-core__centre img { animation: none; }
 :root.reduced-motion .page-loading-core__arc--primary { animation: none; }
 
 /* Shared interaction polish. Custom controls that visually replace their
@@ -2637,14 +2633,14 @@ body {
 .positive-delta,
 .neutral-delta { font-size: 11.5px !important; }
 
-/* The compact shield-and-link mark stays crisp in dense navigation and at
-   browser-icon scale without the glow and fine detail of the former artwork. */
+/* Keep the transparent mark unobstructed wherever the shared brand appears. */
 .brand { gap: 9px; }
 .brand__mark--image {
   width: 34px !important;
   height: 34px !important;
   flex: 0 0 34px;
   object-fit: contain;
+  background: transparent;
   filter: drop-shadow(0 5px 12px rgba(0, 0, 0, .24));
 }
 

@@ -16,5 +16,9 @@ describe("Chainward web app manifest", () => {
         expect.objectContaining({ sizes: "512x512", purpose: "maskable" }),
       ]),
     );
+    expect(value.icons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ src: "/icons/android-chrome-192x192.png" }),
+      expect.objectContaining({ src: "/icons/android-chrome-512x512.png" }),
+    ]));
   });
 });
