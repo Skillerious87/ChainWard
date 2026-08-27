@@ -91,6 +91,8 @@ The view remains intentionally conservative about provenance:
 - `PAID` means a deliberate Chainward acknowledgement, not inferred Torn
   activity.
 - `WAIVED` counts as resolved but never as paid value.
+- A zero-value decision is displayed as `Not eligible`, excluded from paid and
+  settlement-rate totals, and retained in the register for reward provenance.
 - Local SQLite currently persists paid chain settlements and withdrawal
   corrections; PostgreSQL can expose the full pending/approved/held/paid/waived
   lifecycle. The interface analyses only records actually present in its

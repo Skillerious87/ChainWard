@@ -7,7 +7,7 @@ import { ContributionTable } from "@/components/chain/contribution-table";
 import { ExportButton } from "@/components/ui/action-controls";
 import { MemberAvatar } from "@/components/ui/member-avatar";
 import { RewardAmount } from "@/components/ui/reward-amount";
-import { calculateChainRewardPreview, getChainSettlement } from "@/lib/rewards/chain-settlement";
+import { calculateChainRewardPreview, getChainSettlement, payableMemberCount } from "@/lib/rewards/chain-settlement";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getRewardWorkspace } from "@/lib/rewards/reward-store";
 import { getChainReportView } from "@/lib/torn/workspace-data-service";
@@ -45,7 +45,7 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
 
     <section className={settlement?.status === "PAID" ? "reward-calculation-summary reward-calculation-summary--paid" : "reward-calculation-summary"}>
       <header><span>{settlement?.status === "PAID" ? <BadgeCheck size={22} /> : <CircleDollarSign size={22} />}</span><div><p className="eyebrow">{settlement?.status === "PAID" ? "Immutable paid snapshot" : "Reward calculation"}</p><h2>{preview.available ? `${preview.schemeName} · version ${preview.schemeVersion}` : "Reward scheme required"}</h2><p>{preview.message}</p></div></header>
-      <dl><div><dt>Eligible records</dt><dd>{preview.members.length}</dd></div><div><dt>Total liability</dt><dd>{preview.available && preview.rewardUnit ? <RewardAmount amount={preview.totalAmount} unit={preview.rewardUnit} paid={settlement?.status === "PAID"} size="compact" artwork="liability" /> : "Unavailable"}</dd></div><div><dt>Payout status</dt><dd className={settlement?.status === "PAID" ? "paid-copy" : undefined}>{settlement?.status === "PAID" ? "PAID" : "Not marked"}</dd></div></dl>
+      <dl><div><dt>Eligible records</dt><dd>{payableMemberCount(preview.members)}</dd></div><div><dt>Total liability</dt><dd>{preview.available && preview.rewardUnit ? <RewardAmount amount={preview.totalAmount} unit={preview.rewardUnit} paid={settlement?.status === "PAID"} size="compact" artwork="liability" /> : "Unavailable"}</dd></div><div><dt>Payout status</dt><dd className={settlement?.status === "PAID" ? "paid-copy" : undefined}>{settlement?.status === "PAID" ? "PAID" : "Not marked"}</dd></div></dl>
     </section>
 
     <div className="report-grid">

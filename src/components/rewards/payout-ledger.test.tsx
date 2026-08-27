@@ -59,6 +59,23 @@ describe("PayoutLedger", () => {
     ]} message="Ready" />);
     expect(exposed).toContain("aria-label=\"50 percent unresolved settlement risk\"");
   });
+
+  it("separates zero-reward decisions from paid and waived payouts", () => {
+    const entries = [
+      entry({ id: "paid", amount: 2, status: "PAID", processedAt: "2026-08-10T12:00:00.000Z" }),
+      entry({ id: "below-threshold", amount: 0, tierLabel: "Below threshold", status: "PAID", processedAt: "2026-08-10T12:00:00.000Z" }),
+    ];
+    const analysis = analysePayoutLedger(entries);
+    const html = renderToStaticMarkup(<PayoutLedger entries={entries} message="Ready" />);
+
+    expect(analysis.paid).toBe(1);
+    expect(analysis.notEligible).toBe(1);
+    expect(analysis.payable).toBe(1);
+    expect(analysis.settlementRate).toBe(100);
+    expect(html).toContain("Not eligible");
+    expect(html).toContain("Assessed · no payment due");
+    expect(html).toContain("1 not eligible excluded");
+  });
 });
 
 function entry(overrides: Partial<PayoutLedgerEntry>): PayoutLedgerEntry {

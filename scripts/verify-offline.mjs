@@ -273,6 +273,7 @@ async function run() {
     check("payout overview surfaces settlement controls", payoutOverview.html.includes("Operational posture") && payoutOverview.html.includes("Unresolved settlement share"));
     const payoutLedger = await getRoute("/payouts/ledger", session.cookie);
     check("payout register owns its auditable record view", payoutLedger.html.includes("Member payout ledger") && payoutLedger.html.includes("Persisted records only"));
+    check("payout register separates below-threshold members from paid recipients", payoutLedger.html.includes("Below Threshold") && payoutLedger.html.includes("Not eligible") && payoutLedger.html.includes("Assessed · no payment due"));
     const payoutRecipients = await getRoute("/payouts/recipients", session.cookie);
     check("payout recipient view ranks member exposure", payoutRecipients.html.includes("payout-recipient__rank") && payoutRecipients.html.includes("Recipient analysis"));
     const payoutCorrections = await getRoute("/payouts/corrections", session.cookie);

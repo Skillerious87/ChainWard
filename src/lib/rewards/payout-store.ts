@@ -17,6 +17,8 @@ export interface PayoutLedgerEntry {
   processedBy: { tornUserId: number; name: string } | null;
 }
 
+type PersistedPayoutStatus = PayoutLedgerEntry["status"];
+
 export interface PayoutLedgerResult {
   databaseConfigured: boolean;
   databaseAvailable: boolean;
@@ -57,8 +59,11 @@ export async function getPayoutLedger(tornFactionId: number | null, knownNames: 
       const member = calculation?.find((item) => item.tornUserId === row.tornUserId);
       tierByMember.set(row.id, member?.tierLabel ?? null);
     }
-    const entries = rows.map<PayoutLedgerEntry>((row) => ({ id: row.id, chainId: row.snapshot.chain.tornChainId, tornUserId: row.tornUserId, memberName: row.memberName, amount: Number(row.amount), rewardUnit: row.rewardDefinition.displayUnit, tierLabel: tierByMember.get(row.id) ?? null, status: row.status, createdAt: row.createdAt.toISOString(), processedAt: row.processedAt?.toISOString() ?? null, processedBy: row.processedBy ? { name: row.processedBy.name, tornUserId: row.processedBy.tornUserId } : null }));
-    return { databaseConfigured: true, databaseAvailable: true, entries, message: entries.length ? `${entries.length} persisted member payout${entries.length === 1 ? "" : "s"}.` : "No payout records have been created for this faction." };
+    const entries = rows.map<PayoutLedgerEntry>((row) => {
+      const amount = Number(row.amount);
+      return { id: row.id, chainId: row.snapshot.chain.tornChainId, tornUserId: row.tornUserId, memberName: row.memberName, amount, rewardUnit: row.rewardDefinition.displayUnit, tierLabel: tierByMember.get(row.id) ?? null, status: normalizePayoutStatus(amount, row.status), createdAt: row.createdAt.toISOString(), processedAt: row.processedAt?.toISOString() ?? null, processedBy: row.processedBy ? { name: row.processedBy.name, tornUserId: row.processedBy.tornUserId } : null };
+    });
+    return { databaseConfigured: true, databaseAvailable: true, entries, message: entries.length ? `${entries.length} persisted member reward decision${entries.length === 1 ? "" : "s"}.` : "No payout records have been created for this faction." };
   } catch { return empty(true, false, "The configured PostgreSQL payout register could not be queried."); }
 }
 
@@ -67,8 +72,8 @@ function getLocalLedger(factionId: number, knownNames: Readonly<Record<number, s
   if (!database) return empty(false, false, "The local database file is unavailable.");
   try {
     const rows = database.prepare("SELECT chain_id, reward_unit, snapshot_json, calculated_at, paid_at, paid_by_torn_id, paid_by_name FROM chain_settlements WHERE faction_id = ? AND status = 'PAID' ORDER BY paid_at DESC").all(factionId) as unknown as LocalSettlementRow[];
-    const entries = rows.flatMap<PayoutLedgerEntry>((row) => parseMembers(row.snapshot_json).map((member) => ({ id: `${factionId}:${row.chain_id}:${member.tornUserId}`, chainId: row.chain_id, tornUserId: member.tornUserId, memberName: member.memberName, amount: member.amount, rewardUnit: row.reward_unit, tierLabel: member.tierLabel, status: "PAID", createdAt: row.calculated_at, processedAt: row.paid_at, processedBy: row.paid_by_torn_id ? { tornUserId: row.paid_by_torn_id, name: row.paid_by_name || knownNames[row.paid_by_torn_id] || "Unknown user" } : null })));
-    return { databaseConfigured: true, databaseAvailable: true, entries, message: entries.length ? `${entries.length} local member payout${entries.length === 1 ? "" : "s"}.` : "No paid chains are stored in the local database yet." };
+    const entries = rows.flatMap<PayoutLedgerEntry>((row) => parseMembers(row.snapshot_json).map((member) => ({ id: `${factionId}:${row.chain_id}:${member.tornUserId}`, chainId: row.chain_id, tornUserId: member.tornUserId, memberName: member.memberName, amount: member.amount, rewardUnit: row.reward_unit, tierLabel: member.tierLabel, status: normalizePayoutStatus(member.amount, "PAID"), createdAt: row.calculated_at, processedAt: row.paid_at, processedBy: row.paid_by_torn_id ? { tornUserId: row.paid_by_torn_id, name: row.paid_by_name || knownNames[row.paid_by_torn_id] || "Unknown user" } : null })));
+    return { databaseConfigured: true, databaseAvailable: true, entries, message: entries.length ? `${entries.length} local member reward decision${entries.length === 1 ? "" : "s"}.` : "No paid chains are stored in the local database yet." };
   } catch { return empty(true, false, "The local payout register could not be read safely."); }
   finally { database.close(); }
 }
@@ -81,6 +86,11 @@ function parseCalculation(value: unknown): ChainMemberReward[] | null {
 function parseMembers(value: string): ChainMemberReward[] {
   try { const parsed = JSON.parse(value) as unknown; return Array.isArray(parsed) ? parsed as ChainMemberReward[] : []; }
   catch { return []; }
+}
+
+/** Zero-value reward decisions are resolved by policy, never by payment. */
+function normalizePayoutStatus(amount: number, status: PersistedPayoutStatus): PersistedPayoutStatus {
+  return amount <= 0 ? "WAIVED" : status;
 }
 
 function empty(databaseConfigured: boolean, databaseAvailable: boolean, message: string): PayoutLedgerResult { return { databaseConfigured, databaseAvailable, entries: [], message }; }

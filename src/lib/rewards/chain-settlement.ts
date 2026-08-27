@@ -90,7 +90,7 @@ export async function getChainSettlementSummaries(factionId: number, chainIds: n
       for (const row of rows) { const parsed = parseSettlement(row.value); if (parsed && !settlements.some((item) => item.chainId === parsed.chainId)) settlements.push(parsed); }
     } catch { return {}; }
   }
-  return Object.fromEntries(settlements.map((item) => [item.chainId, { status: item.status, totalAmount: item.totalAmount, rewardUnit: item.rewardUnit ?? "units", memberCount: item.members.length, paidAt: item.paidAt }]));
+  return Object.fromEntries(settlements.map((item) => [item.chainId, { status: item.status, totalAmount: item.totalAmount, rewardUnit: item.rewardUnit ?? "units", memberCount: payableMemberCount(item.members), paidAt: item.paidAt }]));
 }
 
 export async function savePaidChainSettlement(settlement: ChainSettlement, report: TornChainReportView, paidByName: string): Promise<void> {
@@ -101,7 +101,7 @@ export async function savePaidChainSettlement(settlement: ChainSettlement, repor
     try {
       database.prepare(`INSERT INTO chain_settlements (faction_id, chain_id, status, scheme_id, scheme_name, scheme_version, reward_unit, total_amount, member_count, snapshot_json, calculated_at, paid_at, paid_by_torn_id, paid_by_name)
         VALUES (?, ?, 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(faction_id, chain_id) DO UPDATE SET status = 'PAID', scheme_id = excluded.scheme_id, scheme_name = excluded.scheme_name, scheme_version = excluded.scheme_version, reward_unit = excluded.reward_unit, total_amount = excluded.total_amount, member_count = excluded.member_count, snapshot_json = excluded.snapshot_json, calculated_at = excluded.calculated_at, paid_at = excluded.paid_at, paid_by_torn_id = excluded.paid_by_torn_id, paid_by_name = excluded.paid_by_name`).run(settlement.factionId, settlement.chainId, settlement.schemeId, settlement.schemeName, settlement.schemeVersion, settlement.rewardUnit, settlement.totalAmount, settlement.members.length, JSON.stringify(settlement.members), settlement.calculatedAt, settlement.paidAt, settlement.paidByTornId, paidByName);
+        ON CONFLICT(faction_id, chain_id) DO UPDATE SET status = 'PAID', scheme_id = excluded.scheme_id, scheme_name = excluded.scheme_name, scheme_version = excluded.scheme_version, reward_unit = excluded.reward_unit, total_amount = excluded.total_amount, member_count = excluded.member_count, snapshot_json = excluded.snapshot_json, calculated_at = excluded.calculated_at, paid_at = excluded.paid_at, paid_by_torn_id = excluded.paid_by_torn_id, paid_by_name = excluded.paid_by_name`).run(settlement.factionId, settlement.chainId, settlement.schemeId, settlement.schemeName, settlement.schemeVersion, settlement.rewardUnit, settlement.totalAmount, payableMemberCount(settlement.members), JSON.stringify(settlement.members), settlement.calculatedAt, settlement.paidAt, settlement.paidByTornId, paidByName);
       if (settlement.schemeId) database.prepare("UPDATE reward_schemes SET locked_by_history = 1 WHERE id = ? AND faction_id = ?").run(settlement.schemeId, settlement.factionId);
     } finally { database.close(); }
     return;
@@ -132,9 +132,21 @@ export async function savePaidChainSettlement(settlement: ChainSettlement, repor
     }
     await tx.chainRewardSnapshot.updateMany({ where: { chainId: chain.id, status: "FINAL" }, data: { status: "SUPERSEDED", supersededAt: new Date() } });
     const calculation = JSON.parse(JSON.stringify(settlement)) as Prisma.InputJsonValue;
-    const liabilityTotals = { totalAmount: settlement.totalAmount, rewardUnit: settlement.rewardUnit, memberCount: settlement.members.length } as Prisma.InputJsonValue;
+    const liabilityTotals = { totalAmount: settlement.totalAmount, rewardUnit: settlement.rewardUnit, memberCount: payableMemberCount(settlement.members) } as Prisma.InputJsonValue;
     const snapshot = await tx.chainRewardSnapshot.create({ data: { chainId: chain.id, rewardSchemeId: scheme.id, schemeName: settlement.schemeName!, schemeVersion: settlement.schemeVersion!, status: "FINAL", calculation, liabilityTotals, calculatedAt: new Date(settlement.calculatedAt) } });
-    await tx.memberPayout.createMany({ data: settlement.members.map((member) => ({ factionId: faction.id, snapshotId: snapshot.id, contributionId: contributionIds.get(member.tornUserId)!, rewardDefinitionId, tornUserId: member.tornUserId, memberName: member.memberName, amount: member.amount, status: "PAID" as const, processedById: processedBy.id, processedAt: new Date(settlement.paidAt!), note: `Chain #${settlement.chainId} payout acknowledgement` })) });
+    await tx.memberPayout.createMany({ data: settlement.members.map((member) => ({
+      factionId: faction.id,
+      snapshotId: snapshot.id,
+      contributionId: contributionIds.get(member.tornUserId)!,
+      rewardDefinitionId,
+      tornUserId: member.tornUserId,
+      memberName: member.memberName,
+      amount: member.amount,
+      status: member.amount > 0 ? "PAID" as const : "WAIVED" as const,
+      processedById: processedBy.id,
+      processedAt: new Date(settlement.paidAt!),
+      note: member.amount > 0 ? `Chain #${settlement.chainId} payout acknowledgement` : `Chain #${settlement.chainId}: no reward due under the saved tier rules`,
+    })) });
   });
 }
 
@@ -305,6 +317,10 @@ function parseSettlement(value: unknown): ChainSettlement | null {
 }
 
 function settlementKey(chainId: number): string { return `chainSettlement.${chainId}`; }
+
+export function payableMemberCount(members: readonly ChainMemberReward[]): number {
+  return members.filter((member) => member.amount > 0).length;
+}
 
 interface LocalSettlementRow {
   faction_id: number;

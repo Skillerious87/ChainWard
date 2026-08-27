@@ -495,6 +495,7 @@
 .payout-lifecycle__pending, .payout-lifecycle__dot--pending { background: var(--warning); }
 .payout-lifecycle__held, .payout-lifecycle__dot--held { background: var(--danger); }
 .payout-lifecycle__waived, .payout-lifecycle__dot--waived { background: #77848c; }
+.payout-lifecycle__not-eligible, .payout-lifecycle__dot--not-eligible { background: #53616a; }
 .payout-lifecycle__legend { display: flex; flex-wrap: wrap; gap: 17px; margin-top: 10px; }
 .payout-lifecycle__legend > span { display: flex; align-items: center; gap: 6px; }
 .payout-lifecycle__dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -592,6 +593,8 @@
 .professional-payout-ledger .payout-badge--pending { border-color: rgba(245, 185, 76, .2); }
 .professional-payout-ledger .payout-badge--held { border-color: rgba(242, 109, 109, .22); }
 .professional-payout-ledger .payout-badge--waived { border-color: rgba(148, 160, 168, .2); background: rgba(148, 160, 168, .07); color: #9ca8af; }
+.professional-payout-ledger .payout-badge--not-eligible { border-color: rgba(131, 148, 158, .2); background: rgba(105, 122, 132, .07); color: #87969f; }
+.professional-payout-ledger .ledger-date--ineligible small { color: #728089; }
 .professional-payout-ledger .ledger-date strong { color: #b8c2c7; font-size: 10.5px; }
 .professional-payout-ledger .ledger-date small { font-size: 9.5px; }
 .professional-payout-ledger .ledger-date--open strong { color: #a9b4b9; }
@@ -741,6 +744,7 @@
 .payout-ledger-row--held td:first-child { box-shadow: inset 2px 0 var(--danger); }
 .payout-ledger-row--approved td:first-child,
 .payout-ledger-row--pending td:first-child { box-shadow: inset 2px 0 var(--warning); }
+.payout-ledger-row--not-eligible td:first-child { box-shadow: inset 2px 0 #53616a; }
 .payout-ledger-open { width: 44px; padding-inline: 8px !important; text-align: right; }
 .payout-ledger-open a { display: inline-grid; width: 29px; height: 29px; place-items: center; border: 1px solid #303941; border-radius: 7px; color: #75818a; transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease; }
 .payout-ledger-open a:hover { border-color: rgba(var(--accent-rgb), .35); background: rgba(var(--accent-rgb), .06); color: var(--accent); transform: translateX(2px); }

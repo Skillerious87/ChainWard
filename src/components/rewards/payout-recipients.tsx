@@ -25,7 +25,8 @@ export function PayoutRecipients({ entries }: { entries: PayoutLedgerEntry[] }) 
   const [unit, setUnit] = useState("ALL");
   const [sort, setSort] = useState<RecipientSort>("TOTAL");
   const [showAll, setShowAll] = useState(false);
-  const recipients = useMemo(() => aggregateRecipients(entries), [entries]);
+  const payableEntries = useMemo(() => entries.filter(isPayable), [entries]);
+  const recipients = useMemo(() => aggregateRecipients(payableEntries), [payableEntries]);
   const units = useMemo(() => [...new Set(recipients.map((recipient) => recipient.unit))].toSorted(), [recipients]);
   const filteredRecipients = useMemo(() => {
     const normalized = deferredQuery.trim().toLowerCase();
@@ -33,10 +34,10 @@ export function PayoutRecipients({ entries }: { entries: PayoutLedgerEntry[] }) 
       && (!normalized || `${recipient.memberName} ${recipient.tornUserId} ${[...recipient.chains].join(" ")}`.toLowerCase().includes(normalized)));
   }, [deferredQuery, recipients, unit]);
   const groups = useMemo(() => groupRecipients(filteredRecipients, sort), [filteredRecipients, sort]);
-  const distinctMembers = new Set(entries.map((entry) => entry.tornUserId)).size;
-  const paidMembers = new Set(entries.filter((entry) => entry.status === "PAID").map((entry) => entry.tornUserId)).size;
-  const openMembers = new Set(entries.filter((entry) => !["PAID", "WAIVED"].includes(entry.status)).map((entry) => entry.tornUserId)).size;
-  const chainCount = new Set(entries.map((entry) => entry.chainId)).size;
+  const distinctMembers = new Set(payableEntries.map((entry) => entry.tornUserId)).size;
+  const paidMembers = new Set(payableEntries.filter((entry) => entry.status === "PAID").map((entry) => entry.tornUserId)).size;
+  const openMembers = new Set(payableEntries.filter((entry) => !["PAID", "WAIVED"].includes(entry.status)).map((entry) => entry.tornUserId)).size;
+  const chainCount = new Set(payableEntries.map((entry) => entry.chainId)).size;
   const rowLimit = groups.length > 1 ? 6 : 10;
   const hiddenCount = groups.reduce((total, group) => total + Math.max(0, group.recipients.length - rowLimit), 0);
   const exportRows = filteredRecipients.map((recipient) => ({
@@ -127,3 +128,5 @@ function compareRecipients(left: RecipientTotal, right: RecipientTotal, sort: Re
 function formatAmount(amount: number): string {
   return amount.toLocaleString("en-GB", { maximumFractionDigits: 4 });
 }
+
+function isPayable(entry: PayoutLedgerEntry): boolean { return entry.amount > 0; }

@@ -23,6 +23,6 @@ export const getPayoutWorkspace = cache(async () => {
   return {
     corrections,
     ledger,
-    recipientCount: new Set(ledger.entries.map((entry) => entry.tornUserId)).size,
+    recipientCount: new Set(ledger.entries.filter((entry) => entry.amount > 0).map((entry) => entry.tornUserId)).size,
   };
 });

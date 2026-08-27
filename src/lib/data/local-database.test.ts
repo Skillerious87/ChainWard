@@ -45,11 +45,18 @@ describe.sequential("local SQLite database", () => {
     createLocalDatabase();
     const database = openLocalDatabase();
     try {
-      database!.prepare("INSERT INTO chain_settlements (faction_id, chain_id, status, scheme_name, scheme_version, reward_unit, total_amount, member_count, snapshot_json, calculated_at, paid_at, paid_by_torn_id) VALUES (?, ?, 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(51393, 58410291, "Standard chain", 1, "Xanax", 5, 1, JSON.stringify([{ tornUserId: 3212954, memberName: "Skillerious", hits: 46, tierLabel: "Top", amount: 5 }]), "2026-08-08T20:00:00.000Z", "2026-08-08T20:05:00.000Z", 3212954);
+      database!.prepare("INSERT INTO chain_settlements (faction_id, chain_id, status, scheme_name, scheme_version, reward_unit, total_amount, member_count, snapshot_json, calculated_at, paid_at, paid_by_torn_id) VALUES (?, ?, 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(51393, 58410291, "Standard chain", 1, "Xanax", 5, 1, JSON.stringify([
+        { tornUserId: 3212954, memberName: "Skillerious", hits: 46, tierLabel: "Top", amount: 5 },
+        { tornUserId: 1234567, memberName: "BelowThreshold", hits: 4, tierLabel: "Below threshold", amount: 0 },
+      ]), "2026-08-08T20:00:00.000Z", "2026-08-08T20:05:00.000Z", 3212954);
     } finally { database?.close(); }
 
     const ledger = await getPayoutLedger(51393);
     expect(ledger.databaseAvailable).toBe(true);
-    expect(ledger.entries).toEqual([expect.objectContaining({ chainId: 58410291, tornUserId: 3212954, amount: 5, rewardUnit: "Xanax", status: "PAID" })]);
+    expect(ledger.entries).toHaveLength(2);
+    expect(ledger.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ chainId: 58410291, tornUserId: 3212954, amount: 5, rewardUnit: "Xanax", status: "PAID" }),
+      expect.objectContaining({ tornUserId: 1234567, amount: 0, status: "WAIVED" }),
+    ]));
   });
 });

@@ -17,6 +17,7 @@ export function ChainPaymentControl({ chainId, preview, settlement }: { chainId:
   const [working, setWorking] = useState(false);
   const paid = settlement?.status === "PAID";
   const display = settlement ?? preview;
+  const recipientCount = display.members.filter((member) => member.amount > 0).length;
 
   function closeDialog(): void {
     setOpen(false);
@@ -60,14 +61,14 @@ export function ChainPaymentControl({ chainId, preview, settlement }: { chainId:
     <button className={paid ? "chain-payment-button chain-payment-button--paid" : "chain-payment-button"} onClick={() => { setReverting(false); setOpen(true); }} aria-label={paid ? `View paid record for chain ${chainId}` : `Mark chain ${chainId} paid`}>
       <span className="chain-payment-button__seal">{paid ? <BadgeCheck size={22} /> : <CircleDollarSign size={21} />}</span>
       <span className="chain-payment-button__status"><small>Payment status</small><strong>{paid ? "Paid" : "Awaiting payment"}</strong></span>
-      <span className="chain-payment-button__amount"><strong>{display.totalAmount.toLocaleString()}</strong><small>{display.rewardUnit} · {display.members.length} member{display.members.length === 1 ? "" : "s"}</small></span>
+      <span className="chain-payment-button__amount"><strong>{display.totalAmount.toLocaleString()}</strong><small>{display.rewardUnit} · {recipientCount} recipient{recipientCount === 1 ? "" : "s"}</small></span>
       <ChevronRight className="chain-payment-button__chevron" size={17} />
     </button>
     <Dialog
       open={open}
       className={reverting ? "dialog--revert-paid" : paid ? "dialog--chain-paid" : "dialog--mark-paid"}
       title={reverting ? `Return chain #${chainId} to unpaid?` : paid ? `Chain #${chainId} is paid` : `Mark chain #${chainId} as paid?`}
-      description={reverting ? "Use this only to correct a payout that was recorded by mistake." : paid ? "This payout acknowledgement is stored in the workspace database." : "Confirm only after every listed member reward has been sent."}
+      description={reverting ? "Use this only to correct a payout that was recorded by mistake." : paid ? "This payout acknowledgement is stored in the workspace database." : "Confirm only after every eligible member reward has been sent. Zero-reward members are recorded as not eligible."}
       confirmLabel={reverting ? (working ? "Withdrawing…" : "Withdraw paid status") : paid ? "Done" : working ? "Saving…" : "Confirm all rewards paid"}
       cancelLabel={reverting ? "Keep as paid" : "Cancel"}
       destructive={reverting}
@@ -109,7 +110,7 @@ export function ChainPaymentControl({ chainId, preview, settlement }: { chainId:
             <span>{paid ? <ShieldCheck size={23} /> : <CircleDollarSign size={23} />}</span>
             <div><p className="eyebrow">{paid ? "Recorded payment" : "Payout acknowledgement"}</p><h3>{display.totalAmount.toLocaleString()} {display.rewardUnit}</h3><p>{paid ? "This settlement has been acknowledged and recorded in the workspace ledger." : "Confirm only after the complete calculated payout has been sent."}</p></div>
           </div>
-          <dl className="payment-record-grid"><div><dt><UsersRound size={13} />Recipients</dt><dd>{display.members.length} member{display.members.length === 1 ? "" : "s"}</dd></div><div><dt><ReceiptText size={13} />Reward scheme</dt><dd>{display.schemeName}</dd></div><div><dt><ShieldCheck size={13} />Scheme version</dt><dd>Version {display.schemeVersion}</dd></div><div><dt><CalendarCheck2 size={13} />{paid ? "Recorded" : "Status"}</dt><dd>{paid && settlement?.paidAt ? new Date(settlement.paidAt).toLocaleString("en-GB") : "Ready for confirmation"}</dd></div></dl>
+          <dl className="payment-record-grid"><div><dt><UsersRound size={13} />Recipients</dt><dd>{recipientCount} eligible member{recipientCount === 1 ? "" : "s"}</dd></div><div><dt><ReceiptText size={13} />Reward scheme</dt><dd>{display.schemeName}</dd></div><div><dt><ShieldCheck size={13} />Scheme version</dt><dd>Version {display.schemeVersion}</dd></div><div><dt><CalendarCheck2 size={13} />{paid ? "Recorded" : "Status"}</dt><dd>{paid && settlement?.paidAt ? new Date(settlement.paidAt).toLocaleString("en-GB") : "Ready for confirmation"}</dd></div></dl>
           {paid && <button type="button" className="payment-revert-button" onClick={() => setReverting(true)}>
             <Undo2 size={14} /> Recorded by mistake? Return this chain to unpaid
           </button>}

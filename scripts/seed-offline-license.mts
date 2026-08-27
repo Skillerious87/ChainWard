@@ -216,8 +216,9 @@ function fixtureMembers(hits: number): ChainMemberReward[] {
     [9_000_003, "Bridge Watch"],
     [9_000_004, "Quiet Hand"],
     [9_000_005, "Late Joiner"],
+    [9_000_006, "Below Threshold"],
   ];
-  const weights = [0.24, 0.21, 0.18, 0.15, 0.13, 0.09];
+  const weights = [0.24, 0.21, 0.18, 0.15, 0.13, 0.09, 0];
   const allocated = weights.map((weight) => Math.floor(hits * weight));
   allocated[0] = (allocated[0] ?? 0) + hits - allocated.reduce((total, value) => total + value, 0);
   return roster.map(([tornUserId, memberName], index) => {

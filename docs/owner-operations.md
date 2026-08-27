@@ -101,8 +101,9 @@ record whose expiry has passed is not treated as valid access.
    confirm the total and member count.
 
 The PAID action stores an immutable calculation. With PostgreSQL it also stores
-the chain, contributions, reward snapshot, and one PAID ledger entry per
-member. With local SQLite it stores the complete per-member snapshot in the
+the chain, contributions, reward snapshot, and one ledger decision per member.
+Payable rewards are marked PAID; zero-reward decisions are shown as Not eligible
+and never count as a payment. With local SQLite it stores the complete per-member snapshot in the
 local database file. Used reward schemes become version-locked so later edits
 create a new version instead of changing historical calculations.
 
