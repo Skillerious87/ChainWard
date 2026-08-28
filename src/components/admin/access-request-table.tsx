@@ -84,7 +84,7 @@ export function AccessRequestTable({ initialRequests, databaseConfigured, messag
           <label className="search-field"><Search size={15} /><span className="sr-only">Search requests</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Faction, player, or identifier" /></label>
         </div>
       </div>
-      <div className="table-scroll">
+      <div className="table-scroll" role="region" aria-label="Access request table" tabIndex={0}>
         <table className="data-table access-request-table">
           <thead><tr><th>Faction</th><th>Plan</th><th>Submitted by</th><th>Payment identifier</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>{visible.map((request) => <tr key={request.requestId}>

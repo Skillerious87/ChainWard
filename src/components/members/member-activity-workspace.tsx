@@ -18,6 +18,7 @@ import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-type
 
 type ActivityView = "all" | "attention" | "critical" | "dueSoon" | "active" | "holiday" | "expired" | "watch";
 type ActivitySort = "attention" | "recent" | "inactive" | "name" | "level" | "tenure";
+type ManagedFilter = "all" | "standard" | "holiday" | "expired" | "watch";
 
 export function MemberActivityWorkspace({ rosterResult, telemetry, activity, canManage }: { rosterResult: TornDataResult<TornRosterMember[]>; telemetry: WorkspaceTelemetry; activity: ActivityWorkspace; canManage: boolean }) {
   const router = useRouter();
@@ -29,6 +30,7 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
   const [view, setView] = useState<ActivityView>("all");
   const [position, setPosition] = useState("All positions");
   const [tornStatus, setTornStatus] = useState("All statuses");
+  const [managedFilter, setManagedFilter] = useState<ManagedFilter>("all");
   const [thresholdDays, setThresholdDays] = useState(activity.policy.thresholdDays);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [sort, setSort] = useState<ActivitySort>("attention");
@@ -57,9 +59,14 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
   const visible = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return rows.filter((row) => {
-      const matchesQuery = !normalized || `${row.member.name} ${row.member.tornId} ${row.member.position} ${row.record?.note ?? ""}`.toLowerCase().includes(normalized);
+      const matchesQuery = !normalized || `${row.member.name} ${row.member.tornId} ${row.member.position} ${row.member.lastAction} ${row.member.status} ${row.band} ${row.reason} ${row.record?.note ?? ""}`.toLowerCase().includes(normalized);
       const matchesPosition = position === "All positions" || (row.member.position || "Unassigned") === position;
       const matchesStatus = tornStatus === "All statuses" || (row.member.status || "Unknown") === tornStatus;
+      const matchesManagedState = managedFilter === "all"
+        || (managedFilter === "standard" && !row.record)
+        || (managedFilter === "holiday" && row.holidayActive)
+        || (managedFilter === "expired" && row.holidayExpired)
+        || (managedFilter === "watch" && row.record?.state === "WATCH");
       const matchesView = view === "all"
         || (view === "attention" && row.needsAttention)
         || (view === "critical" && row.critical)
@@ -68,9 +75,9 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
         || (view === "holiday" && row.holidayActive)
         || (view === "expired" && row.holidayExpired)
         || (view === "watch" && row.record?.state === "WATCH");
-      return matchesQuery && matchesPosition && matchesStatus && matchesView;
+      return matchesQuery && matchesPosition && matchesStatus && matchesManagedState && matchesView;
     }).toSorted((left, right) => compareRows(left, right, sort));
-  }, [position, query, rows, sort, tornStatus, view]);
+  }, [managedFilter, position, query, rows, sort, tornStatus, view]);
 
   useEffect(() => {
     const requestedView = new URLSearchParams(window.location.search).get("view");
@@ -89,45 +96,69 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
 
   async function save(): Promise<void> {
     if (!selected || !faction) return;
-    const result = await updateMemberActivity({ factionId: faction.id, tornUserId: selected.tornId, state: draftState, holidayUntil: draftState === "HOLIDAY" && holidayUntil ? new Date(`${holidayUntil}T23:59:59.999Z`).toISOString() : null, note });
+    let result: Awaited<ReturnType<typeof updateMemberActivity>>;
+    try {
+      result = await updateMemberActivity({ factionId: faction.id, tornUserId: selected.tornId, state: draftState, holidayUntil: draftState === "HOLIDAY" && holidayUntil ? new Date(`${holidayUntil}T23:59:59.999Z`).toISOString() : null, note });
+    } catch {
+      notify({ title: "Activity was not changed", description: "The activity update could not reach the server. The editor has been kept open so you can retry.", tone: "danger" });
+      throw new Error("Member activity request failed.");
+    }
     notify({ title: result.ok ? "Member activity updated" : "Activity was not changed", description: result.message, tone: result.ok ? "success" : "danger" });
     if (!result.ok) throw new Error(result.message);
     router.refresh();
   }
 
-  async function saveThreshold(nextThreshold: number): Promise<void> {
-    const previous = thresholdDays;
-    setThresholdDays(nextThreshold);
-    if (!canManage || !faction || !activity.databaseAvailable) return;
-    setSavingPolicy(true);
-    const result = await updateMemberActivityPolicy({ factionId: faction.id, thresholdDays: nextThreshold });
-    setSavingPolicy(false);
-    notify({ title: result.ok ? "Owner alert policy saved" : "Alert policy was not changed", description: result.message, tone: result.ok ? "success" : "danger" });
-    if (!result.ok) {
-      setThresholdDays(previous);
+  async function saveThreshold(): Promise<void> {
+    const savedThreshold = activity.policy.thresholdDays;
+    if (thresholdDays === savedThreshold) return;
+    if (!canManage || !faction || !activity.databaseAvailable) {
+      setThresholdDays(savedThreshold);
       return;
     }
-    router.refresh();
+    setSavingPolicy(true);
+    try {
+      const result = await updateMemberActivityPolicy({ factionId: faction.id, thresholdDays });
+      notify({ title: result.ok ? "Owner alert policy saved" : "Alert policy was not changed", description: result.message, tone: result.ok ? "success" : "danger" });
+      if (!result.ok) {
+        setThresholdDays(savedThreshold);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setThresholdDays(savedThreshold);
+      notify({ title: "Alert policy was not changed", description: "The policy save could not reach the server. Your previous threshold is still active.", tone: "danger" });
+    } finally {
+      setSavingPolicy(false);
+    }
   }
 
   const exportRows = visible.map((row) => ({ name: row.member.name, tornId: row.member.tornId, factionPosition: row.member.position, level: row.member.level, daysInFaction: row.member.daysInFaction, lastAction: row.member.lastAction, inactivityDays: Number(row.daysInactive.toFixed(2)), riskScore: row.riskScore, smartSignal: row.band, attentionReason: row.reason, tornStatus: row.member.status, managedState: row.record?.state ?? "STANDARD", holidayUntil: row.record?.holidayUntil ?? "", note: row.record?.note ?? "" }));
   const criticalAfterDays = criticalThreshold(thresholdDays);
-  const filtersActive = Boolean(query || position !== "All positions" || tornStatus !== "All statuses" || view !== "all");
+  const policyDirty = thresholdDays !== activity.policy.thresholdDays;
+  const policyDisabled = !canManage || !activity.databaseAvailable || !faction || savingPolicy;
+  const holidayEnd = holidayUntil ? Date.parse(`${holidayUntil}T23:59:59.999Z`) : null;
+  const holidayDateInvalid = draftState === "HOLIDAY" && holidayEnd !== null && (Number.isNaN(holidayEnd) || holidayEnd <= Date.now());
+  const filtersActive = Boolean(query || position !== "All positions" || tornStatus !== "All statuses" || managedFilter !== "all" || view !== "all");
 
   function resetFilters(): void {
     setQuery("");
     setPosition("All positions");
     setTornStatus("All statuses");
+    setManagedFilter("all");
     setView("all");
   }
 
   return <div className="page-stack member-activity-workspace">
     <PageHeader eyebrow="Faction readiness" title="Member activity" description="Owner-grade inactivity intelligence with protected absences, escalation signals, and an auditable follow-up policy." actions={<><button className="button button--secondary" disabled={refreshing} onClick={() => startRefresh(() => router.refresh())}>{refreshing ? <Spinner size={15} label="Refreshing member activity" tone="muted" /> : <RefreshCw size={15} />} {refreshing ? "Refreshing…" : "Refresh roster"}</button><ExportButton filename="chainward-member-activity.csv" label="Export activity" rows={exportRows} /></>} />
 
-    <section className={`member-activity-brief${summary.critical ? " member-activity-brief--critical" : summary.attention ? " member-activity-brief--attention" : ""}`} role="status">
+    <section className={`member-activity-brief${summary.critical ? " member-activity-brief--critical" : summary.attention ? " member-activity-brief--attention" : ""}`}>
       <span><Activity size={22} /></span>
-      <div><p className="eyebrow">Owner inactivity intelligence</p><h2>{summary.critical ? `${summary.critical} critical member alert${summary.critical === 1 ? "" : "s"}.` : summary.attention ? `${summary.attention} member${summary.attention === 1 ? "" : "s"} need owner review.` : "The current roster is within policy."}</h2><p>Owners are alerted after {thresholdDays} inactive day{thresholdDays === 1 ? "" : "s"}; critical escalation begins after {criticalAfterDays}. Active holidays are protected and watch-listed members remain visible.</p></div>
-      <label><span>Alert owners after</span><select value={thresholdDays} disabled={!canManage || !activity.databaseAvailable || !faction || savingPolicy} onChange={(event) => void saveThreshold(Number(event.target.value))}>{[1, 2, 3, 5, 7, 10, 14, 21, 30].map((days) => <option key={days} value={days}>{days} day{days === 1 ? "" : "s"}</option>)}</select><small>{savingPolicy && <Spinner size={11} label="Saving activity policy" />}{savingPolicy ? "Saving policy…" : canManage ? "Saved faction policy" : "Owner-managed policy"}</small></label>
+      <div role="status" aria-live="polite"><p className="eyebrow">Owner inactivity intelligence</p><h2>{summary.critical ? `${summary.critical} critical member alert${summary.critical === 1 ? "" : "s"}.` : summary.attention ? `${summary.attention} member${summary.attention === 1 ? "" : "s"} need owner review.` : "The current roster is within policy."}</h2><p>Owners are alerted after {thresholdDays} inactive day{thresholdDays === 1 ? "" : "s"}; critical escalation begins after {criticalAfterDays}. Active holidays are protected and watch-listed members remain visible.</p></div>
+      <div className="member-activity-policy">
+        <span>Alert owners after</span>
+        <div><select aria-label="Owner inactivity alert threshold" value={thresholdDays} disabled={policyDisabled} onChange={(event) => setThresholdDays(Number(event.target.value))}>{Array.from({ length: 30 }, (_, index) => index + 1).map((days) => <option key={days} value={days}>{days} day{days === 1 ? "" : "s"}</option>)}</select><button type="button" disabled={policyDisabled || !policyDirty} onClick={() => void saveThreshold()}>{savingPolicy && <Spinner size={11} label="Saving activity policy" />}{savingPolicy ? "Saving…" : "Save"}</button></div>
+        <small aria-live="polite">{policyDirty ? `Previewing ${thresholdDays} days · save to apply` : canManage ? activity.policy.updatedByName ? `Saved by ${activity.policy.updatedByName}` : "Saved faction policy" : "Owner-managed policy"}</small>
+      </div>
     </section>
 
     <section className="member-activity-stats">
@@ -145,10 +176,10 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
     </section>
 
     <section className="data-section member-activity-table-section">
-      <div className="section-heading member-activity-table-heading"><div><h2>Roster activity tracker</h2><p>{visible.length} of {members.length} verified members match this view</p></div><div className="table-tools"><label className="search-field"><Search size={15} /><span className="sr-only">Search member activity</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Member, position, ID, or note" /></label><label className="member-activity-select"><SlidersHorizontal size={14} /><span className="sr-only">Faction position</span><select value={position} onChange={(event) => setPosition(event.target.value)}>{positions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="member-activity-select"><Activity size={14} /><span className="sr-only">Torn status</span><select value={tornStatus} onChange={(event) => setTornStatus(event.target.value)}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>{filtersActive && <button className="member-filter-reset" onClick={resetFilters}><ListFilter size={13} /> Clear</button>}</div></div>
-      <div className="member-activity-tabs" role="tablist" aria-label="Member activity view">{([ ["all", "All members", members.length], ["attention", "Needs review", summary.attention], ["critical", "Critical", summary.critical], ["dueSoon", "Due soon", summary.dueSoon], ["active", "Active 24h", summary.activeDay], ["holiday", "Holiday", summary.holiday], ["expired", "Expired holiday", summary.expired], ["watch", "Watch list", summary.watch] ] as const).map(([value, label, count]) => <button key={value} role="tab" aria-selected={view === value} className={view === value ? "member-activity-tab--active" : undefined} onClick={() => setView(value)}>{label}<span>{count}</span></button>)}</div>
-      <div className="member-activity-sort"><span>Sort</span>{([ ["attention", "Priority"], ["recent", "Most recent"], ["inactive", "Longest inactive"], ["name", "Name"], ["level", "Level"], ["tenure", "Tenure"] ] as const).map(([value, label]) => <button className={sort === value ? "member-activity-sort--active" : undefined} key={value} onClick={() => setSort(value)}>{label}{sort === value && <ChevronsUpDown size={12} />}</button>)}</div>
-      <div className="table-scroll">
+      <div className="section-heading member-activity-table-heading"><div><h2>Roster activity tracker</h2><p>{visible.length} of {members.length} verified members match this view</p><small className="member-table-scroll-hint">Swipe the roster horizontally to view every desktop column.</small></div><div className="table-tools"><label className="search-field"><Search size={15} /><span className="sr-only">Search member activity</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Member, signal, status, ID, or note" /></label><label className="member-activity-select"><SlidersHorizontal size={14} /><span className="sr-only">Faction position</span><select value={position} onChange={(event) => setPosition(event.target.value)}>{positions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="member-activity-select"><Activity size={14} /><span className="sr-only">Torn status</span><select value={tornStatus} onChange={(event) => setTornStatus(event.target.value)}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label><label className="member-activity-select"><ShieldCheck size={14} /><span className="sr-only">Managed activity state</span><select value={managedFilter} onChange={(event) => setManagedFilter(event.target.value as ManagedFilter)}><option value="all">All policy states</option><option value="standard">Standard policy</option><option value="holiday">Protected holiday</option><option value="expired">Expired holiday</option><option value="watch">Watch list</option></select></label>{filtersActive && <button type="button" className="member-filter-reset" onClick={resetFilters}><ListFilter size={13} /> Clear filters</button>}</div></div>
+      <div className="member-activity-tabs" role="tablist" aria-label="Member activity view">{([ ["all", "All members", members.length], ["attention", "Needs review", summary.attention], ["critical", "Critical", summary.critical], ["dueSoon", "Due soon", summary.dueSoon], ["active", "Active 24h", summary.activeDay], ["holiday", "Holiday", summary.holiday], ["expired", "Expired holiday", summary.expired], ["watch", "Watch list", summary.watch] ] as const).map(([value, label, count]) => <button type="button" key={value} role="tab" aria-selected={view === value} className={view === value ? "member-activity-tab--active" : undefined} onClick={() => setView(value)}>{label}<span>{count}</span></button>)}</div>
+      <div className="member-activity-sort"><span>Sort</span>{([ ["attention", "Priority"], ["recent", "Most recent"], ["inactive", "Longest inactive"], ["name", "Name"], ["level", "Level"], ["tenure", "Tenure"] ] as const).map(([value, label]) => <button type="button" aria-pressed={sort === value} className={sort === value ? "member-activity-sort--active" : undefined} key={value} onClick={() => setSort(value)}>{label}{sort === value && <ChevronsUpDown size={12} />}</button>)}</div>
+      <div className="table-scroll" role="region" aria-label="Roster activity table" tabIndex={0}>
         <table className="data-table member-activity-table">
           <caption className="sr-only">Faction member activity, status, and owner-managed follow-up state</caption>
           <thead><tr><th>Member</th><th>Faction position</th><th>Last activity</th><th>Smart signal</th><th>Torn status</th><th>Managed state</th><th><span className="sr-only">Member actions</span></th></tr></thead>
@@ -169,8 +200,16 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
 
     <section className="panel member-activity-audit"><div className="section-heading"><div><h2>Activity management history</h2><p>Latest holiday, watch, and owner-policy changes</p></div><span className="analytics-panel-icon"><Clock3 size={17} /></span></div>{activity.audit.length ? <div>{activity.audit.slice(0, 10).map((event) => { const policyEvent = event.tornUserId === 0; return <article key={event.id}><span>{auditSymbol(event.action, policyEvent)}</span><div>{policyEvent ? <strong>Faction activity policy</strong> : <TornUserName name={event.memberName} tornUserId={event.tornUserId} />}<p>{auditLabel(event.action, event.state, policyEvent)}{event.note ? ` · ${event.note}` : ""}</p></div><TornUserName name={event.actorName} tornUserId={event.actorTornUserId} detail="Updated by" /><time dateTime={event.createdAt}>{formatAuditTime(event.createdAt)}</time></article>; })}</div> : <div className="access-audit-empty"><ShieldCheck size={17} /><span><strong>No activity-management changes recorded</strong><small>The first holiday, watch, or threshold update will create an audit entry.</small></span></div>}</section>
 
-    <Dialog open={Boolean(selected)} className="dialog--member-activity" title={selected ? `Manage ${selected.name}` : "Manage member activity"} description="This changes Chainward’s activity policy only. It does not alter Torn membership or status." confirmLabel={canManage ? "Save activity record" : "Close"} cancelLabel="Cancel" hideCancel={!canManage} confirmDisabled={canManage && (!activity.databaseAvailable || !faction)} onConfirm={canManage ? save : async () => undefined} onClose={() => setSelected(null)}>
-      {selected && <div className="member-activity-editor"><div className="member-activity-editor__identity"><TornUserLink name={selected.name} tornUserId={selected.tornId} detail={`${selected.position || "Unassigned"} · ${selected.lastAction}`} /></div>{canManage ? <><div className="member-activity-state-options">{([ ["STANDARD", ShieldCheck, "Standard", "Use the saved owner inactivity threshold."], ["HOLIDAY", Umbrella, "On holiday", "Exclude from inactivity alerts until return."], ["WATCH", Eye, "Watch", "Keep visible for deliberate owner follow-up."] ] as const).map(([value, Icon, label, detail]) => <button key={value} className={draftState === value ? "member-activity-state-option--active" : undefined} onClick={() => setDraftState(value)}><span><Icon size={16} /></span><p><strong>{label}</strong><small>{detail}</small></p>{draftState === value && <Check size={14} />}</button>)}</div>{draftState === "HOLIDAY" && <label className="member-activity-date"><span>Protected through <small>Optional</small></span><input type="date" min={utcDateInputValue(new Date())} value={holidayUntil} onChange={(event) => setHolidayUntil(event.target.value)} /><small>The selected calendar date is protected in UTC. Leave blank for an open-ended exemption.</small></label>}<label className="member-activity-note"><span>Internal activity note <small>{note.length}/500</small></span><textarea value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} placeholder={draftState === "HOLIDAY" ? "Reason or return context…" : draftState === "WATCH" ? "What should leaders follow up on?" : "Optional note about returning to standard policy…"} /></label><div className="access-safety-note"><ShieldCheck size={15} /><p><strong>Verified write boundary</strong><span>The server rechecks your member-management permission, faction, and current roster before saving.</span></p></div></> : <div className="member-activity-readonly"><ShieldCheck size={16} /><p><strong>Read-only activity access</strong><span>An Administrator or platform owner can change holiday, watch, and alert-policy records.</span></p></div>}</div>}
+    <Dialog open={Boolean(selected)} className="dialog--member-activity" title={selected ? `Manage ${selected.name}` : "Manage member activity"} description="This changes Chainward’s activity policy only. It does not alter Torn membership or status." confirmLabel={canManage ? "Save activity record" : "Close"} cancelLabel="Cancel" hideCancel={!canManage} confirmDisabled={canManage && (!activity.databaseAvailable || !faction || holidayDateInvalid)} onConfirm={canManage ? save : async () => undefined} onClose={() => setSelected(null)}>
+      {selected && <div className="member-activity-editor">
+        <div className="member-activity-editor__identity"><TornUserLink name={selected.name} tornUserId={selected.tornId} detail={`${selected.position || "Unassigned"} · ${selected.lastAction}`} /></div>
+        {canManage ? <>
+          <div className="member-activity-state-options">{([ ["STANDARD", ShieldCheck, "Standard", "Use the saved owner inactivity threshold."], ["HOLIDAY", Umbrella, "On holiday", "Exclude from inactivity alerts until return."], ["WATCH", Eye, "Watch", "Keep visible for deliberate owner follow-up."] ] as const).map(([value, Icon, label, detail]) => <button type="button" key={value} aria-pressed={draftState === value} className={draftState === value ? "member-activity-state-option--active" : undefined} onClick={() => setDraftState(value)}><span><Icon size={16} /></span><p><strong>{label}</strong><small>{detail}</small></p>{draftState === value && <Check size={14} />}</button>)}</div>
+          {draftState === "HOLIDAY" && <label className={`member-activity-date${holidayDateInvalid ? " member-activity-date--invalid" : ""}`}><span>Protected through <small>Optional</small></span><input type="date" min={utcDateInputValue(new Date())} value={holidayUntil} aria-invalid={holidayDateInvalid || undefined} onChange={(event) => setHolidayUntil(event.target.value)} /><small>{holidayDateInvalid ? "Choose today or a future return date." : "The selected calendar date is protected in UTC. Leave blank for an open-ended exemption."}</small></label>}
+          <label className="member-activity-note"><span>Internal activity note <small>{note.length}/500</small></span><textarea value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} placeholder={draftState === "HOLIDAY" ? "Reason or return context…" : draftState === "WATCH" ? "What should leaders follow up on?" : "Optional note about returning to standard policy…"} /></label>
+          <div className="access-safety-note"><ShieldCheck size={15} /><p><strong>Verified write boundary</strong><span>The server rechecks your member-management permission, faction, and current roster before saving.</span></p></div>
+        </> : <div className="member-activity-readonly"><ShieldCheck size={16} /><p><strong>Read-only activity access</strong><span>An Administrator or platform owner can change holiday, watch, and alert-policy records.</span></p></div>}
+      </div>}
     </Dialog>
   </div>;
 }

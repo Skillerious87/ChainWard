@@ -73,7 +73,7 @@ export function ContributionTable({ members, title = "Chain contribution", compa
         <div><strong>Member rewards are not calculated yet</strong><small>{rewardMessage ?? "Choose the reward rules Chainward should apply to this report."}</small></div>
         <Link href="/rewards">Open reward schemes</Link>
       </div>}
-      <div className="table-scroll">
+      <div className="table-scroll" role="region" aria-label="Chain contribution table" tabIndex={0}>
         <table className="data-table contribution-table">
           <thead><tr><SortableHeader label="Rank" sortKey="rank" activeKey={sortKey} direction={sortDirection} onSort={changeSort} /><SortableHeader label="Player" sortKey="name" activeKey={sortKey} direction={sortDirection} onSort={changeSort} /><SortableHeader label="Chain hits" sortKey="hits" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />{!compact && <SortableHeader label="Contribution" sortKey="contribution" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />}<SortableHeader label="Respect" sortKey="respect" activeKey={sortKey} direction={sortDirection} onSort={changeSort} align="right" />{rewardColumnVisible && <th className="numeric reward-column">Member reward</th>}{!compact && <th>Torn status</th>}</tr></thead>
           <tbody>{renderedMembers.map((member) => <tr key={member.tornId}>

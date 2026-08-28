@@ -402,7 +402,13 @@
     max-width: 100%;
     overflow-x: auto;
   }
-  .table-scroll { overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+  .table-scroll {
+    overflow-y: hidden;
+    outline: 0;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-scroll:focus-visible { box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), .55); }
   :is(.member-activity-tabs,.member-activity-sort,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) { scroll-snap-type: inline proximity; overscroll-behavior-inline: contain; }
   :is(.member-activity-tabs,.member-activity-sort,.payout-view-tabs,.history-view-tabs,.roster-view-tabs,.segmented-control) button,
   .pagination button { min-width: 44px; min-height: 44px; scroll-snap-align: start; }
@@ -412,12 +418,12 @@
   .settings-console .professional-settings-nav nav { scroll-snap-type: inline proximity; }
   .settings-console .professional-settings-nav nav button { min-width: min(180px, 70vw); scroll-snap-align: start; }
 
-  /* Member Activity is an operating screen, not a desktop spreadsheet. Keep
-     the summary compact, give the owner policy control its own usable row, and
-     let the filter/sort controls scroll without squeezing their labels. */
+  /* Keep the member summary compact, give the owner policy control its own
+     usable row, and let the filter/sort controls scroll without squeezing. */
   .member-activity-brief > div { min-width: 0; }
-  .member-activity-brief > label { min-width: 0; max-width: 260px; }
-  .member-activity-brief > label select { min-height: 46px; }
+  .member-activity-policy { width: min(100%, 300px); min-width: 0; max-width: 300px; }
+  .member-activity-policy :is(select,button) { min-height: 46px; }
+  .member-table-scroll-hint { display: flex; margin-top: 6px; color: #87938c !important; }
   .member-activity-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .member-activity-stats article,
   .member-activity-stats article:nth-child(3),
@@ -460,77 +466,11 @@
   .chain-trend__best small { min-width: 0; overflow-wrap: anywhere; }
 }
 
-/* A phone-sized activity register becomes a set of compact, labelled records.
-   Larger operational tables retain their bounded horizontal scroller because
-   their column comparisons are the useful interaction. */
+/* Every operational table keeps its desktop columns and row density on a
+   phone. The table boundary is the only horizontal scroll container. */
 @media (max-width: 620px) {
-  .member-activity-table-section > .table-scroll { overflow: visible; }
-  .member-activity-table {
-    display: block;
-    min-width: 0;
-    border-collapse: separate;
-    white-space: normal;
-  }
-  .member-activity-table thead { display: none; }
-  .member-activity-table tbody { display: grid; gap: 10px; padding: 10px; }
-  .member-activity-table tbody tr {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    padding: 14px;
-    overflow: hidden;
-    border: 1px solid #29343b;
-    border-radius: 10px;
-    background: #0b1013;
-  }
-  .member-activity-table tbody tr:hover { box-shadow: none; }
-  .member-activity-table tbody tr.member-activity-row--attention {
-    background: linear-gradient(120deg, rgba(245, 185, 76, .055), transparent 48%), #0b1013;
-  }
-  .member-activity-table tbody tr.member-activity-row--critical {
-    background: linear-gradient(120deg, rgba(242, 109, 109, .08), transparent 52%), #0b1013;
-  }
-  .member-activity-table td,
-  .density-compact .member-activity-table td {
-    display: flex;
-    height: auto;
-    min-height: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 0;
-    overflow: visible;
-    border: 0;
-    white-space: normal;
-  }
-  .member-activity-table td::before {
-    color: #68757d;
-    content: attr(data-label);
-    font-size: 10px;
-    font-weight: 720;
-    letter-spacing: .55px;
-    line-height: 1.3;
-    text-transform: uppercase;
-  }
-  .member-activity-table td:first-child,
-  .member-activity-table td:nth-child(4),
-  .member-activity-table td:last-child { grid-column: 1 / -1; }
-  .member-activity-table td:first-child::before { display: none; }
-  .member-activity-table .cell-subtext,
-  .member-activity-table .member-activity-reason {
-    max-width: none;
-    margin-top: 1px;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-  .member-activity-table .member-row-actions {
-    display: grid;
-    width: 100%;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-  .member-activity-table .member-row-actions > * { width: 100%; }
+  .table-scroll > .data-table { width: max-content; }
+  .member-activity-table { min-width: 1120px; }
 }
 
 @media (max-width: 430px) {
@@ -561,8 +501,8 @@
     white-space: nowrap;
   }
   .mobile-tabbar { grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); }
-  .member-activity-brief > label { width: 100%; max-width: none; }
-  .member-activity-brief > label select { width: 100%; }
+  .member-activity-policy { width: 100%; max-width: none; }
+  .member-activity-policy select { width: 100%; }
 }
 
 /* Observed service state ---------------------------------------------------- */

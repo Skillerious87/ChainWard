@@ -2,8 +2,9 @@ import type { MemberActivityRecord, MemberActivityWorkspace } from "./member-act
 import type { TornRosterMember } from "@/lib/torn/workspace-types";
 
 const DAY_SECONDS = 86_400;
+const DEFAULT_THRESHOLD_DAYS = 3;
 
-export type MemberActivityBand = "Active" | "Recent" | "Due soon" | "Review" | "Critical";
+export type MemberActivityBand = "Active" | "Recent" | "Due soon" | "Review" | "Critical" | "Protected" | "Watch" | "Holiday expired";
 
 export interface MemberActivityAssessment {
   member: TornRosterMember;
@@ -54,31 +55,39 @@ export interface MemberActivityMonitorSnapshot extends MemberActivityAlertSummar
 
 export function assessMemberActivity(member: TornRosterMember, record: MemberActivityRecord | undefined, checkedAtSeconds: number, thresholdDays: number): MemberActivityAssessment {
   const safeCheckedAt = Number.isFinite(checkedAtSeconds) ? checkedAtSeconds : Math.floor(Date.now() / 1_000);
-  const ageSeconds = Math.max(0, safeCheckedAt - member.lastActionAt);
+  const safeThresholdDays = normalizeThreshold(thresholdDays);
+  const lastActionAt = Number.isFinite(member.lastActionAt) ? member.lastActionAt : safeCheckedAt;
+  const ageSeconds = Math.max(0, safeCheckedAt - lastActionAt);
   const daysInactive = ageSeconds / DAY_SECONDS;
   const holidayEnd = record?.holidayUntil ? Date.parse(record.holidayUntil) / 1_000 : null;
   const holidayActive = record?.state === "HOLIDAY" && (holidayEnd === null || (!Number.isNaN(holidayEnd) && holidayEnd >= safeCheckedAt));
   const holidayExpired = record?.state === "HOLIDAY" && holidayEnd !== null && (Number.isNaN(holidayEnd) || holidayEnd < safeCheckedAt);
-  const criticalAfterDays = criticalThreshold(thresholdDays);
+  const criticalAfterDays = criticalThreshold(safeThresholdDays);
   const critical = !holidayActive && daysInactive >= criticalAfterDays;
-  const thresholdExceeded = daysInactive >= thresholdDays;
+  const thresholdExceeded = daysInactive >= safeThresholdDays;
   const watched = record?.state === "WATCH";
   const needsAttention = !holidayActive && (watched || holidayExpired || thresholdExceeded);
-  const band: MemberActivityBand = critical
+  const band: MemberActivityBand = holidayActive
+    ? "Protected"
+    : critical
     ? "Critical"
-    : thresholdExceeded
+    : holidayExpired
+      ? "Holiday expired"
+      : watched
+        ? "Watch"
+        : thresholdExceeded
       ? "Review"
-      : daysInactive >= Math.max(1, thresholdDays - 1)
+      : daysInactive >= Math.max(1, safeThresholdDays - 1)
         ? "Due soon"
         : daysInactive > 1
           ? "Recent"
           : "Active";
   const reason = holidayActive
     ? record?.holidayUntil ? `Holiday protected through ${new Date(record.holidayUntil).toLocaleDateString("en-GB", { timeZone: "UTC" })}` : "Open-ended holiday protection"
-    : holidayExpired
-      ? "Holiday protection has expired"
-      : critical
-        ? `${Math.floor(daysInactive)} days inactive; critical escalation reached${watched && record.note ? ` · ${record.note}` : ""}`
+    : critical
+      ? `${Math.floor(daysInactive)} days inactive; critical escalation reached${holidayExpired ? " after holiday protection expired" : ""}${watched && record.note ? ` · ${record.note}` : ""}`
+      : holidayExpired
+        ? `Holiday protection expired; ${formatInactiveDays(daysInactive)}`
         : watched
           ? record.note || "Manually added to the watch list"
           : thresholdExceeded
@@ -86,7 +95,7 @@ export function assessMemberActivity(member: TornRosterMember, record: MemberAct
             : band === "Due soon"
               ? "Approaching the owner alert threshold"
               : "Within the faction activity policy";
-  const riskScore = holidayActive ? 0 : watched ? 100 : holidayExpired ? 95 : critical ? Math.min(99, 85 + Math.floor(daysInactive - criticalAfterDays)) : thresholdExceeded ? 70 + Math.min(14, Math.floor(daysInactive - thresholdDays)) : band === "Due soon" ? 45 : Math.min(30, Math.floor(daysInactive * 10));
+  const riskScore = holidayActive ? 0 : watched ? 100 : holidayExpired ? 95 : critical ? Math.min(99, 85 + Math.floor(daysInactive - criticalAfterDays)) : thresholdExceeded ? 70 + Math.min(14, Math.floor(daysInactive - safeThresholdDays)) : band === "Due soon" ? 45 : Math.min(30, Math.floor(daysInactive * 10));
   return { member, record, ageSeconds, daysInactive, band, holidayActive, holidayExpired, needsAttention, critical, riskScore, reason };
 }
 
@@ -100,7 +109,7 @@ export function buildMemberActivityAlert(members: TornRosterMember[], workspace:
     tornUserId: item.member.tornId,
     memberName: item.member.name,
     severity: item.critical ? "critical" : "attention",
-    trigger: item.holidayExpired ? "holiday-expired" : item.daysInactive >= workspace.policy.thresholdDays ? "inactivity" : "watch",
+    trigger: item.daysInactive >= workspace.policy.thresholdDays ? "inactivity" : item.holidayExpired ? "holiday-expired" : "watch",
     daysInactive: Number(item.daysInactive.toFixed(2)),
     riskScore: item.riskScore,
     reason: item.reason,
@@ -122,5 +131,18 @@ export function buildMemberActivityAlert(members: TornRosterMember[], workspace:
 }
 
 export function criticalThreshold(thresholdDays: number): number {
-  return Math.max(thresholdDays + 2, thresholdDays * 2);
+  const safeThresholdDays = normalizeThreshold(thresholdDays);
+  return Math.max(safeThresholdDays + 2, safeThresholdDays * 2);
+}
+
+function normalizeThreshold(thresholdDays: number): number {
+  return Number.isFinite(thresholdDays)
+    ? Math.min(30, Math.max(1, Math.round(thresholdDays)))
+    : DEFAULT_THRESHOLD_DAYS;
+}
+
+function formatInactiveDays(daysInactive: number): string {
+  if (daysInactive < 1) return "active within the last day";
+  const days = Math.floor(daysInactive);
+  return `${days} day${days === 1 ? "" : "s"} inactive`;
 }
