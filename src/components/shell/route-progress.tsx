@@ -164,6 +164,6 @@ export function RouteProgress() {
 
   return <>
     <div className="route-progress" data-phase={phase} aria-hidden="true" />
-    {phase !== "idle" && <div className="route-loading-core" data-phase={phase}><PageLoadingCore title="Loading" hint="Preparing the next view" /></div>}
+    {phase !== "idle" && <div className="route-loading-core" data-phase={phase}><PageLoadingCore title="Preparing next view" hint="Synchronising the secure workspace" /></div>}
   </>;
 }

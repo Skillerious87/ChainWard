@@ -33,18 +33,17 @@
 .route-loading-core {
   position: fixed;
   z-index: 70;
-  top: calc(var(--topbar-height) + 31px);
-  right: 0;
-  bottom: 0;
-  left: var(--rail-width);
+  inset: 0;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(7,10,12,.22);
   pointer-events: none;
   opacity: 0;
   animation: route-core-in 180ms ease-out forwards;
+  isolation: isolate;
 }
+.route-loading-core::before { position: fixed; z-index: 0; top: calc(var(--topbar-height) + 31px); right: 0; bottom: 0; left: var(--rail-width); background: radial-gradient(circle at 50% 46%,rgba(var(--accent-rgb),.055),transparent 25%),rgba(7,10,12,.72); content: ""; }
+.route-loading-core > .page-loading-core { position: relative; z-index: 1; }
 .route-loading-core[data-phase="finishing"] { animation: route-core-out 260ms ease-in forwards; }
 @keyframes route-core-in { to { opacity: 1; } }
 @keyframes route-core-out { from { opacity: 1; } to { opacity: 0; } }
@@ -89,6 +88,7 @@
   min-width: 0;
   animation: platform-route-enter 300ms cubic-bezier(.22, .82, .28, 1) both;
 }
+.platform-route-stage:has(.view-loading) { animation: none; }
 @keyframes platform-route-enter {
   from { opacity: 0; transform: translate3d(0, 8px, 0); }
   to { opacity: 1; transform: none; }
@@ -100,7 +100,7 @@
 }
 :root[data-navigating="true"] .page-content {
   opacity: .42;
-  transform: translate3d(0, -3px, 0);
+  transform: none;
   pointer-events: none;
 }
 /* The rail and top chrome stay fully present so the shell never appears to
@@ -655,7 +655,7 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 }
 
 @media (max-width: 960px) {
-  .route-loading-core { left: 0; }
+  .route-loading-core::before { left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

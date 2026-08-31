@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
 import { hasPermission } from "@/lib/auth/authorization";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
@@ -13,7 +15,15 @@ import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 
-export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
+export default function PlatformLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<WorkspaceLoadingScreen />}>
+      <AuthenticatedPlatformLayout>{children}</AuthenticatedPlatformLayout>
+    </Suspense>
+  );
+}
+
+async function AuthenticatedPlatformLayout({ children }: { children: React.ReactNode }) {
   const [actor, telemetry, connection] = await Promise.all([
     getCurrentActor(),
     getWorkspaceTelemetry(),

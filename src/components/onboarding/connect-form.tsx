@@ -19,6 +19,7 @@ import {
 import type { Route } from "next";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Spinner } from "@/components/ui/spinner";
+import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { enterConnectedWorkspace } from "./workspace-navigation";
 
 type ConnectionResult = {
@@ -128,7 +129,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const className = `connect-form connect-form--${formState}${offlineEnabled ? " connect-form--offline" : ""}`;
 
   return (
-    <form className={className} onSubmit={submit} aria-busy={loading}>
+    <form className={className} onSubmit={submit} aria-busy={loading || opening}>
+      <WorkspaceLoadingOverlay visible={opening} />
       <span className="connect-form__activity" aria-hidden="true" />
       {result ? (
         <section className="connection-confirmation" aria-labelledby="connection-confirmation-title">
@@ -154,7 +156,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
           <div className="connection-confirmation__actions">
             <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); enterConnectedWorkspace(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open workspace <ArrowRight size={16} /></>}</button>
-            <button type="button" className="connection-confirmation__reset" disabled={loading} onClick={() => void resetConnection()}>{loading ? <Spinner size={14} label="Clearing connection" /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
+            <button type="button" className="connection-confirmation__reset" disabled={loading || opening} onClick={() => void resetConnection()}>{loading ? <Spinner size={14} label="Clearing connection" /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
           </div>
         </section>
       ) : (

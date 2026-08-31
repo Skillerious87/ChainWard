@@ -1722,12 +1722,49 @@ body {
 .operations-brief > footer strong { color: #93a099; font-weight: 650; }
 .operations-brief > footer time { flex: 0 0 auto; color: #66737c; }
 
+/* Protected document handoff. This screen is rendered before login leaves and
+   again while the authenticated shell resolves, so no unstyled or blank frame
+   can appear between those two documents. */
+.workspace-loading-screen {
+  position: fixed;
+  z-index: 210;
+  inset: 0;
+  display: grid;
+  min-height: 100dvh;
+  overflow: hidden;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 50% 44%,rgba(var(--accent-rgb),.075),transparent 24%),
+    radial-gradient(circle at 8% 12%,rgba(var(--accent-rgb),.025),transparent 28%),
+    linear-gradient(145deg,#070b0d,#090e10 52%,#070a0c);
+  isolation: isolate;
+}
+.workspace-loading-screen::before,
+.workspace-loading-screen::after { position: absolute; border: 1px solid rgba(var(--accent-rgb),.055); border-radius: 50%; content: ""; pointer-events: none; }
+.workspace-loading-screen::before { width: min(720px,74vw); aspect-ratio: 1; box-shadow: inset 0 0 170px rgba(var(--accent-rgb),.012); }
+.workspace-loading-screen::after { width: min(470px,52vw); aspect-ratio: 1; border-color: rgba(var(--accent-rgb),.035); }
+.workspace-loading-screen__grid { position: absolute; inset: 0; z-index: -2; background-image: linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px); background-size: 58px 58px; mask-image: radial-gradient(circle at center,black,transparent 67%); }
+.workspace-loading-screen__halo { position: absolute; z-index: -1; width: min(370px,70vw); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle,rgba(var(--accent-rgb),.055),rgba(var(--accent-rgb),.012) 39%,transparent 70%); filter: blur(8px); }
+.workspace-loading-screen__content { position: relative; z-index: 1; display: grid; justify-items: center; }
+/* The assurance sits outside layout flow so it cannot change the loader's
+   centre point when the protected toolbar replaces this document screen. */
+.workspace-loading-screen__assurance { position: absolute; top: 100%; left: 50%; display: inline-flex; align-items: center; gap: 8px; margin-top: 30px; color: #5f6c65; font-size: 9px; font-weight: 690; letter-spacing: 1.25px; text-transform: uppercase; transform: translateX(-50%); white-space: nowrap; }
+.workspace-loading-screen__assurance::before,
+.workspace-loading-screen__assurance::after { width: 34px; height: 1px; background: linear-gradient(90deg,transparent,rgba(var(--accent-rgb),.22)); content: ""; }
+.workspace-loading-screen__assurance::after { background: linear-gradient(90deg,rgba(var(--accent-rgb),.22),transparent); }
+.workspace-loading-screen__assurance i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-rgb),.07),0 0 13px rgba(var(--accent-rgb),.28); }
+
 /* Route loading state. The muted incoming layout holds the page geometry while
    the shared circular loading mark stays exactly centred in the workspace. */
 .view-loading { position: relative; min-height: clamp(500px,calc(100dvh - 190px),760px); overflow: hidden; animation: view-loading-in 180ms cubic-bezier(.22,.82,.28,1) both; isolation: isolate; }
-@keyframes view-loading-in { from { opacity: 0; transform: translate3d(0,6px,0); } to { opacity: 1; transform: none; } }
+/* Never transform an ancestor of the fixed loading core: transforms establish
+   a new containing block and were the reason the spinner appeared to jump. */
+@keyframes view-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .view-loading__surface { display: flex; flex-direction: column; gap: 18px; opacity: .22; filter: saturate(.55); }
-.view-loading__centre { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; padding: 32px; background: rgba(8,12,14,.42); }
+.view-loading__centre { position: fixed; z-index: 62; inset: 0; display: grid; place-items: center; padding: 32px; pointer-events: none; isolation: isolate; }
+.view-loading__centre::before { position: fixed; z-index: 0; top: calc(var(--topbar-height) + 31px); right: 0; bottom: 0; left: var(--rail-width); background: radial-gradient(circle at 50% 46%,rgba(var(--accent-rgb),.055),transparent 25%),rgba(7,10,12,.72); content: ""; }
+.view-loading__centre > .page-loading-core { position: relative; z-index: 1; }
 .app-shell:has(.route-loading-core) .view-loading__centre { visibility: hidden; }
 
 .skeleton-line { display: block; border-radius: 6px; background: linear-gradient(100deg,#141a1f 30%,#1d252c 48%,#141a1f 66%) 0 0/280% 100%; animation: skeleton-sweep 1.5s ease-in-out infinite; }
@@ -1768,32 +1805,55 @@ body {
 .view-loading__stage-bar { width: min(300px,55%); height: 20px; border-radius: 7px; }
 .view-loading__stage .view-loading__panel { flex: 1; }
 
-/* Modern page loading mark: one crisp, uninterrupted wheel around the
-   Chainward mark. It stays sharp at any DPI and inherits the saved accent. */
-.page-loading-core { --loader-size: 148px; display: grid; justify-items: center; color: #d9e2dd; text-align: center; }
-.page-loading-core__visual { position: relative; display: grid; width: var(--loader-size); height: var(--loader-size); place-items: center; }
-.page-loading-core__visual > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* Precision loading instrument. Two restrained orbits move independently
+   around a still, readable brand core; text remains useful rather than
+   disappearing into an ornamental animation. */
+.page-loading-core { --loader-size: 154px; display: grid; min-width: min(350px,calc(100vw - 40px)); justify-items: center; color: #d9e2dd; text-align: center; }
+.page-loading-core__visual { position: relative; display: grid; width: var(--loader-size); height: var(--loader-size); place-items: center; isolation: isolate; }
+.page-loading-core__aura { position: absolute; z-index: -1; inset: -28%; border-radius: 50%; background: radial-gradient(circle,rgba(var(--accent-rgb),.095),rgba(var(--accent-rgb),.018) 43%,transparent 70%); filter: blur(5px); animation: page-core-aura 2.8s ease-in-out infinite; }
+.page-loading-core__visual > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 8px rgba(var(--accent-rgb),.08)); }
 .page-loading-core__visual > svg circle { fill: none; transform-origin: 50% 50%; }
-.page-loading-core__track { stroke: rgba(255,255,255,.085); stroke-width: 5; }
-.page-loading-core__arc { fill: none; stroke-linecap: round; transform-origin: 50% 50%; }
-.page-loading-core__arc--primary { stroke: var(--accent); stroke-width: 5; stroke-dasharray: 62 38; animation: page-core-spin 1.05s linear infinite; }
-.page-loading-core__centre { position: relative; z-index: 2; display: grid; width: 44%; aspect-ratio: 1; place-items: center; }
-.page-loading-core__centre img { width: 100%; height: 100%; object-fit: contain; background: transparent; filter: drop-shadow(0 8px 18px rgba(0,0,0,.3)); animation: page-core-mark 1.5s ease-in-out infinite; }
-.page-loading-core__copy { display: grid; max-width: 380px; justify-items: center; margin-top: 13px; }
-.page-loading-core__copy strong { color: #d7dfdb; font-size: 13px; font-weight: 620; letter-spacing: -.05px; }
+.page-loading-core__track--outer { stroke: rgba(255,255,255,.075); stroke-width: 2.5; }
+.page-loading-core__track--inner { stroke: rgba(var(--accent-rgb),.07); stroke-width: 1; stroke-dasharray: 1 5; }
+.page-loading-core__arc { fill: none; stroke: var(--accent); stroke-linecap: round; transform-origin: 50% 50%; }
+.page-loading-core__arc--primary { stroke-width: 3.5; stroke-dasharray: 36 8 4 52; filter: drop-shadow(0 0 5px rgba(var(--accent-rgb),.34)); animation: page-core-spin 1.5s linear infinite; }
+.page-loading-core__arc--secondary { stroke-width: 1.6; stroke-dasharray: 5 14; opacity: .48; animation: page-core-spin-reverse 2.6s linear infinite; }
+.page-loading-core__satellite { position: absolute; z-index: 1; inset: 3px; border-radius: 50%; animation: page-core-satellite 2.6s linear infinite; }
+.page-loading-core__satellite::before { position: absolute; top: 7px; left: 50%; width: 6px; height: 6px; border: 2px solid #142018; border-radius: 50%; background: #c4f3a4; box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.08),0 0 13px rgba(var(--accent-rgb),.48); content: ""; transform: translateX(-50%); }
+.page-loading-core__centre { position: relative; z-index: 2; display: grid; width: 72px; aspect-ratio: 1; place-items: center; border: 1px solid rgba(var(--accent-rgb),.19); border-radius: 24px; background: radial-gradient(circle at 38% 30%,rgba(255,255,255,.04),transparent 32%),rgba(10,16,14,.83); box-shadow: 0 20px 45px rgba(0,0,0,.3),inset 0 1px rgba(255,255,255,.035),0 0 0 7px rgba(var(--accent-rgb),.025); }
+.page-loading-core__centre::after { position: absolute; inset: 6px; border: 1px solid rgba(var(--accent-rgb),.075); border-radius: 18px; content: ""; }
+.page-loading-core__centre img { position: relative; z-index: 1; width: 61%; height: 61%; object-fit: contain; background: transparent; filter: drop-shadow(0 7px 13px rgba(0,0,0,.3)); animation: page-core-mark 2.2s ease-in-out infinite; }
+.page-loading-core__copy { display: grid; max-width: 390px; justify-items: center; margin-top: 18px; }
+.page-loading-core__eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 7px; color: #718078; font-size: 8.5px; font-weight: 720; letter-spacing: 1.35px; text-transform: uppercase; }
+.page-loading-core__eyebrow i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-rgb),.065); }
+.page-loading-core__copy strong { color: #e2e9e5; font-size: 15px; font-weight: 640; letter-spacing: -.18px; }
+.page-loading-core__copy small { max-width: 320px; margin-top: 6px; color: #76827b; font-size: 10.5px; line-height: 1.5; text-wrap: balance; }
+.page-loading-core__meter { position: relative; width: 88px; height: 1px; margin-top: 15px; overflow: hidden; border-radius: 1px; background: rgba(255,255,255,.065); }
+.page-loading-core__meter i { position: absolute; inset: 0; width: 42%; border-radius: inherit; background: linear-gradient(90deg,transparent,var(--accent),transparent); animation: page-core-meter 1.45s cubic-bezier(.45,0,.55,1) infinite; }
 @keyframes page-core-spin { to { transform: rotate(360deg); } }
-@keyframes page-core-mark { 0%,100% { opacity: .82; transform: scale(.96); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes page-core-spin-reverse { to { transform: rotate(-360deg); } }
+@keyframes page-core-satellite { to { transform: rotate(360deg); } }
+@keyframes page-core-meter { from { transform: translateX(-130%); } to { transform: translateX(340%); } }
+@keyframes page-core-aura { 50% { opacity: .72; transform: scale(.94); } }
+@keyframes page-core-mark { 0%,100% { opacity: .86; transform: scale(.97); } 50% { opacity: 1; transform: scale(1); } }
 
-/* Compact loading mark: the logo stays readable while one quiet ring moves. */
-.cw-spinner { position: relative; display: inline-grid; flex: 0 0 auto; place-items: center; }
+/* Compact loading mark: the same orbit language, simplified to stay crisp in
+   dense controls where a miniature logo would become visual noise. */
+.cw-spinner { position: relative; display: inline-grid; flex: 0 0 auto; place-items: center; isolation: isolate; }
 .cw-spinner svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .cw-spinner circle { fill: none; stroke-linecap: round; transform-origin: 50% 50%; }
-.cw-spinner__track { stroke: rgba(255,255,255,.09); stroke-width: 2.8; }
-.cw-spinner__arc { stroke-width: 3.4; stroke-dasharray: 28 72; animation: cw-spin-outer .9s linear infinite; }
+.cw-spinner__track { stroke: rgba(255,255,255,.1); stroke-width: 2.5; }
+.cw-spinner__arc { stroke-width: 3.1; stroke-dasharray: 30 70; animation: cw-spin-outer .85s linear infinite; }
+.cw-spinner__arc--inner { stroke-width: 1.5; stroke-dasharray: 8 92; opacity: .55; animation: cw-spin-inner 1.25s linear infinite; }
 .cw-spinner--accent .cw-spinner__arc { stroke: var(--accent); filter: drop-shadow(0 0 4px rgba(var(--accent-rgb),.4)); }
 .cw-spinner--muted .cw-spinner__arc { stroke: #8d9aa3; }
-.cw-spinner__mark { position: relative; width: 84%; height: 84%; object-fit: contain; background: transparent; }
+.cw-spinner__mark { position: relative; width: 54%; height: 54%; object-fit: contain; background: transparent; filter: drop-shadow(0 1px 3px rgba(0,0,0,.32)); }
+.cw-spinner__core { display: block; width: 3px; height: 3px; border-radius: 50%; background: currentColor; box-shadow: 0 0 5px currentColor; }
+.cw-spinner--accent .cw-spinner__core { color: var(--accent); }
+.cw-spinner--muted .cw-spinner__core { color: #8d9aa3; }
+.cw-spinner[data-compact="true"] .cw-spinner__arc--inner { display: none; }
 @keyframes cw-spin-outer { to { transform: rotate(360deg); } }
+@keyframes cw-spin-inner { to { transform: rotate(-360deg); } }
 
 @media (max-width: 900px) {
   .view-loading__stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
@@ -1808,21 +1868,33 @@ body {
 @media (max-width: 520px) {
   .view-loading { min-height: calc(100dvh - 170px); }
   .view-loading__centre { padding: 18px; }
-  .page-loading-core { --loader-size: 132px; }
+  .workspace-loading-screen { padding: max(22px,var(--mobile-safe-area-top)) max(20px,var(--mobile-safe-area-right)) max(22px,var(--mobile-safe-area-bottom)) max(20px,var(--mobile-safe-area-left)); }
+  .workspace-loading-screen::before { width: 116vw; }
+  .workspace-loading-screen::after { width: 82vw; }
+  .workspace-loading-screen__assurance { margin-top: 25px; }
+  .page-loading-core { --loader-size: 138px; min-width: min(320px,calc(100vw - 32px)); }
+  .page-loading-core__centre { width: 64px; border-radius: 21px; }
+  .page-loading-core__centre::after { border-radius: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .view-loading { animation-duration: 1ms; }
   .skeleton-line { animation: none; background: #171e24; }
-  .cw-spinner__arc { animation: cw-spin-outer 1.6s linear infinite; }
-  .page-loading-core__centre img { animation: none; }
-  .page-loading-core__arc--primary { animation: none; }
+  .cw-spinner__arc,
+  .page-loading-core__aura,
+  .page-loading-core__arc,
+  .page-loading-core__satellite,
+  .page-loading-core__centre img,
+  .page-loading-core__meter i { animation: none; }
   .page-loading-core__arc--primary { stroke-dasharray: 42 58; }
 }
 :root.reduced-motion .skeleton-line { animation: none; background: #171e24; }
-:root.reduced-motion .cw-spinner__mark,
-:root.reduced-motion .page-loading-core__centre img { animation: none; }
-:root.reduced-motion .page-loading-core__arc--primary { animation: none; }
+:root.reduced-motion .cw-spinner__arc,
+:root.reduced-motion .page-loading-core__aura,
+:root.reduced-motion .page-loading-core__arc,
+:root.reduced-motion .page-loading-core__satellite,
+:root.reduced-motion .page-loading-core__centre img,
+:root.reduced-motion .page-loading-core__meter i { animation: none; }
 
 /* Shared interaction polish. Custom controls that visually replace their
    native inputs keep an equally obvious keyboard focus indicator. */

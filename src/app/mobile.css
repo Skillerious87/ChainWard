@@ -62,7 +62,8 @@
   .topbar__menu { display: inline-grid !important; }
   .collapse-button,
   .sidebar-rail-toggle { display: none !important; }
-  .route-loading-core { left: 0; }
+  .route-loading-core::before,
+  .view-loading__centre::before { left: 0; }
 
   /* A saved collapsed preference must not collapse the contents of the drawer. */
   :root[data-sidebar="collapsed"] .sidebar__brand-row { justify-content: space-between; padding-inline: 20px; }
@@ -251,10 +252,14 @@
   .sidebar { width: min(300px, 86vw) !important; padding-bottom: var(--mobile-safe-area-bottom); padding-left: var(--mobile-safe-area-left); }
   .nav-item { height: 48px; }
   .toast-region { right: max(12px, var(--mobile-safe-area-right)); bottom: calc(var(--mobile-bottom-nav-height) + 10px); left: max(12px, var(--mobile-safe-area-left)); width: auto; }
-  .route-loading-core {
+  .route-loading-core,
+  .view-loading__centre {
+    padding: max(18px, var(--mobile-safe-area-top)) max(18px, var(--mobile-safe-area-right)) max(18px, var(--mobile-safe-area-bottom)) max(18px, var(--mobile-safe-area-left));
+  }
+  .route-loading-core::before,
+  .view-loading__centre::before {
     top: calc(var(--topbar-height) + var(--mobile-status-banner-height) + 2px);
     bottom: var(--mobile-bottom-nav-height);
-    padding: 18px max(18px, var(--mobile-safe-area-right)) 18px max(18px, var(--mobile-safe-area-left));
   }
   .command-layer {
     display: flex;
