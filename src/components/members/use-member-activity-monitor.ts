@@ -26,12 +26,16 @@ export function useMemberActivityMonitor(initialSnapshot: MemberActivityMonitorS
   useEffect(() => {
     if (!preferences.enabled || !initialSnapshot) return;
     let stopped = false;
-    let lastCheckedAt = 0;
+    // The layout has just built initialSnapshot from the verified roster and
+    // activity store. Treat it as the first scheduled reading instead of
+    // immediately repeating the same protected API work after hydration.
+    let lastCheckedAt = Date.parse(initialSnapshot.checkedAt);
+    if (!Number.isFinite(lastCheckedAt)) lastCheckedAt = Date.now();
 
     void ensureNotificationWorker();
 
     async function poll(): Promise<void> {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || document.visibilityState !== "visible") return;
       lastCheckedAt = Date.now();
       try {
         const response = await fetch("/api/members/activity-monitor", {
@@ -48,12 +52,11 @@ export function useMemberActivityMonitor(initialSnapshot: MemberActivityMonitorS
     }
 
     function checkOnResume(): void {
-      if (document.visibilityState !== "visible" && navigator.onLine) return;
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
       if (Date.now() - lastCheckedAt < preferences.intervalMinutes * 60_000) return;
       void poll();
     }
 
-    void poll();
     const interval = window.setInterval(() => void poll(), preferences.intervalMinutes * 60_000);
     document.addEventListener("visibilitychange", checkOnResume);
     window.addEventListener("online", checkOnResume);

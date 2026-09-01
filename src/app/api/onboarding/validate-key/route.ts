@@ -67,7 +67,11 @@ export async function POST(request: Request) {
       stage = "temporary-session";
       session = {
         kind: "temporary",
-        value: createConnectionSession(parsed.data.apiKey, connection.player.id, connection.faction.id),
+        value: createConnectionSession(parsed.data.apiKey, connection.player.id, connection.faction.id, {
+          tornUserName: connection.player.name,
+          factionName: connection.faction.name,
+          factionTag: connection.faction.tag,
+        }),
       };
     }
 

@@ -13,13 +13,19 @@ export const REMEMBERED_CONNECTION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 export interface RememberedConnection {
   apiKey: string;
   tornUserId: number;
+  tornUserName: string;
   factionId: number;
+  factionName: string;
+  factionTag: string;
   expiresAt: number;
 }
 
 interface LocalRememberedRow {
   torn_user_id: number;
+  torn_user_name: string;
   faction_id: number;
+  faction_name: string;
+  faction_tag: string;
   encrypted_key: Uint8Array;
   encryption_iv: Uint8Array;
   expires_at: string;
@@ -102,7 +108,8 @@ function readLocalConnection(tokenHash: string, scope: RememberedTokenScope): Re
   const database = openCredentialDatabase();
   try {
     const row = database.prepare(`
-      SELECT torn_user_id, faction_id, encrypted_key, encryption_iv, expires_at, last_seen_at
+      SELECT torn_user_id, torn_user_name, faction_id, faction_name, faction_tag,
+             encrypted_key, encryption_iv, expires_at, last_seen_at
       FROM remembered_torn_connections WHERE token_hash = ?
     `).get(tokenHash) as unknown as LocalRememberedRow | undefined;
     if (!row) return null;
@@ -122,7 +129,10 @@ function readLocalConnection(tokenHash: string, scope: RememberedTokenScope): Re
     return {
       apiKey: decryptAndMigrateLocalCredential(database, tokenHash, row),
       tornUserId: row.torn_user_id,
+      tornUserName: row.torn_user_name,
       factionId: row.faction_id,
+      factionName: row.faction_name,
+      factionTag: row.faction_tag,
       expiresAt,
     };
   } catch {
@@ -152,16 +162,18 @@ async function createPostgresConnection(
   const { db } = await import("@/lib/db");
   const encryptedKey = Uint8Array.from(encrypted.encryptedKey);
   const encryptionIv = Uint8Array.from(encrypted.encryptionIv);
-  const user = await db.user.upsert({
-    where: { tornUserId: connection.player.id },
-    update: { name: connection.player.name, lastAuthenticatedAt: new Date() },
-    create: { tornUserId: connection.player.id, name: connection.player.name, lastAuthenticatedAt: new Date() },
-  });
-  const faction = await db.faction.upsert({
-    where: { tornFactionId: connection.faction.id },
-    update: { name: connection.faction.name, tag: connection.faction.tag },
-    create: { tornFactionId: connection.faction.id, name: connection.faction.name, tag: connection.faction.tag },
-  });
+  const [user, faction] = await Promise.all([
+    db.user.upsert({
+      where: { tornUserId: connection.player.id },
+      update: { name: connection.player.name, lastAuthenticatedAt: new Date() },
+      create: { tornUserId: connection.player.id, name: connection.player.name, lastAuthenticatedAt: new Date() },
+    }),
+    db.faction.upsert({
+      where: { tornFactionId: connection.faction.id },
+      update: { name: connection.faction.name, tag: connection.faction.tag },
+      create: { tornFactionId: connection.faction.id, name: connection.faction.name, tag: connection.faction.tag },
+    }),
+  ]);
   await db.factionApiCredential.upsert({
     where: { keyFingerprint: encrypted.fingerprint },
     update: {
@@ -193,23 +205,27 @@ async function createPostgresConnection(
 
 async function readPostgresConnection(tokenHash: string, scope: RememberedTokenScope): Promise<RememberedConnection | null> {
   const { db } = await import("@/lib/db");
-  const session = await db.session.findUnique({ where: { tokenHash }, include: { user: true } });
+  // Both lookups are fully scoped by the opaque token. Running them together
+  // removes a database-network waterfall from every authenticated request;
+  // the owner IDs are still compared before the credential is accepted.
+  const [session, credential] = await Promise.all([
+    db.session.findUnique({ where: { tokenHash }, include: { user: true } }),
+    db.factionApiCredential.findFirst({
+      where: {
+        keyFingerprint: scope.keyFingerprint,
+        faction: { tornFactionId: scope.factionId },
+        status: "ACTIVE",
+      },
+      include: { faction: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+  ]);
   if (!session) return null;
   if (session.expiresAt.getTime() <= Date.now()) {
     await db.session.delete({ where: { id: session.id } });
     return null;
   }
-  const credential = await db.factionApiCredential.findFirst({
-    where: {
-      ownerTornUserId: session.user.tornUserId,
-      keyFingerprint: scope.keyFingerprint,
-      faction: { tornFactionId: scope.factionId },
-      status: "ACTIVE",
-    },
-    include: { faction: true },
-    orderBy: { updatedAt: "desc" },
-  });
-  if (!credential) return null;
+  if (!credential || credential.ownerTornUserId !== session.user.tornUserId) return null;
   if (Date.now() - session.lastSeenAt.getTime() > 24 * 60 * 60 * 1_000) {
     await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
   }
@@ -217,7 +233,10 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
     return {
       apiKey: await decryptAndMigratePostgresCredential(credential),
       tornUserId: session.user.tornUserId,
+      tornUserName: session.user.name,
       factionId: credential.faction.tornFactionId,
+      factionName: credential.faction.name,
+      factionTag: credential.faction.tag ?? "",
       expiresAt: session.expiresAt.getTime(),
     };
   } catch {

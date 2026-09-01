@@ -16,14 +16,20 @@ export const getFactionAccessSummary = cache(async (tornFactionId: number | null
   try {
     const { db } = await import("@/lib/db");
     const now = new Date();
-    const faction = await db.faction.findUnique({ where: { tornFactionId }, select: { id: true } });
-    if (!faction) return inactive();
-    const license = await db.factionLicense.findFirst({
-      where: { factionId: faction.id, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-      orderBy: { issuedAt: "desc" },
-    });
+    // Both records can be selected directly through the faction relation.
+    // This removes the preliminary faction lookup and runs the remaining
+    // database reads together on the request-critical authorization path.
+    const [license, pendingRenewal] = await Promise.all([
+      db.factionLicense.findFirst({
+        where: { faction: { tornFactionId }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        orderBy: { issuedAt: "desc" },
+      }),
+      db.accessRequest.findFirst({
+        where: { faction: { tornFactionId }, status: { in: ["PENDING", "INFORMATION_REQUESTED"] } },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
     if (license) {
-      const pendingRenewal = await db.accessRequest.findFirst({ where: { factionId: faction.id, status: { in: ["PENDING", "INFORMATION_REQUESTED"] } }, orderBy: { createdAt: "desc" } });
       const renewalMeta = pendingRenewal ? parseMetadata(pendingRenewal.customerNote) : null;
       return {
       state: "active",
@@ -37,10 +43,9 @@ export const getFactionAccessSummary = cache(async (tornFactionId: number | null
       renewalRequest: pendingRenewal ? { reference: pendingRenewal.reference, startedAt: pendingRenewal.createdAt.toISOString(), plan: renewalMeta?.plan ?? null, payment: renewalMeta?.price ?? null, message: renewalMeta?.reviewMessage ?? null } : null,
     };
     }
-    const pending = await db.accessRequest.findFirst({ where: { factionId: faction.id, status: { in: ["PENDING", "INFORMATION_REQUESTED"] } }, orderBy: { createdAt: "desc" } });
-    if (pending) {
-      const meta = parseMetadata(pending.customerNote);
-      return { state: "pending", label: pending.status === "INFORMATION_REQUESTED" ? "More information required" : "Owner review required", expiresAt: null, reference: pending.reference, startedAt: pending.createdAt.toISOString(), plan: meta.plan, payment: meta.price, message: meta.reviewMessage };
+    if (pendingRenewal) {
+      const meta = parseMetadata(pendingRenewal.customerNote);
+      return { state: "pending", label: pendingRenewal.status === "INFORMATION_REQUESTED" ? "More information required" : "Owner review required", expiresAt: null, reference: pendingRenewal.reference, startedAt: pendingRenewal.createdAt.toISOString(), plan: meta.plan, payment: meta.price, message: meta.reviewMessage };
     }
     return inactive();
   } catch {

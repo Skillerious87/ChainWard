@@ -11,6 +11,25 @@ Torn API call patterns and caching, per-request server work, the connection
 screen, the observed service state drawer, route transitions, the navigation
 rail, the reward scheme workspace, and a network-free acceptance run.
 
+## September 2026 performance follow-up
+
+The hosted request path received a second pass after production navigation and
+active-chain timings were observed:
+
+- New encrypted sessions carry the player and faction labels that Torn already
+  verified during connection. Reconstructing the current actor no longer adds a
+  `/user/basic` request to every render and five-second telemetry poll. Existing
+  temporary cookies remain compatible and use the old lookup until they expire.
+- Remembered PostgreSQL session and credential reads now run concurrently.
+  Licence and renewal queries are also parallel, and authorization reads one
+  actor assignment instead of the complete assignment list and audit history.
+- The protected layout starts database authorization, health, roster, member
+  activity, and display telemetry work as soon as their inputs are available,
+  avoiding the previous sequence of database and Torn network waterfalls.
+- Browser telemetry refreshes share one in-flight response across the shell and
+  live-chain controls. Hidden tabs pause polling, and member monitoring accepts
+  the freshly rendered server snapshot instead of repeating it after hydration.
+
 ## Findings and fixes
 
 ### 1. The stored credential was decrypted three to five times per page render
@@ -35,8 +54,9 @@ but it removed the repeated cryptography and file handles.
 
 `server-client.ts` passed a 60-second fallback for `historyCacheSeconds` while
 the client's own default was 900. That bucket covers `/key/info`,
-`/user/basic`, and `/faction/chains` — data that changes rarely — so the
-signed-in player's profile was re-fetched from Torn at least once a minute.
+`/user/basic`, and `/faction/chains` — data that changes rarely. `/user/basic`
+is now needed only for connection validation and backward compatibility with a
+temporary cookie from the previous release.
 
 **Fix.** The fallback is now 600 seconds. `TORN_HISTORY_CACHE_SECONDS` still
 overrides it, and live buckets (faction, chain, members, current chain report)
@@ -106,10 +126,12 @@ never re-checked that the holder was still in the verified Torn faction, so a
 member who left or was removed kept operating the workspace until somebody
 noticed the row and revoked it by hand.
 
-**Fix.** Every permission check now confirms current roster membership. It
-denies only on a definite answer — if Torn cannot return the roster at all we do
-not know that the member left, and converting an upstream outage into a lockout
-for every delegated operator would be worse than the risk it avoids.
+**Fix.** Every permission check still confirms current roster membership.
+Telemetry and that authorization work now run concurrently, so the security
+check adds no separate network waterfall. Checks deny only on a definite
+answer — if Torn cannot return the roster at all we do not know that the member
+left, and converting an upstream outage into a lockout for every delegated
+operator would be worse than the risk it avoids.
 
 ### 10. Stale assignments could not be revoked
 

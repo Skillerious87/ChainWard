@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
 import { anchorFromReading, createAnchor, displaySeconds, project, reconcileChainReading, type CountdownAnchor } from "@/lib/torn/chain-countdown";
+import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { readWorkspaceTelemetryEvent, workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
@@ -86,16 +87,12 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
     if (syncing) return;
     setSyncing(true);
     try {
-      const startedAt = Date.now();
-      const response = await fetch("/api/telemetry/live-chain?fresh=1", {
-        headers: { accept: "application/json" },
-        cache: "no-store",
-      });
-      const payload: unknown = await response.json();
-      const transitMs = Math.max(0, (Date.now() - startedAt) / 2);
-      if (!response.ok || !isWorkspaceTelemetry(payload)) {
+      const result = await requestWorkspaceTelemetry("/api/telemetry/live-chain?fresh=1");
+      if (!result.ok || !isWorkspaceTelemetry(result.payload)) {
         throw new Error("The telemetry response was invalid.");
       }
+      const payload = result.payload;
+      const { transitMs } = result;
       setSnapshotOverride(payload);
       applyReading(payload, transitMs);
       window.dispatchEvent(workspaceTelemetryEvent(payload, transitMs));
@@ -517,11 +514,4 @@ function formatDuration(seconds: number): string {
 function formatTornTime(timestamp: number): string {
   if (timestamp <= 0) return "—";
   return `${new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(timestamp * 1_000)} TCT`;
-}
-
-function isWorkspaceTelemetry(value: unknown): value is WorkspaceTelemetry {
-  if (!value || typeof value !== "object" || !("source" in value) || !("checkedAt" in value)) return false;
-  const candidate = value as Partial<WorkspaceTelemetry>;
-  return (candidate.source === "live" || candidate.source === "unavailable")
-    && typeof candidate.checkedAt === "string";
 }

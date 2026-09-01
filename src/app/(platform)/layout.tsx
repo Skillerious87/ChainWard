@@ -33,33 +33,49 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
 }
 
 async function AuthenticatedPlatformLayout({ children }: { children: React.ReactNode }) {
-  const [actor, telemetry, connection] = await Promise.all([
-    getCurrentActor(),
-    getWorkspaceTelemetry(),
-    getConfiguredTornConnection(),
-  ]);
-  if (!actor.tornUserId || telemetry.source !== "live" || !telemetry.faction || !connection) redirect("/connect");
-  if (connection.tornUserId !== actor.tornUserId || connection.factionId !== telemetry.faction.id) redirect("/connect");
-  const factionId = telemetry.faction?.id ?? null;
-  // None of these three depend on each other, and the database probe is the
-  // slowest, so awaiting it on its own added its full latency to every render.
+  const connection = await getConfiguredTornConnection();
+  if (!connection) redirect("/connect");
+
+  // The connection already supplies the trusted tenant ID, so database work
+  // can begin while Torn prepares the display telemetry instead of waiting for
+  // that network response first.
+  const telemetryPromise = getWorkspaceTelemetry();
+  const databasePromise = getDatabaseStatus();
+  const accessPromise = getFactionAccessSummary(connection.factionId);
+  const actor = await getCurrentActor();
+  if (!actor.tornUserId || connection.tornUserId !== actor.tornUserId) redirect("/connect");
   const owner = isPlatformOwner(actor);
-  const [database, access, assignment] = await Promise.all([
-    getDatabaseStatus(),
-    getFactionAccessSummary(factionId),
-    owner ? Promise.resolve(null) : getFactionAccessAssignment(factionId, actor.tornUserId),
+  const assignmentPromise = owner
+    ? Promise.resolve(null)
+    : getFactionAccessAssignment(connection.factionId, actor.tornUserId);
+  const authorizationDataPromise = Promise.all([accessPromise, assignmentPromise]).then(async ([access, assignment]) => {
+    const assigned = access.state === "active" && Boolean(assignment);
+    const provisionallyCanManageMembers = access.state === "active"
+      && (owner || Boolean(assignment && hasPermission(assignment.role, "members:manage")));
+    const [currentRoster, memberActivity] = await Promise.all([
+      assigned || provisionallyCanManageMembers ? getFactionRoster() : Promise.resolve(null),
+      provisionallyCanManageMembers ? getMemberActivityWorkspace(connection.factionId) : Promise.resolve(null),
+    ]);
+    return { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity };
+  });
+  const [telemetry, database, authorizationData] = await Promise.all([
+    telemetryPromise,
+    databasePromise,
+    authorizationDataPromise,
   ]);
-  const currentRoster = access.state === "active" && assignment ? await getFactionRoster() : null;
+  if (telemetry.source !== "live" || !telemetry.faction || connection.factionId !== telemetry.faction.id) redirect("/connect");
+  const factionId = telemetry.faction.id;
+  const { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity } = authorizationData;
   const currentRosterMember = !currentRoster?.available || currentRoster.data.some((member) => member.tornId === actor.tornUserId);
   const workspaceAuthorized = access.state === "active" && (owner || Boolean(assignment && currentRosterMember));
   const shellTelemetry = redactLockedTelemetry(telemetry, access, workspaceAuthorized);
-  const canManageMembers = workspaceAuthorized && (owner || Boolean(assignment && hasPermission(assignment.role, "members:manage")));
-  const memberActivityAlert = access.state === "active" && canManageMembers && factionId
-    ? await Promise.all([getFactionRoster(), getMemberActivityWorkspace(factionId)]).then(([roster, activity]) => roster.available ? {
+  const canManageMembers = workspaceAuthorized && provisionallyCanManageMembers;
+  const memberActivityAlert = canManageMembers && currentRoster?.available && memberActivity
+    ? {
       factionId,
-      factionName: telemetry.faction!.name,
-      ...buildMemberActivityAlert(roster.data, activity, roster.checkedAt),
-    } : null)
+      factionName: telemetry.faction.name,
+      ...buildMemberActivityAlert(currentRoster.data, memberActivity, currentRoster.checkedAt),
+    }
     : null;
   return <AppShell currentUser={actor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert}>{children}</AppShell>;
 }

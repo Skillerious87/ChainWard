@@ -49,7 +49,10 @@ describe.sequential("remembered Torn connections", () => {
     await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({
       apiKey,
       tornUserId: 3_212_954,
+      tornUserName: "Skillerious",
       factionId: 51_393,
+      factionName: "Prive Cartel",
+      factionTag: "PRIVE",
     });
 
     await revokeRememberedConnection(stored.token);

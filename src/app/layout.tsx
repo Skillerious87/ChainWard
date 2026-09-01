@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AppearanceBootScript } from "@/components/appearance-boot-script";
+import { deploymentOrigin } from "@/lib/metadata/public-origin";
 import "./globals.css";
 import "./polish.css";
 import "./shell.css";
@@ -63,19 +64,6 @@ export const metadata: Metadata = {
     title: "Chainward",
   },
 };
-
-function deploymentOrigin(): URL | undefined {
-  const configured = process.env.CHAINWARD_PUBLIC_ORIGIN?.trim();
-  if (!configured) return undefined;
-  try {
-    const url = new URL(configured);
-    if (!(["http:", "https:"] as string[]).includes(url.protocol) || url.username || url.password || url.search || url.hash) return undefined;
-    url.pathname = "/";
-    return url;
-  } catch {
-    return undefined;
-  }
-}
 
 export const viewport: Viewport = {
   colorScheme: "dark",

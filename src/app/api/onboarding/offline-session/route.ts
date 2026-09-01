@@ -26,7 +26,11 @@ export async function POST(request: Request) {
     nextPath: parsed.data.identity === "owner" ? "/admin" : "/unlock",
     session: { remembered: false, expiresAt: new Date(Date.now() + CONNECTION_MAX_AGE_SECONDS * 1_000).toISOString() },
   }, { headers: { "cache-control": "no-store" } });
-  response.cookies.set(CONNECTION_COOKIE, createConnectionSession(connection.apiKey, connection.player.id, connection.faction.id), cookieOptions(CONNECTION_MAX_AGE_SECONDS));
+  response.cookies.set(CONNECTION_COOKIE, createConnectionSession(connection.apiKey, connection.player.id, connection.faction.id, {
+    tornUserName: connection.player.name,
+    factionName: connection.faction.name,
+    factionTag: connection.faction.tag,
+  }), cookieOptions(CONNECTION_MAX_AGE_SECONDS));
   response.cookies.set(REMEMBERED_CONNECTION_COOKIE, "", cookieOptions(0));
   return response;
 }

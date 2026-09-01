@@ -112,7 +112,9 @@ Before exposing Chainward to other users:
 2. Generate separate random values of at least 32 bytes for `SESSION_SECRET`
    and `API_KEY_ENCRYPTION_SECRET`.
 3. Set `CHAINWARD_PUBLIC_ORIGIN` to the canonical HTTPS origin and list every
-   accepted browser origin in `CHAINWARD_ALLOWED_ORIGINS`.
+   accepted browser origin in `CHAINWARD_ALLOWED_ORIGINS`. Vercel can derive
+   the canonical origin from its system environment when the explicit value is
+   absent, but setting it remains recommended for portable deployments.
 4. Keep `CHAINWARD_OFFLINE_TEST_MODE=false`. Enable
    `CHAINWARD_TRUST_PROXY_HEADERS` only when the trusted proxy overwrites those
    headers and direct origin access is blocked.

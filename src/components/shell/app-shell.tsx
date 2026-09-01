@@ -58,6 +58,7 @@ import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
 import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
 import { buildOperationalNotifications, type OperationalNotification } from "@/lib/notifications/notification-intelligence";
 import { pollSecondsForChain } from "@/lib/torn/polling-policy";
+import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { readWorkspaceTelemetryEvent, workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 
@@ -303,23 +304,17 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     let lastPollAt = Date.now();
 
     async function pollTelemetry(): Promise<void> {
-      if (!navigator.onLine || pollInFlight) return;
+      if (!navigator.onLine || document.visibilityState !== "visible" || pollInFlight) return;
       pollInFlight = true;
       lastPollAt = Date.now();
       try {
-        const startedAt = performance.now();
         // Torn documents `timestamp` as the supported way to bypass its
         // 30-second service cache when fresh information is needed. The server
         // adds it only while a chain is active, and only to the chain request.
         const endpoint = chainRunning ? "/api/telemetry/live-chain?fresh=1" : "/api/telemetry/live-chain";
-        const response = await fetch(endpoint, {
-          headers: { accept: "application/json" },
-          cache: "no-store",
-        });
-        const payload: unknown = await response.json();
-        const transitMs = Math.max(0, (performance.now() - startedAt) / 2);
-        if (!response.ok || !isWorkspaceTelemetry(payload) || stopped) return;
-        publishTelemetry(payload, transitMs);
+        const result = await requestWorkspaceTelemetry(endpoint);
+        if (!result.ok || !isWorkspaceTelemetry(result.payload) || stopped) return;
+        publishTelemetry(result.payload, result.transitMs);
       } catch {
         // A background poll keeps the last verified snapshot; manual sync reports failures.
       } finally {
@@ -458,15 +453,10 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     if (syncing) return;
     setSyncState("syncing");
     try {
-      const startedAt = performance.now();
-      const response = await fetch("/api/telemetry/live-chain?fresh=1", {
-        headers: { accept: "application/json" },
-        cache: "no-store",
-      });
-      const payload: unknown = await response.json();
-      const transitMs = Math.max(0, (performance.now() - startedAt) / 2);
-      if (!response.ok || !isWorkspaceTelemetry(payload)) throw new Error("Telemetry sync failed");
-      publishTelemetry(payload, transitMs);
+      const result = await requestWorkspaceTelemetry("/api/telemetry/live-chain?fresh=1");
+      if (!result.ok || !isWorkspaceTelemetry(result.payload)) throw new Error("Telemetry sync failed");
+      const payload = result.payload;
+      publishTelemetry(payload, result.transitMs);
       router.refresh();
       notify({
         title: payload.source === "live" ? "Live Torn data refreshed" : "Torn data unavailable",
@@ -766,14 +756,4 @@ function newestTelemetry(server: WorkspaceTelemetry, override: WorkspaceTelemetr
   const serverTime = Date.parse(server.checkedAt);
   const overrideTime = Date.parse(override.checkedAt);
   return Number.isFinite(serverTime) && serverTime > overrideTime ? server : override;
-}
-
-function isWorkspaceTelemetry(value: unknown): value is WorkspaceTelemetry {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<WorkspaceTelemetry>;
-  return (candidate.source === "live" || candidate.source === "unavailable")
-    && typeof candidate.checkedAt === "string"
-    && typeof candidate.message === "string"
-    && (candidate.faction === null || typeof candidate.faction === "object")
-    && (candidate.chain === null || typeof candidate.chain === "object");
 }

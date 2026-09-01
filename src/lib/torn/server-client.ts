@@ -11,7 +11,10 @@ import { readRememberedConnection, REMEMBERED_CONNECTION_COOKIE } from "./rememb
 export interface ConfiguredTornConnection {
   client: TornClient;
   tornUserId: number;
+  tornUserName: string | null;
   factionId: number;
+  factionName: string | null;
+  factionTag: string | null;
 }
 
 /**
@@ -29,7 +32,10 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
   const offline = isOfflineFixtureKey(apiKey);
   return {
     tornUserId: session.tornUserId,
+    tornUserName: session.tornUserName,
     factionId: session.factionId,
+    factionName: session.factionName,
+    factionTag: session.factionTag,
     client: new TornClient({
     apiKey,
     dataMode: offline ? "offline" : "torn",
