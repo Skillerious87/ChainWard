@@ -103,6 +103,28 @@ When Chainward is hosted remotely, “local” means the server that runs the ap
 a website cannot write a database onto an unrelated visitor’s computer. When
 you run Chainward on your own device, the server and device are the same.
 
+## Production deployment
+
+Before exposing Chainward to other users:
+
+1. Configure shared PostgreSQL with `DATABASE_URL`, run `npm run db:push`, and
+   do not use the local SQLite backend across multiple instances.
+2. Generate separate random values of at least 32 bytes for `SESSION_SECRET`
+   and `API_KEY_ENCRYPTION_SECRET`.
+3. Set `CHAINWARD_PUBLIC_ORIGIN` to the canonical HTTPS origin and list every
+   accepted browser origin in `CHAINWARD_ALLOWED_ORIGINS`.
+4. Keep `CHAINWARD_OFFLINE_TEST_MODE=false`. Enable
+   `CHAINWARD_TRUST_PROXY_HEADERS` only when the trusted proxy overwrites those
+   headers and direct origin access is blocked.
+5. Add provider/WAF rate limits in front of the application and run
+   `npm run check:full` against the exact release commit.
+
+The local backend uses Node's release-candidate `node:sqlite` API and can emit
+an `ExperimentalWarning` in development. Chainward loads that module only when
+local SQLite is actually opened, so a PostgreSQL deployment does not activate
+the local-only runtime. See [`docs/abuse-protection.md`](docs/abuse-protection.md)
+for the application and edge-rate-limit boundary.
+
 For a complete PostgreSQL snapshot, including licensing and payout history:
 
 ```powershell
@@ -118,7 +140,7 @@ supplied.
 
 ```bash
 npm run check           # lint, TypeScript, unit tests, production build
-npm run verify:offline  # 65 end-to-end assertions with no network access
+npm run verify:offline  # 86 end-to-end assertions with no network access
 npm run check:full      # both of the above
 ```
 

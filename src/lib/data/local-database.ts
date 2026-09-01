@@ -2,7 +2,8 @@ import "server-only";
 
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { openSqliteDatabase } from "@/lib/data/sqlite-database";
 
 const DEFAULT_DATABASE_PATH = path.join(process.cwd(), "data", "chainward-local.sqlite");
 
@@ -25,14 +26,14 @@ export function localDatabaseExists(): boolean {
 export function createLocalDatabase(): LocalDatabaseInfo {
   const databasePath = localDatabasePath();
   mkdirSync(path.dirname(databasePath), { recursive: true });
-  const database = new DatabaseSync(databasePath);
+  const database = openSqliteDatabase(databasePath);
   try { initializeSchema(database); } finally { database.close(); }
   return localDatabaseInfo();
 }
 
 export function openLocalDatabase(): DatabaseSync | null {
   if (!localDatabaseExists()) return null;
-  const database = new DatabaseSync(localDatabasePath());
+  const database = openSqliteDatabase(localDatabasePath());
   initializeSchema(database);
   return database;
 }

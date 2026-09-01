@@ -1,11 +1,11 @@
 import "server-only";
 
-export async function readLimitedJson(request: Request, maximumBytes: number): Promise<unknown> {
-  const declaredLength = Number(request.headers.get("content-length") ?? 0);
+export async function readLimitedJson(message: Pick<Request | Response, "body" | "headers">, maximumBytes: number): Promise<unknown> {
+  const declaredLength = Number(message.headers.get("content-length") ?? 0);
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) throw new RequestBodyTooLargeError();
-  if (!request.body) return null;
+  if (!message.body) return null;
 
-  const reader = request.body.getReader();
+  const reader = message.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   while (true) {

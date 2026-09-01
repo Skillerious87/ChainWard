@@ -47,6 +47,34 @@ describe("TornClient", () => {
     });
   });
 
+  it("caps an upstream Retry-After so one request cannot occupy a worker indefinitely", async () => {
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const limited = () => Response.json(
+      { error: { code: 5, error: "Too many requests" } },
+      { status: 429, headers: { "retry-after": "86400" } },
+    );
+    const client = new TornClient({
+      apiKey: "retry-delay-cap",
+      fetchImplementation: vi.fn<typeof fetch>().mockImplementation(async () => limited()),
+      sleep,
+    });
+
+    await expect(client.getKeyInfo()).rejects.toMatchObject({ category: "RATE_LIMITED" });
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenNthCalledWith(1, 5_000);
+    expect(sleep).toHaveBeenNthCalledWith(2, 5_000);
+  });
+
+  it("rejects an oversized upstream payload before buffering it", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", {
+      headers: { "content-length": String(9 * 1_024 * 1_024) },
+    }));
+    const client = new TornClient({ apiKey: "oversized-response", fetchImplementation: fetchMock });
+
+    await expect(client.getKeyInfo()).rejects.toMatchObject({ category: "UNEXPECTED_RESPONSE" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("bypasses both cache layers on an explicit refresh and replaces the canonical cache entry", async () => {
     const chain = (current: number) => ({
       chain: {

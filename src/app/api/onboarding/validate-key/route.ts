@@ -6,7 +6,7 @@ import {
 } from "@/lib/diagnostics/onboarding-validation";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
-import { consumeGlobalRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
+import { consumeGlobalRateLimit, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { MissingTornSelectionsError, validateTornConnection } from "@/lib/torn/connection-service";
 import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession } from "@/lib/torn/connection-session";
 import { TornApiError, userFacingTornError } from "@/lib/torn/errors";
@@ -21,15 +21,28 @@ const requestSchema = z.object({
 
 export async function POST(request: Request) {
   if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
-  const rateLimit = consumeRateLimit("onboarding-key", request, { limit: 8, windowMs: 10 * 60_000 });
-  const globalRateLimit = consumeGlobalRateLimit("onboarding-key", { limit: 120, windowMs: 10 * 60_000 });
-  if (!rateLimit.allowed || !globalRateLimit.allowed) return errorResponse("Too many connection attempts. Wait before trying again.", "RATE_LIMITED", 429, Math.max(rateLimit.retryAfterSeconds, globalRateLimit.retryAfterSeconds));
+  // A short burst absorbs accidental double-submits, while the longer buckets
+  // prevent a public caller from using Chainward to test credentials or expose
+  // the server's Torn-facing IP to a flood of invalid-key requests.
+  const requestLimits = [
+    consumeRateLimit("onboarding-key:address-burst", request, { limit: 4, windowMs: 60_000 }),
+    consumeRateLimit("onboarding-key:address-sustained", request, { limit: 10, windowMs: 15 * 60_000 }),
+    consumeGlobalRateLimit("onboarding-key:process-burst", { limit: 10, windowMs: 60_000 }),
+    consumeGlobalRateLimit("onboarding-key:process-sustained", { limit: 40, windowMs: 10 * 60_000 }),
+  ];
+  const deniedRequestLimit = retryAfter(requestLimits);
+  if (deniedRequestLimit) return errorResponse("Too many connection attempts. Wait before trying again.", "RATE_LIMITED", 429, deniedRequestLimit);
   let input: unknown;
   try { input = await readLimitedJson(request, 2_048); }
   catch (error) { return errorResponse(error instanceof RequestBodyTooLargeError ? error.message : "The request could not be read.", "INVALID_FORMAT", 413); }
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success) {
     return errorResponse("Enter the 16-character API key from Torn Settings, not the key name or your password.", "INVALID_FORMAT", 400);
+  }
+
+  const credentialLimit = consumePartitionRateLimit("onboarding-key:credential", parsed.data.apiKey, { limit: 4, windowMs: 15 * 60_000 });
+  if (!credentialLimit.allowed) {
+    return errorResponse("This API key has been checked too frequently. Wait before trying again.", "RATE_LIMITED", 429, credentialLimit.retryAfterSeconds);
   }
 
   let stage: OnboardingValidationStage = "torn-api-validation";
@@ -126,6 +139,10 @@ function normalizeApiKey(value: string): string {
   const hasMatchingQuotes = trimmed.length >= 2
     && ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")));
   return hasMatchingQuotes ? trimmed.slice(1, -1).trim() : trimmed;
+}
+
+function retryAfter(results: Array<{ allowed: boolean; retryAfterSeconds: number }>): number {
+  return Math.max(0, ...results.filter((result) => !result.allowed).map((result) => result.retryAfterSeconds));
 }
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {

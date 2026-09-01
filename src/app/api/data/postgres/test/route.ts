@@ -6,6 +6,7 @@ import { getCurrentActor } from "@/lib/auth/current-actor";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { readLimitedJson } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
+import { acquireConcurrencySlot, consumeGlobalRateLimit, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -20,13 +21,28 @@ const connectionSchema = z.object({
 
 export async function POST(request: Request) {
   if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
+  const requestLimit = consumeRateLimit("postgres-connection-test:address", request, { limit: 12, windowMs: 10 * 60_000 });
+  if (!requestLimit.allowed) return rateLimitedResponse(requestLimit.retryAfterSeconds);
   const actor = await getCurrentActor();
   if (!actor.tornUserId) return NextResponse.json({ error: "Connect a verified Torn API key before testing workspace storage." }, { status: 401 });
   if (!isPlatformOwner(actor)) return NextResponse.json({ error: "Only the platform owner can test a server-side database connection." }, { status: 403 });
+  const actorLimit = consumePartitionRateLimit("postgres-connection-test:actor", actor.tornUserId, { limit: 10, windowMs: 10 * 60_000 });
+  const processLimit = consumeGlobalRateLimit("postgres-connection-test:process", { limit: 30, windowMs: 10 * 60_000 });
+  if (!actorLimit.allowed || !processLimit.allowed) {
+    return rateLimitedResponse(Math.max(actorLimit.retryAfterSeconds, processLimit.retryAfterSeconds));
+  }
 
   const input = await readLimitedJson(request, 4_096).catch(() => null);
   const parsed = connectionSchema.safeParse(input);
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid PostgreSQL host, port, database, and username." }, { status: 400 });
+
+  const releaseActorSlot = acquireConcurrencySlot("postgres-connection-test:actor", actor.tornUserId, 2);
+  if (!releaseActorSlot) return rateLimitedResponse(1);
+  const releaseProcessSlot = acquireConcurrencySlot("postgres-connection-test:process", "global", 8);
+  if (!releaseProcessSlot) {
+    releaseActorSlot();
+    return rateLimitedResponse(1);
+  }
 
   const client = new Client({
     ...parsed.data,
@@ -47,7 +63,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: postgresErrorMessage(error) }, { status: 502, headers: { "cache-control": "no-store" } });
   } finally {
     await client.end().catch(() => undefined);
+    releaseProcessSlot();
+    releaseActorSlot();
   }
+}
+
+function rateLimitedResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "Too many PostgreSQL connection tests. Wait before trying again." },
+    { status: 429, headers: { "cache-control": "no-store", "retry-after": String(retryAfterSeconds) } },
+  );
 }
 
 function postgresErrorMessage(error: unknown): string {

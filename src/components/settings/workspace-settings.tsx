@@ -162,9 +162,15 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".json") || file.size > 5_000_000) {
       notify({ title: "Unsupported backup file", description: "Choose a Chainward JSON backup smaller than 5 MB.", tone: "warning" });
+      clearRestoreFile();
       return;
     }
     setRestoreFile(file);
+  }
+
+  function clearRestoreFile(): void {
+    setRestoreFile(null);
+    if (restoreInput.current) restoreInput.current.value = "";
   }
 
   async function restoreBackup(): Promise<void> {
@@ -177,7 +183,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
       if (!response.ok) throw new Error(isErrorPayload(payload) ? payload.error : "The backup could not be restored.");
       const imported = isRestorePayload(payload) ? payload.imported : 0;
       const skipped = isRestorePayload(payload) ? payload.skipped : 0;
-      setRestoreFile(null);
+      clearRestoreFile();
       notify({ title: "Workspace restore complete", description: `${imported} scheme version${imported === 1 ? "" : "s"} imported; ${skipped} existing version${skipped === 1 ? "" : "s"} retained.`, tone: "success" });
       router.refresh();
     } catch (error) {
@@ -344,7 +350,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         {activeView === "storage" && <section className="settings-view-content">
           <div className="settings-status-hero"><span><HardDrive size={22} /></span><div><p className="eyebrow">Active storage backend</p><h3>{database.available ? database.label : "Create local storage"}</h3><p>{database.message}</p></div><em className={`database-health database-health--${database.available ? "ready" : "attention"}`}><i />{database.available ? "Ready" : "Not configured"}</em></div>
           {!database.available && database.provider === "none" && <div className="create-database-card"><span><DatabaseBackup size={23} /></span><div><h3>Create a local database file</h3><p>Creates <strong>chainward-local.sqlite</strong> in Chainward’s private data folder. No Docker installation or external server is required.</p><ul><li><Check size={13} /> Reward schemes and versions</li><li><Check size={13} /> Paid-chain acknowledgements</li><li><Check size={13} /> Workspace settings</li></ul></div><button className="button button--primary" disabled={Boolean(storageWorking) || telemetry.source !== "live"} onClick={() => void createDatabaseFile()}>{storageWorking === "create" ? <Spinner size={16} label="Creating local database" /> : <Database size={16} />} {storageWorking === "create" ? "Creating database…" : "Create local database"}</button></div>}
-          <div className="backup-action-grid"><article><span><Download size={18} /></span><div><h3>Download portable backup</h3><p>Exports faction settings and reward-scheme versions as JSON. API keys and Torn responses are excluded.</p></div><button className="button button--secondary" disabled={!database.available || telemetry.source !== "live" || Boolean(storageWorking)} onClick={() => void downloadBackup()}>{storageWorking === "download" ? <Spinner size={15} label="Creating portable backup" tone="muted" /> : <Download size={15} />} {storageWorking === "download" ? "Preparing backup…" : "Download backup"}</button></article><article><span><Upload size={18} /></span><div><h3>Restore portable backup</h3><p>Imports missing versions without overwriting historical payout records.</p></div><input ref={restoreInput} type="file" hidden accept="application/json,.json" onChange={(event) => chooseRestoreFile(event.target.files?.[0])} /><button className="button button--secondary" disabled={!database.available || telemetry.source !== "live" || Boolean(storageWorking)} onClick={() => restoreInput.current?.click()}><Upload size={15} /> Choose backup</button></article></div>
+          <div className="backup-action-grid"><article><span><Download size={18} /></span><div><h3>Download portable backup</h3><p>Exports faction settings and reward-scheme versions as JSON. API keys and Torn responses are excluded.</p></div><button className="button button--secondary" disabled={!database.available || telemetry.source !== "live" || Boolean(storageWorking)} onClick={() => void downloadBackup()}>{storageWorking === "download" ? <Spinner size={15} label="Creating portable backup" tone="muted" /> : <Download size={15} />} {storageWorking === "download" ? "Preparing backup…" : "Download backup"}</button></article><article><span><Upload size={18} /></span><div><h3>Restore portable backup</h3><p>Restores named settings and imports missing scheme versions without changing payout history.</p></div><input ref={restoreInput} type="file" hidden accept="application/json,.json" onChange={(event) => chooseRestoreFile(event.target.files?.[0])} /><button className="button button--secondary" disabled={!database.available || telemetry.source !== "live" || Boolean(storageWorking)} onClick={() => restoreInput.current?.click()}><Upload size={15} /> Choose backup</button></article></div>
           <div className="backup-fine-print"><ShieldCheck size={14} /><p><strong>Storage stays explicit.</strong><span>{database.provider === "sqlite" ? `The active file is ${database.filename}. Move downloaded backups away from this device for real recovery protection.` : "PostgreSQL remains available for shared or hosted installations."}</span></p></div>
         </section>}
 
@@ -415,7 +421,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         <footer className="settings-cycle"><button className="button button--quiet" disabled={activeIndex === 0} onClick={() => cycle(-1)}><ChevronLeft size={15} /> Previous</button><div><span>{activeIndex + 1} / {views.length}</span><strong>{active.label}</strong></div><button className="button button--secondary" disabled={activeIndex === views.length - 1} onClick={() => cycle(1)}>Next section <ChevronRight size={15} /></button></footer>
       </main>
     </div>
-    <Dialog open={Boolean(restoreFile)} className="dialog--restore" title="Restore workspace configuration?" description={restoreFile ? `Selected file: ${restoreFile.name}` : undefined} confirmLabel="Restore backup" cancelLabel="Cancel" destructive onConfirm={restoreBackup} onClose={() => setRestoreFile(null)}><div className="restore-warning"><AlertTriangle size={18} /><div><strong>Review before restoring</strong><p>The backup must belong to the connected faction. Missing scheme versions are imported; existing versions and paid-chain history remain untouched.</p></div></div></Dialog>
+    <Dialog open={Boolean(restoreFile)} className="dialog--restore" title="Restore workspace configuration?" description={restoreFile ? `Selected file: ${restoreFile.name}` : undefined} confirmLabel="Restore backup" cancelLabel="Cancel" destructive onConfirm={restoreBackup} onClose={clearRestoreFile}><div className="restore-warning"><AlertTriangle size={18} /><div><strong>Review before restoring</strong><p>The backup must belong to the connected faction. Matching settings are replaced, missing scheme versions are imported, and existing schemes and paid-chain history remain untouched.</p></div></div></Dialog>
   </div>;
 }
 

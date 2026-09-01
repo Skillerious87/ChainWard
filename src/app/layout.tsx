@@ -14,6 +14,10 @@ import "./unlock.css";
 import "./members.css";
 import "./mobile.css";
 
+const siteDescription = "A third-party Torn faction chain tracker, reward engine, and payout operations platform.";
+const publicOrigin = deploymentOrigin();
+const metadataBase = publicOrigin ?? new URL("http://localhost:3000");
+
 /**
  * Inter is self-hosted rather than fetched from a font CDN: local rendering has
  * to work with no internet access, and a third-party font request would leak
@@ -33,19 +37,45 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase,
   applicationName: "Chainward",
   title: {
     default: "Chainward · Faction chain operations",
     template: "%s · Chainward",
   },
-  description:
-    "A third-party Torn faction chain tracker, reward engine, and payout operations platform.",
+  description: siteDescription,
+  openGraph: {
+    type: "website",
+    locale: "en_GB",
+    siteName: "Chainward",
+    title: "Chainward · Faction chain operations",
+    description: siteDescription,
+    ...(publicOrigin ? { url: publicOrigin } : {}),
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Chainward · Faction chain operations",
+    description: siteDescription,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Chainward",
   },
 };
+
+function deploymentOrigin(): URL | undefined {
+  const configured = process.env.CHAINWARD_PUBLIC_ORIGIN?.trim();
+  if (!configured) return undefined;
+  try {
+    const url = new URL(configured);
+    if (!(["http:", "https:"] as string[]).includes(url.protocol) || url.username || url.password || url.search || url.hash) return undefined;
+    url.pathname = "/";
+    return url;
+  } catch {
+    return undefined;
+  }
+}
 
 export const viewport: Viewport = {
   colorScheme: "dark",

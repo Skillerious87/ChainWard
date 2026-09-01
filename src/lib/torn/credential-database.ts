@@ -2,9 +2,10 @@ import "server-only";
 
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { chainwardAppDataDirectory, migrateLegacyConnectionSecret } from "@/lib/data/app-data";
 import { localDatabasePath } from "@/lib/data/local-database";
+import { openSqliteDatabase } from "@/lib/data/sqlite-database";
 
 export function credentialDatabasePath(): string {
   return path.join(chainwardAppDataDirectory(), "credentials.sqlite");
@@ -13,7 +14,7 @@ export function credentialDatabasePath(): string {
 export function openCredentialDatabase(): DatabaseSync {
   const databasePath = credentialDatabasePath();
   mkdirSync(path.dirname(databasePath), { recursive: true });
-  const database = new DatabaseSync(databasePath);
+  const database = openSqliteDatabase(databasePath);
   database.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = FULL;
@@ -48,7 +49,7 @@ function migrateLegacyCredentialRows(destination: DatabaseSync): void {
   if (!existsSync(legacyPath) || path.resolve(legacyPath) === path.resolve(credentialDatabasePath())) return;
   if (!migrateLegacyConnectionSecret() && !process.env.SESSION_SECRET?.trim()) return;
 
-  const legacy = new DatabaseSync(legacyPath);
+  const legacy = openSqliteDatabase(legacyPath);
   try {
     const table = legacy.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'remembered_torn_connections'").get();
     if (!table) return;

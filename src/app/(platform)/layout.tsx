@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
@@ -14,6 +15,14 @@ import { getMemberActivityWorkspace } from "@/lib/members/member-activity-store"
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: { index: false, follow: false, noimageindex: true },
+  },
+};
 
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
   return (

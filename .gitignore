@@ -16,6 +16,7 @@ node_modules/
 
 # Next.js
 .next/
+next-env.d.ts
 .next-offline-verify/
 .next-probe/
 .next-build-check/

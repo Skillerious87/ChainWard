@@ -26,6 +26,7 @@ import { licensePlans } from "@/lib/licensing/pricing";
 export const metadata: Metadata = {
   title: "Faction operations, beautifully organised",
   description: "Bring Torn chain tracking, faction analytics, rewards, payouts, and member access into one protected operations workspace.",
+  alternates: { canonical: "/" },
 };
 
 const capabilities = [

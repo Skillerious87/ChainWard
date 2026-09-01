@@ -1913,6 +1913,8 @@ body {
 }
 
 .route-error { display: flex; min-height: min(590px,calc(100vh - 170px)); flex-direction: column; align-items: center; justify-content: center; padding: 40px; border: 1px solid #303942; border-radius: 12px; background: radial-gradient(circle at 50% 20%,rgba(242,109,109,.045),transparent 30%),#0d1216; text-align: center; }
+.global-error-page { min-height: 100vh; padding: 28px; background: #080d0f; }
+.global-error-page .route-error { min-height: calc(100vh - 56px); }
 .route-error__icon,.not-found-page section > span { display: grid; width: 54px; height: 54px; margin-bottom: 17px; place-items: center; border: 1px solid rgba(242,109,109,.25); border-radius: 13px; background: rgba(242,109,109,.055); color: var(--danger); }
 .route-error h1,.not-found-page h1 { max-width: 640px; font-size: clamp(25px,3vw,39px); font-weight: 690; letter-spacing: -1.2px; line-height: 1.15; text-wrap: balance; }
 .route-error > p:not(.eyebrow),.not-found-page section > p:not(.eyebrow) { max-width: 560px; margin-top: 10px; color: #929da5; font-size: 12px; line-height: 1.6; }

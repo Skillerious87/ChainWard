@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
   if (!offlineTestModeEnabled()) return NextResponse.json({ error: "Offline test mode is not enabled." }, { status: 404 });
   const rateLimit = consumeRateLimit("offline-session", request, { limit: 30, windowMs: 60_000 });
-  if (!rateLimit.allowed) return NextResponse.json({ error: "Too many offline test sessions were opened." }, { status: 429, headers: { "retry-after": String(rateLimit.retryAfterSeconds) } });
+  if (!rateLimit.allowed) return NextResponse.json({ error: "Too many offline test sessions were opened." }, { status: 429, headers: { "cache-control": "no-store", "retry-after": String(rateLimit.retryAfterSeconds) } });
   const parsed = requestSchema.safeParse(await readLimitedJson(request, 256).catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Choose a valid offline test identity." }, { status: 400 });
 

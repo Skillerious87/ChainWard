@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
+import { acquireConcurrencySlot, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -8,14 +9,26 @@ interface LocalSettingRow { key: string; value_json: string }
 interface LocalSchemeRow { id: string; name: string; description: string; version: number; status: "ACTIVE" | "ARCHIVED"; is_default: number; reward_name: string; reward_unit: string }
 interface LocalTierRow { label: string; minimum_hits: number; maximum_hits: number | null; position: number; enabled: number; amount: number }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const requestLimit = consumeRateLimit("workspace-backup:address", request, { limit: 12, windowMs: 10 * 60_000 });
+  if (!requestLimit.allowed) return rateLimitedResponse(requestLimit.retryAfterSeconds);
   let context;
   // Exporting configuration is a read; restoring one overwrites the workspace
   // and stays with the owner. The two now use separate permissions.
   try { context = await requireFactionPermission("faction:backup"); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Workspace backup access was denied." }, { status: 403 }); }
+  const actorLimit = consumePartitionRateLimit("workspace-backup:actor", context.actor.tornUserId, { limit: 6, windowMs: 10 * 60_000 });
+  if (!actorLimit.allowed) return rateLimitedResponse(actorLimit.retryAfterSeconds);
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return NextResponse.json({ error: "Create a local database before downloading a backup." }, { status: 503 });
+
+  const releaseActorSlot = acquireConcurrencySlot("workspace-backup:actor", context.actor.tornUserId, 1);
+  if (!releaseActorSlot) return rateLimitedResponse(1);
+  const releaseProcessSlot = acquireConcurrencySlot("workspace-backup:process", "global", 4);
+  if (!releaseProcessSlot) {
+    releaseActorSlot();
+    return rateLimitedResponse(1);
+  }
 
   try {
     const exportedAt = new Date();
@@ -26,7 +39,17 @@ export async function GET() {
     return new NextResponse(JSON.stringify(backup, null, 2), { headers: { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="chainward-${context.faction.id}-${stamp}.json"`, "cache-control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "The workspace backup could not be created." }, { status: 500 });
+  } finally {
+    releaseProcessSlot();
+    releaseActorSlot();
   }
+}
+
+function rateLimitedResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "Too many workspace backups were requested. Wait before trying again." },
+    { status: 429, headers: { "cache-control": "no-store", "retry-after": String(retryAfterSeconds) } },
+  );
 }
 
 async function createPostgresBackup(factionId: number, factionName: string, factionTag: string, exportedAt: Date) {

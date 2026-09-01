@@ -1,49 +1,70 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
+import { localBackupCompatibilityIssue, workspaceBackupSchema, type WorkspaceBackup } from "@/lib/data/workspace-backup";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
+import { acquireConcurrencySlot, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
-const rewardSchema = z.object({ name: z.string().min(1).max(80), displayUnit: z.string().min(1).max(40), kind: z.enum(["ITEM", "CURRENCY", "POINTS", "CUSTOM"]), decimals: z.number().int().min(0).max(8), amount: z.number().finite().min(0) });
-const backupSchema = z.object({
-  format: z.literal("chainward-workspace-backup"), version: z.literal(1), exportedAt: z.string().datetime(),
-  faction: z.object({ tornFactionId: z.number().int().positive(), name: z.string().min(1), tag: z.string() }),
-  settings: z.array(z.object({ key: z.string().min(1).max(120).regex(/^(appearance|rewards|payouts|members)\./), value: z.unknown() })).max(500),
-  rewardSchemes: z.array(z.object({ name: z.string().min(1).max(80), description: z.string().nullable(), version: z.number().int().positive(), status: z.enum(["ACTIVE", "ARCHIVED"]), isDefault: z.boolean(), tiers: z.array(z.object({ label: z.string().min(1).max(50), description: z.string().nullable(), minimumHits: z.number().int().min(0), maximumHits: z.number().int().min(0).nullable(), position: z.number().int().min(0), enabled: z.boolean(), rewards: z.array(rewardSchema).min(1).max(10) })).min(1).max(20) })).max(200),
-});
-
 export async function POST(request: Request) {
   if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
+  const requestLimit = consumeRateLimit("workspace-restore:address", request, { limit: 8, windowMs: 10 * 60_000 });
+  if (!requestLimit.allowed) return NextResponse.json({ error: "Too many restore attempts. Wait before trying again." }, { status: 429, headers: { "cache-control": "no-store", "retry-after": String(requestLimit.retryAfterSeconds) } });
   let context;
   try { context = await requireFactionPermission("faction:manage"); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Workspace restore access was denied." }, { status: 403 }); }
+  const rateLimit = consumePartitionRateLimit("workspace-restore:actor", context.actor.tornUserId, { limit: 5, windowMs: 10 * 60_000 });
+  if (!rateLimit.allowed) return NextResponse.json({ error: "Too many restore attempts. Wait before trying again." }, { status: 429, headers: { "cache-control": "no-store", "retry-after": String(rateLimit.retryAfterSeconds) } });
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return NextResponse.json({ error: "Create a local database before restoring a backup." }, { status: 503 });
   let input: unknown;
   try { input = await readLimitedJson(request, 5_000_000); }
-  catch (error) { return NextResponse.json({ error: error instanceof RequestBodyTooLargeError ? "The backup exceeds the 5 MB restore limit." : "The backup could not be read." }, { status: 413 }); }
-  const parsed = backupSchema.safeParse(input);
+  catch (error) {
+    const tooLarge = error instanceof RequestBodyTooLargeError;
+    return NextResponse.json({ error: tooLarge ? "The backup exceeds the 5 MB restore limit." : "The backup is not valid JSON." }, { status: tooLarge ? 413 : 400 });
+  }
+  const parsed = workspaceBackupSchema.safeParse(input);
   if (!parsed.success) return NextResponse.json({ error: "This is not a valid Chainward workspace backup." }, { status: 400 });
   if (parsed.data.faction.tornFactionId !== context.faction.id) return NextResponse.json({ error: "The backup belongs to a different Torn faction." }, { status: 409 });
+  const localCompatibilityIssue = hasPostgres ? null : localBackupCompatibilityIssue(parsed.data);
+  if (localCompatibilityIssue) return NextResponse.json({ error: localCompatibilityIssue }, { status: 422, headers: { "cache-control": "no-store" } });
+
+  const releaseActorSlot = acquireConcurrencySlot("workspace-restore:actor", context.actor.tornUserId, 1);
+  if (!releaseActorSlot) return NextResponse.json({ error: "A workspace restore is already in progress. Wait for it to finish." }, { status: 429, headers: { "cache-control": "no-store", "retry-after": "1" } });
+  const releaseProcessSlot = acquireConcurrencySlot("workspace-restore:process", "global", 2);
+  if (!releaseProcessSlot) {
+    releaseActorSlot();
+    return NextResponse.json({ error: "The server is already processing other workspace restores." }, { status: 429, headers: { "cache-control": "no-store", "retry-after": "1" } });
+  }
 
   try {
     const result = hasPostgres
       ? await restorePostgres(parsed.data, context.faction.id, context.faction.name, context.faction.tag)
       : restoreSqlite(parsed.data, context.faction.id);
     return NextResponse.json({ restored: true, ...result }, { headers: { "cache-control": "no-store" } });
-  } catch {
+  } catch (error) {
+    if (error instanceof BackupConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409, headers: { "cache-control": "no-store" } });
+    }
     return NextResponse.json({ error: "The backup could not be restored safely." }, { status: 500 });
+  } finally {
+    releaseProcessSlot();
+    releaseActorSlot();
   }
 }
 
-type Backup = z.infer<typeof backupSchema>;
+class BackupConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BackupConflictError";
+  }
+}
 
-async function restorePostgres(data: Backup, factionId: number, factionName: string, factionTag: string) {
+async function restorePostgres(data: WorkspaceBackup, factionId: number, factionName: string, factionTag: string) {
   const { db } = await import("@/lib/db");
   return db.$transaction(async (tx) => {
     const faction = await tx.faction.upsert({ where: { tornFactionId: factionId }, update: { name: factionName, tag: factionTag }, create: { tornFactionId: factionId, name: factionName, tag: factionTag } });
@@ -58,7 +79,13 @@ async function restorePostgres(data: Backup, factionId: number, factionName: str
       const definitionIds = new Map<string, string>();
       for (const reward of scheme.tiers.flatMap((tier) => tier.rewards)) {
         if (definitionIds.has(reward.name)) continue;
-        const definition = await tx.rewardDefinition.upsert({ where: { factionId_name: { factionId: faction.id, name: reward.name } }, update: { displayUnit: reward.displayUnit, kind: reward.kind, decimals: reward.decimals, isArchived: false }, create: { factionId: faction.id, name: reward.name, displayUnit: reward.displayUnit, kind: reward.kind, decimals: reward.decimals } });
+        const existingDefinition = await tx.rewardDefinition.findUnique({ where: { factionId_name: { factionId: faction.id, name: reward.name } } });
+        if (existingDefinition && (existingDefinition.displayUnit !== reward.displayUnit || existingDefinition.kind !== reward.kind || existingDefinition.decimals !== reward.decimals)) {
+          throw new BackupConflictError(`The reward “${reward.name}” already exists with different metadata. Rename it in the source workspace before restoring this backup.`);
+        }
+        const definition = existingDefinition
+          ? await tx.rewardDefinition.update({ where: { id: existingDefinition.id }, data: { isArchived: false } })
+          : await tx.rewardDefinition.create({ data: { factionId: faction.id, name: reward.name, displayUnit: reward.displayUnit, kind: reward.kind, decimals: reward.decimals } });
         definitionIds.set(reward.name, definition.id);
       }
       if (scheme.isDefault) await tx.rewardScheme.updateMany({ where: { factionId: faction.id, isDefault: true }, data: { isDefault: false } });
@@ -69,7 +96,7 @@ async function restorePostgres(data: Backup, factionId: number, factionName: str
   });
 }
 
-function restoreSqlite(data: Backup, factionId: number) {
+function restoreSqlite(data: WorkspaceBackup, factionId: number) {
   const database = openLocalDatabase();
   if (!database) throw new Error("Local database is unavailable.");
   let imported = 0; let skipped = 0;

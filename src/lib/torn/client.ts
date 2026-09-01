@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { ZodType } from "zod";
+import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { TornApiError } from "./errors";
 import { CHAIN_CACHE_SECONDS } from "./polling-policy";
 import {
@@ -52,6 +53,8 @@ interface CacheEntry {
 }
 
 const RESPONSE_CACHE_LIMIT = 400;
+const MAX_RESPONSE_BYTES = 8 * 1_024 * 1_024;
+const MAX_RETRY_DELAY_MS = 5_000;
 const responseCache = new Map<string, CacheEntry>();
 const pendingRequests = new Map<string, Promise<unknown>>();
 
@@ -242,7 +245,18 @@ export class TornClient {
       throw new TornApiError(17, "Torn API request failed.", { cause });
     }
 
-    const payload: unknown = await response.json().catch(() => null);
+    let payload: unknown;
+    try {
+      payload = await readLimitedJson(response, MAX_RESPONSE_BYTES);
+    } catch (cause: unknown) {
+      throw new TornApiError(
+        0,
+        cause instanceof RequestBodyTooLargeError
+          ? "Torn API response exceeded the safe size limit."
+          : "Torn API response could not be read.",
+        { cause },
+      );
+    }
     const errorResult = tornErrorSchema.safeParse(payload);
     if (errorResult.success) {
       const apiError = new TornApiError(
@@ -273,7 +287,8 @@ export class TornClient {
 function retryDelay(response: Response, attempt: number): number {
   const retryAfter = response.headers.get("retry-after");
   const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
-  return Number.isFinite(seconds) ? seconds * 1_000 : 500 * 2 ** attempt;
+  const requestedDelay = Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : 500 * 2 ** attempt;
+  return Math.min(MAX_RETRY_DELAY_MS, requestedDelay);
 }
 
 function delay(milliseconds: number): Promise<void> {
