@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLocalDatabase } from "@/lib/data/local-database";
-import { getMemberActivityWorkspace, setMemberActivity, setMemberActivityPolicy } from "./member-activity-store";
+import { getMemberActivityWorkspace, setMemberActivity, setMemberActivityPolicy, synchronizeMemberInactivityPeriods } from "./member-activity-store";
 
 describe.sequential("member activity store", () => {
   const originalPath = process.env.CHAINWARD_LOCAL_DB_PATH;
@@ -22,7 +22,7 @@ describe.sequential("member activity store", () => {
     process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "activity.sqlite");
     delete process.env.DATABASE_URL;
     createLocalDatabase();
-    const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
+    const faction = { id: 51394, name: "Prive Cartel", tag: "PC" };
     const member = { tornUserId: 123, memberName: "Member" };
     const actor = { tornUserId: 3212954, name: "Skillerious", isPlatformAdmin: true };
 
@@ -40,5 +40,30 @@ describe.sequential("member activity store", () => {
     workspace = await getMemberActivityWorkspace(faction.id);
     expect(workspace.policy).toMatchObject({ thresholdDays: 7, updatedByTornId: 3212954, updatedByName: "Skillerious" });
     expect(workspace.audit[0]).toMatchObject({ action: "UPDATED", tornUserId: 0, memberName: "Faction activity policy", note: "Inactivity alert threshold changed to 7 days." });
+  });
+
+  it("persists and closes inferred inactivity periods without duplicates", async () => {
+    directory = mkdtempSync(path.join(tmpdir(), "chainward-inactivity-"));
+    process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "activity.sqlite");
+    delete process.env.DATABASE_URL;
+    createLocalDatabase();
+    const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
+    const checkedAtSeconds = Date.parse("2026-09-02T12:00:00.000Z") / 1_000;
+    const member = { tornId: 123, name: "Member", position: "Member", level: 50, daysInFaction: 100, lastAction: "2 days ago", lastActionAt: checkedAtSeconds - 2 * 86_400, status: "Okay", statusDescription: "", statusUntil: null };
+
+    let periods = await synchronizeMemberInactivityPeriods(faction, [member], [], "2026-09-02T12:00:00.000Z");
+    expect(periods).toHaveLength(1);
+    expect(periods[0]).toMatchObject({ tornUserId: 123, endedAt: null, peakDurationSeconds: 2 * 86_400 });
+
+    periods = await synchronizeMemberInactivityPeriods(faction, [member], [], "2026-09-02T13:00:00.000Z");
+    expect(periods).toHaveLength(1);
+    expect(periods[0]?.peakDurationSeconds).toBe(2 * 86_400 + 3_600);
+
+    periods = await synchronizeMemberInactivityPeriods(faction, [{ ...member, lastAction: "Just now", lastActionAt: checkedAtSeconds + 7_200 }], [], "2026-09-02T14:00:00.000Z");
+    expect(periods).toHaveLength(1);
+    expect(periods[0]).toMatchObject({ endedAt: "2026-09-02T14:00:00.000Z", peakDurationSeconds: 2 * 86_400 + 7_200 });
+
+    const workspace = await getMemberActivityWorkspace(faction.id);
+    expect(workspace.inactivityPeriods).toEqual(periods);
   });
 });

@@ -11,7 +11,7 @@ import { getDatabaseStatus } from "@/lib/data/database-status";
 import { getFactionAccessSummary } from "@/lib/licensing/faction-access";
 import { redactLockedTelemetry } from "@/lib/licensing/telemetry";
 import { buildMemberActivityAlert } from "@/lib/members/member-activity-intelligence";
-import { getMemberActivityWorkspace } from "@/lib/members/member-activity-store";
+import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
@@ -70,6 +70,9 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
   const workspaceAuthorized = access.state === "active" && (owner || Boolean(assignment && currentRosterMember));
   const shellTelemetry = redactLockedTelemetry(telemetry, access, workspaceAuthorized);
   const canManageMembers = workspaceAuthorized && provisionallyCanManageMembers;
+  if (canManageMembers && currentRoster?.available && memberActivity?.databaseAvailable) {
+    await synchronizeMemberInactivityPeriods(telemetry.faction, currentRoster.data, memberActivity.records, currentRoster.checkedAt).catch(() => undefined);
+  }
   const memberActivityAlert = canManageMembers && currentRoster?.available && memberActivity
     ? {
       factionId,

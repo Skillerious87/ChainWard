@@ -7,7 +7,7 @@ import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { assessMemberActivity } from "@/lib/members/member-activity-intelligence";
-import { getMemberActivityWorkspace } from "@/lib/members/member-activity-store";
+import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
 import { getMemberProfileWorkspace } from "@/lib/members/member-profile-store";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
@@ -31,6 +31,9 @@ export default async function MemberReportPage({ params }: { params: Promise<{ t
   ]);
   const canManage = isPlatformOwner(actor) || Boolean(assignment && hasPermission(assignment.role, "members:manage"));
   const profile = await getMemberProfileWorkspace(factionId, tornUserId, canManage);
+  const inactivityPeriods = activity.databaseAvailable
+    ? await synchronizeMemberInactivityPeriods(telemetry.faction!, roster.data, activity.records, roster.checkedAt).catch(() => activity.inactivityPeriods)
+    : activity.inactivityPeriods;
   const parsedCheckedAt = Date.parse(roster.checkedAt);
   const checkedAt = Math.floor((Number.isNaN(parsedCheckedAt) ? member.lastActionAt * 1_000 : parsedCheckedAt) / 1_000);
   const activityAssessment = assessMemberActivity(
@@ -47,6 +50,7 @@ export default async function MemberReportPage({ params }: { params: Promise<{ t
     checkedAt={roster.checkedAt}
     profile={profile}
     activity={activityAssessment}
+    inactivityPeriods={inactivityPeriods.filter((period) => period.tornUserId === tornUserId)}
     canManage={canManage}
   />;
 }

@@ -26,6 +26,7 @@ import { MemberAvatar } from "@/components/ui/member-avatar";
 import { notify } from "@/lib/client-actions";
 import { MEMBER_BADGES, memberBadgeDefinition, type MemberBadgeId } from "@/lib/members/member-badges";
 import type { MemberActivityAssessment } from "@/lib/members/member-activity-intelligence";
+import { buildMemberInactivityInsights, periodDurationSeconds, type MemberInactivityPeriod } from "@/lib/members/member-inactivity";
 import type { MemberAward, MemberProfileWorkspace, MemberReportCategory, MemberReportVisibility } from "@/lib/members/member-profile-store";
 import type { TornRosterMember } from "@/lib/torn/workspace-types";
 
@@ -36,6 +37,7 @@ interface MemberReportWorkspaceProps {
   checkedAt: string;
   profile: MemberProfileWorkspace;
   activity: MemberActivityAssessment;
+  inactivityPeriods: MemberInactivityPeriod[];
   canManage: boolean;
 }
 
@@ -46,7 +48,7 @@ const reportCategories: ReadonlyArray<{ id: MemberReportCategory; label: string;
   { id: "GENERAL", label: "General", detail: "Other useful faction context." },
 ];
 
-export function MemberReportWorkspace({ member, factionId, source, checkedAt, profile, activity, canManage }: MemberReportWorkspaceProps) {
+export function MemberReportWorkspace({ member, factionId, source, checkedAt, profile, activity, inactivityPeriods, canManage }: MemberReportWorkspaceProps) {
   const router = useRouter();
   const [reportOpen, setReportOpen] = useState(false);
   const [awardOpen, setAwardOpen] = useState(false);
@@ -60,6 +62,7 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
   const [revokeReason, setRevokeReason] = useState("");
   const activeAwards = useMemo(() => profile.awards.filter((award) => !award.revokedAt), [profile.awards]);
   const awardHistory = useMemo(() => profile.awards.filter((award) => award.revokedAt), [profile.awards]);
+  const inactivityInsights = useMemo(() => buildMemberInactivityInsights(inactivityPeriods, checkedAt), [checkedAt, inactivityPeriods]);
   const joinedAt = approximateJoinDate(member.daysInFaction, checkedAt);
 
   async function saveReport(): Promise<void> {
@@ -116,6 +119,8 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       <Fact icon={ShieldCheck} label="Torn status" value={member.status || "Unknown"} detail={member.statusDescription || "No status detail"} />
     </section>
 
+    <MemberInactivityRecord periods={inactivityPeriods} checkedAt={checkedAt} periodCount={inactivityInsights.recordedPeriods} averageCompletedSeconds={inactivityInsights.averageCompletedSeconds} longestSeconds={inactivityInsights.longestPeriodSeconds} />
+
     <section className="member-award-showcase">
       <header><div><p className="eyebrow"><Sparkles size={12} /> Recognition</p><h2>Awards on record</h2><p>Deliberate faction recognition assigned by authorised Chainward managers.</p></div>{canManage && <button className="button button--secondary" disabled={!profile.databaseAvailable} onClick={() => setAwardOpen(true)}><Award size={15} /> Award badge</button>}</header>
       {activeAwards.length ? <div className="member-award-showcase__grid">{activeAwards.map((award) => <AwardCard key={award.id} award={award} canManage={canManage} onRevoke={() => { setRevokeReason(""); setRevoking(award); }} />)}</div> : <div className="member-award-empty"><span><Medal size={22} /></span><div><strong>No awards yet</strong><p>Awards appear here with their citation and the manager who assigned them.</p></div></div>}
@@ -156,6 +161,15 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
 }
 
 function Fact({ icon: Icon, label, value, detail }: { icon: typeof CalendarDays; label: string; value: string; detail: string }) { return <article><span><Icon size={18} /></span><div><small>{label}</small><strong>{value}</strong><p>{detail}</p></div></article>; }
+function MemberInactivityRecord({ periods, checkedAt, periodCount, averageCompletedSeconds, longestSeconds }: { periods: MemberInactivityPeriod[]; checkedAt: string; periodCount: number; averageCompletedSeconds: number; longestSeconds: number }) {
+  const parsedCheckedAt = Date.parse(checkedAt);
+  const checkedAtSeconds = Math.floor((Number.isNaN(parsedCheckedAt) ? Date.now() : parsedCheckedAt) / 1_000);
+  const completedCount = periods.filter((period) => period.endedAt !== null).length;
+  return <section className="member-report-inactivity">
+    <header><div><p className="eyebrow"><History size={12} /> Activity pattern</p><h2>Inactivity periods</h2><p>Persistent gaps of 24 hours or longer inferred from verified Torn last_action timestamps.</p></div><span className={`inactivity-period-state${periods.some((period) => period.endedAt === null) ? " inactivity-period-state--open" : ""}`}><i />{periods.some((period) => period.endedAt === null) ? "Currently inactive" : "No open period"}</span></header>
+    {periods.length ? <><dl><div><dt>Periods logged</dt><dd>{periodCount}</dd></div><div><dt>Completed</dt><dd>{completedCount}</dd></div><div><dt>Average completed</dt><dd>{completedCount ? formatInactivityDuration(averageCompletedSeconds) : "—"}</dd></div><div><dt>Longest observed</dt><dd>{formatInactivityDuration(longestSeconds)}</dd></div></dl><div className="member-report-inactivity__timeline">{periods.slice(0, 12).map((period) => <article key={period.id}><span className={period.endedAt ? undefined : "member-report-inactivity__open"}><i /></span><div><strong>{formatShortDateTime(period.startedAt)} <em>to</em> {period.endedAt ? formatShortDateTime(period.endedAt) : "ongoing"}</strong><p>{formatInactivityDuration(periodDurationSeconds(period, checkedAtSeconds))}{period.holidayProtected ? " · holiday protected" : ""}{period.watchListed ? " · watch-listed" : ""}</p><small>First observed {formatShortDateTime(period.firstObservedAt)}</small></div></article>)}</div></> : <div className="member-report-inactivity__empty"><Clock3 size={18} /><p><strong>No inactivity periods logged</strong><span>A period will appear after a verified roster check finds this member inactive for at least 24 hours.</span></p></div>}
+  </section>;
+}
 function AwardCard({ award, canManage, onRevoke }: { award: MemberAward; canManage: boolean; onRevoke: () => void }) { const badge = memberBadgeDefinition(award.badgeId); return <article><BadgeGlyph badgeId={award.badgeId} /><div><header><h3>{badge.label}</h3><time dateTime={award.awardedAt}>{formatShortDate(award.awardedAt)}</time></header><p>{award.citation}</p><footer><span>Awarded by <strong>{award.awardedByName}</strong></span>{canManage && <button onClick={onRevoke}>Revoke</button>}</footer></div></article>; }
 function BadgeGlyph({ badgeId }: { badgeId: MemberBadgeId }) { const index = MEMBER_BADGES.findIndex((badge) => badge.id === badgeId); const Icon = [Award, BadgeCheck, ShieldCheck, Sparkles, Medal, CalendarDays][index] ?? Award; return <span className={`member-badge-glyph member-badge-glyph--${index + 1}`}><Icon size={20} /></span>; }
 function ReportIcon({ category }: { category: MemberReportCategory }) { if (category === "RECOGNITION") return <Sparkles size={15} />; if (category === "DEVELOPMENT") return <BookOpenText size={15} />; if (category === "INCIDENT") return <LockKeyhole size={15} />; return <MessageSquareText size={15} />; }
@@ -164,4 +178,6 @@ function categoryLabel(category: MemberReportCategory): string { return reportCa
 function approximateJoinDate(days: number, checkedAt: string): string | null { const checked = Date.parse(checkedAt); if (Number.isNaN(checked) || !Number.isFinite(days)) return null; return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(checked - days * 86_400_000)); }
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "time unavailable" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date); }
 function formatShortDate(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unknown date" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date); }
+function formatShortDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unknown" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(date); }
+function formatInactivityDuration(seconds: number): string { if (!Number.isFinite(seconds) || seconds <= 0) return "—"; if (seconds < 86_400) return `${Math.max(1, Math.round(seconds / 3_600))} hours`; const days = seconds / 86_400; return `${days < 10 ? days.toFixed(1) : Math.round(days)} days`; }
 function formatRelativeActivity(seconds: number): string { if (seconds < 3_600) return `${Math.max(0, Math.floor(seconds / 60))} minutes ago`; if (seconds < 86_400) return `${Math.floor(seconds / 3_600)} hours ago`; const days = Math.floor(seconds / 86_400); return `${days} day${days === 1 ? "" : "s"} ago`; }

@@ -1,7 +1,7 @@
 import { AuthorizationError } from "@/lib/auth/authorization";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { buildMemberActivityAlert, type MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
-import { getMemberActivityWorkspace } from "@/lib/members/member-activity-store";
+import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
 import { consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
@@ -34,6 +34,7 @@ export async function GET(request: Request): Promise<Response> {
         { status: 503, headers: { "cache-control": "no-store" } },
       );
     }
+    await synchronizeMemberInactivityPeriods(faction, roster.data, workspace.records, roster.checkedAt);
     const snapshot: MemberActivityMonitorSnapshot = {
       factionId: faction.id,
       factionName: faction.name,

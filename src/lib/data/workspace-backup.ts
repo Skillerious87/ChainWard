@@ -68,7 +68,10 @@ export const workspaceBackupSchema = z.object({
   settings: z.array(z.object({
     key: z.string().min(1).max(120).regex(/^(appearance|rewards|payouts|members)\./),
     value: z.unknown(),
-  }).strict()).max(500),
+  // Member inactivity periods are individual durable settings. The request
+  // body remains capped at 5 MB, while this higher count lets a multi-year
+  // period history round-trip instead of producing an unrestorable backup.
+  }).strict()).max(5_000),
   rewardSchemes: z.array(schemeSchema).max(200),
 }).strict().superRefine((backup, context) => {
   const schemeVersions = backup.rewardSchemes.map((scheme) => `${scheme.name.toLocaleLowerCase("en-GB")}\u0000${scheme.version}`);

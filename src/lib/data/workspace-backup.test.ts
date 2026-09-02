@@ -34,6 +34,16 @@ describe("workspace backup validation", () => {
     if (parsed.success) expect(localBackupCompatibilityIssue(parsed.data)).toBeNull();
   });
 
+  it("accepts a multi-year inactivity history within the request-size boundary", () => {
+    const backup = validBackup();
+    backup.settings = Array.from({ length: 600 }, (_, index) => ({
+      key: `members.inactivity.period.42.${index}`,
+      value: { id: String(index), startedAt: "2026-01-01T00:00:00.000Z" },
+    }));
+
+    expect(workspaceBackupSchema.safeParse(backup).success).toBe(true);
+  });
+
   it("rejects impossible tier bounds, duplicate positions, and unknown fields", () => {
     const backup = validBackup();
     backup.rewardSchemes[0]!.tiers = [

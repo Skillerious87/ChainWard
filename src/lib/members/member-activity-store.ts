@@ -1,7 +1,14 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+import type { Prisma } from "@/generated/prisma/client";
 import { cache } from "react";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
+import {
+  reconcileMemberInactivityPeriod,
+  type MemberInactivityPeriod,
+} from "@/lib/members/member-inactivity";
+import type { TornRosterMember } from "@/lib/torn/workspace-types";
 
 export type ManagedMemberActivityState = "HOLIDAY" | "WATCH";
 export type MemberActivityInputState = ManagedMemberActivityState | "STANDARD";
@@ -49,6 +56,7 @@ export interface MemberActivityWorkspace {
   databaseAvailable: boolean;
   policy: MemberActivityPolicy;
   records: MemberActivityRecord[];
+  inactivityPeriods: MemberInactivityPeriod[];
   audit: MemberActivityAuditEvent[];
   message: string;
 }
@@ -87,6 +95,22 @@ export async function setMemberActivityPolicy(faction: FactionIdentity, actor: A
   setLocalPolicy(faction.id, actor, thresholdDays);
 }
 
+/**
+ * Persists inferred 24-hour inactivity periods from the latest verified Torn
+ * roster. The fixed one-day qualification makes long-term history independent
+ * from the faction's changeable owner-alert threshold.
+ */
+export async function synchronizeMemberInactivityPeriods(
+  faction: FactionIdentity,
+  members: TornRosterMember[],
+  records: MemberActivityRecord[],
+  checkedAt: string,
+): Promise<MemberInactivityPeriod[]> {
+  if (!members.length || Number.isNaN(Date.parse(checkedAt))) return [];
+  if (process.env.DATABASE_URL?.trim()) return synchronizePostgresInactivity(faction, members, records, checkedAt);
+  return synchronizeLocalInactivity(faction.id, members, records, checkedAt);
+}
+
 function getLocalWorkspace(factionId: number): MemberActivityWorkspace {
   const database = openLocalDatabase();
   if (!database) return empty(false, false, "The local activity register is unavailable.");
@@ -94,11 +118,53 @@ function getLocalWorkspace(factionId: number): MemberActivityWorkspace {
     const rows = database.prepare("SELECT key, value_json FROM faction_settings WHERE faction_id = ? AND key LIKE 'members.activity.%' ORDER BY key").all(factionId) as unknown as LocalSettingRow[];
     const policyRow = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key = 'members.policy'").get(factionId) as unknown as { value_json: string } | undefined;
     const records = rows.flatMap((row) => { const record = parseRecord(safeJson(row.value_json)); return record ? [record] : []; });
+    const inactivityPeriods = readLocalInactivityPeriods(database, factionId);
     const audit = (database.prepare("SELECT * FROM member_activity_audit WHERE faction_id = ? ORDER BY created_at DESC, id DESC LIMIT 30").all(factionId) as unknown as LocalAuditRow[]).map(mapLocalAudit);
-    return { databaseConfigured: true, databaseAvailable: true, policy: parsePolicy(policyRow ? safeJson(policyRow.value_json) : null), records, audit, message: records.length ? `${records.length} managed member activity record${records.length === 1 ? "" : "s"}.` : "No holiday or watch records have been created." };
+    return { databaseConfigured: true, databaseAvailable: true, policy: parsePolicy(policyRow ? safeJson(policyRow.value_json) : null), records, inactivityPeriods, audit, message: records.length ? `${records.length} managed member activity record${records.length === 1 ? "" : "s"}.` : "No holiday or watch records have been created." };
   } catch {
     return empty(true, false, "The local member activity register could not be read safely.");
   } finally { database.close(); }
+}
+
+function synchronizeLocalInactivity(
+  factionId: number,
+  members: TornRosterMember[],
+  records: MemberActivityRecord[],
+  checkedAt: string,
+): MemberInactivityPeriod[] {
+  const database = openLocalDatabase();
+  if (!database) return [];
+  const recordById = new Map(records.map((record) => [record.tornUserId, record]));
+  try {
+    database.exec("BEGIN IMMEDIATE");
+    const periods = readLocalInactivityPeriods(database, factionId);
+    const openById = new Map(periods.filter((period) => period.endedAt === null).map((period) => [period.tornUserId, period]));
+    const upsert = database.prepare("INSERT INTO faction_settings (faction_id, key, value_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(faction_id, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at");
+    const remove = database.prepare("DELETE FROM faction_settings WHERE faction_id = ? AND key = ?");
+    for (const member of members) {
+      const openKey = inactivityOpenKey(member.tornId);
+      const reconciliation = reconcileMemberInactivityPeriod(openById.get(member.tornId), member, recordById.get(member.tornId), checkedAt, randomUUID);
+      if (!reconciliation.changed) continue;
+      if (reconciliation.completed) {
+        upsert.run(factionId, inactivityPeriodKey(reconciliation.completed), JSON.stringify(reconciliation.completed), checkedAt);
+        remove.run(factionId, openKey);
+      }
+      if (reconciliation.current) upsert.run(factionId, openKey, JSON.stringify(reconciliation.current), checkedAt);
+      else remove.run(factionId, openKey);
+    }
+    database.exec("COMMIT");
+    return readLocalInactivityPeriods(database, factionId);
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch { /* Transaction did not begin. */ }
+    throw error;
+  } finally {
+    database.close();
+  }
+}
+
+function readLocalInactivityPeriods(database: NonNullable<ReturnType<typeof openLocalDatabase>>, factionId: number): MemberInactivityPeriod[] {
+  const rows = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key LIKE 'members.inactivity.%' ORDER BY updated_at DESC LIMIT 2000").all(factionId) as unknown as Array<{ value_json: string }>;
+  return rows.flatMap((row) => { const period = parseInactivityPeriod(safeJson(row.value_json)); return period ? [period] : []; }).toSorted(compareInactivityPeriods);
 }
 
 function setLocalPolicy(factionId: number, actor: ActivityActor, thresholdDays: number): void {
@@ -145,17 +211,79 @@ async function getPostgresWorkspace(factionId: number): Promise<MemberActivityWo
     const { db } = await import("@/lib/db");
     const faction = await db.faction.findUnique({ where: { tornFactionId: factionId } });
     if (!faction) return empty(true, true, "No holiday or watch records have been created.");
-    const [settings, events] = await Promise.all([
-      db.factionSetting.findMany({ where: { factionId: faction.id, key: { startsWith: "members." } }, orderBy: { key: "asc" } }),
+    const [managedSettings, inactivitySettings, events] = await Promise.all([
+      db.factionSetting.findMany({
+        where: { factionId: faction.id, OR: [{ key: "members.policy" }, { key: { startsWith: "members.activity." } }] },
+        orderBy: { key: "asc" },
+      }),
+      db.factionSetting.findMany({ where: { factionId: faction.id, key: { startsWith: "members.inactivity." } }, orderBy: { updatedAt: "desc" }, take: 2000 }),
       db.auditLog.findMany({ where: { factionId: faction.id, action: { startsWith: "member_activity." } }, include: { actor: true }, orderBy: { createdAt: "desc" }, take: 30 }),
     ]);
-    const policy = parsePolicy(settings.find((setting) => setting.key === "members.policy")?.value ?? null);
-    const records = settings.filter((setting) => setting.key.startsWith("members.activity.")).flatMap((setting) => { const record = parseRecord(setting.value); return record ? [record] : []; });
+    const policy = parsePolicy(managedSettings.find((setting) => setting.key === "members.policy")?.value ?? null);
+    const records = managedSettings.filter((setting) => setting.key.startsWith("members.activity.")).flatMap((setting) => { const record = parseRecord(setting.value); return record ? [record] : []; });
+    const inactivityPeriods = inactivitySettings.flatMap((setting) => { const period = parseInactivityPeriod(setting.value); return period ? [period] : []; }).toSorted(compareInactivityPeriods);
     const audit = events.flatMap<MemberActivityAuditEvent>((event) => { const parsed = parseAudit(event.metadata); return parsed ? [{ ...parsed, id: event.id, actorTornUserId: event.actor?.tornUserId ?? parsed.actorTornUserId, actorName: event.actor?.name ?? parsed.actorName, createdAt: event.createdAt.toISOString() }] : []; });
-    return { databaseConfigured: true, databaseAvailable: true, policy, records, audit, message: records.length ? `${records.length} managed member activity record${records.length === 1 ? "" : "s"}.` : "No holiday or watch records have been created." };
+    return { databaseConfigured: true, databaseAvailable: true, policy, records, inactivityPeriods, audit, message: records.length ? `${records.length} managed member activity record${records.length === 1 ? "" : "s"}.` : "No holiday or watch records have been created." };
   } catch {
     return empty(true, false, "The configured member activity register could not be queried.");
   }
+}
+
+async function synchronizePostgresInactivity(
+  factionIdentity: FactionIdentity,
+  members: TornRosterMember[],
+  records: MemberActivityRecord[],
+  checkedAt: string,
+): Promise<MemberInactivityPeriod[]> {
+  const { db } = await import("@/lib/db");
+  const recordById = new Map(records.map((record) => [record.tornUserId, record]));
+  return db.$transaction(async (transaction) => {
+    const faction = await transaction.faction.upsert({
+      where: { tornFactionId: factionIdentity.id },
+      update: { name: factionIdentity.name, tag: factionIdentity.tag },
+      create: { tornFactionId: factionIdentity.id, name: factionIdentity.name, tag: factionIdentity.tag },
+    });
+    const settings = await transaction.factionSetting.findMany({
+      where: { factionId: faction.id, key: { startsWith: "members.inactivity." } },
+      orderBy: { updatedAt: "desc" },
+      take: 2000,
+    });
+    const periodsByKey = new Map(settings.flatMap((setting) => {
+      const period = parseInactivityPeriod(setting.value);
+      return period ? [[setting.key, period] as const] : [];
+    }));
+
+    for (const member of members) {
+      const openKey = inactivityOpenKey(member.tornId);
+      const reconciliation = reconcileMemberInactivityPeriod(periodsByKey.get(openKey), member, recordById.get(member.tornId), checkedAt, randomUUID);
+      if (!reconciliation.changed) continue;
+      if (reconciliation.completed) {
+        const archiveKey = inactivityPeriodKey(reconciliation.completed);
+        const completedValue = JSON.parse(JSON.stringify(reconciliation.completed)) as Prisma.InputJsonValue;
+        await transaction.factionSetting.upsert({
+          where: { factionId_key: { factionId: faction.id, key: archiveKey } },
+          update: { value: completedValue },
+          create: { factionId: faction.id, key: archiveKey, value: completedValue },
+        });
+        periodsByKey.set(archiveKey, reconciliation.completed);
+        await transaction.factionSetting.deleteMany({ where: { factionId: faction.id, key: openKey } });
+        periodsByKey.delete(openKey);
+      }
+      if (reconciliation.current) {
+        const currentValue = JSON.parse(JSON.stringify(reconciliation.current)) as Prisma.InputJsonValue;
+        await transaction.factionSetting.upsert({
+          where: { factionId_key: { factionId: faction.id, key: openKey } },
+          update: { value: currentValue },
+          create: { factionId: faction.id, key: openKey, value: currentValue },
+        });
+        periodsByKey.set(openKey, reconciliation.current);
+      } else {
+        await transaction.factionSetting.deleteMany({ where: { factionId: faction.id, key: openKey } });
+        periodsByKey.delete(openKey);
+      }
+    }
+    return [...periodsByKey.values()].toSorted(compareInactivityPeriods);
+  });
 }
 
 async function setPostgresPolicy(factionIdentity: FactionIdentity, actor: ActivityActor, thresholdDays: number): Promise<void> {
@@ -190,7 +318,9 @@ async function setPostgresActivity(factionIdentity: FactionIdentity, target: Act
 }
 
 function activityKey(tornUserId: number): string { return `members.activity.${tornUserId}`; }
-function empty(databaseConfigured: boolean, databaseAvailable: boolean, message: string): MemberActivityWorkspace { return { databaseConfigured, databaseAvailable, policy: DEFAULT_MEMBER_ACTIVITY_POLICY, records: [], audit: [], message }; }
+function inactivityOpenKey(tornUserId: number): string { return `members.inactivity.open.${tornUserId}`; }
+function inactivityPeriodKey(period: MemberInactivityPeriod): string { return `members.inactivity.period.${period.tornUserId}.${period.id}`; }
+function empty(databaseConfigured: boolean, databaseAvailable: boolean, message: string): MemberActivityWorkspace { return { databaseConfigured, databaseAvailable, policy: DEFAULT_MEMBER_ACTIVITY_POLICY, records: [], inactivityPeriods: [], audit: [], message }; }
 function safeJson(value: string): unknown { try { return JSON.parse(value) as unknown; } catch { return null; } }
 
 function parseRecord(value: unknown): MemberActivityRecord | null {
@@ -217,6 +347,28 @@ function parseAudit(value: unknown): Omit<MemberActivityAuditEvent, "id" | "crea
   const event = value as Record<string, unknown>;
   if (typeof event.tornUserId !== "number" || typeof event.memberName !== "string" || !isAction(event.action) || !isInputState(event.state) || (event.holidayUntil !== null && typeof event.holidayUntil !== "string") || typeof event.note !== "string" || typeof event.actorTornUserId !== "number" || typeof event.actorName !== "string") return null;
   return event as unknown as Omit<MemberActivityAuditEvent, "id" | "createdAt">;
+}
+
+function parseInactivityPeriod(value: unknown): MemberInactivityPeriod | null {
+  if (!value || typeof value !== "object") return null;
+  const period = value as Record<string, unknown>;
+  if (typeof period.id !== "string"
+    || typeof period.tornUserId !== "number"
+    || typeof period.memberName !== "string"
+    || typeof period.startedAt !== "string"
+    || typeof period.qualifyingAt !== "string"
+    || typeof period.firstObservedAt !== "string"
+    || typeof period.lastObservedAt !== "string"
+    || (period.endedAt !== null && typeof period.endedAt !== "string")
+    || typeof period.sourceLastActionAt !== "number"
+    || typeof period.peakDurationSeconds !== "number"
+    || typeof period.holidayProtected !== "boolean"
+    || typeof period.watchListed !== "boolean") return null;
+  return period as unknown as MemberInactivityPeriod;
+}
+
+function compareInactivityPeriods(left: MemberInactivityPeriod, right: MemberInactivityPeriod): number {
+  return Number(left.endedAt !== null) - Number(right.endedAt !== null) || right.startedAt.localeCompare(left.startedAt);
 }
 
 function isAction(value: unknown): value is MemberActivityAuditEvent["action"] { return value === "HOLIDAY_SET" || value === "WATCH_SET" || value === "UPDATED" || value === "CLEARED"; }

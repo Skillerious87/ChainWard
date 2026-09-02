@@ -7,7 +7,7 @@ Last reviewed: 8 August 2026
 Chainward is a third-party, multi-tenant faction operations service. Torn is the
 source of truth for chain and membership facts. Chainward is the source of truth
 for faction-specific reward policy, calculation snapshots, payout workflow,
-licensing, roles, and audit events.
+licensing, roles, inactivity observations, and audit events.
 
 The application never claims that marking a payout paid transfers an item or
 currency in Torn. Chainward's selected Torn endpoints are read-only.
@@ -77,6 +77,14 @@ Completed Torn records are stored locally and synchronized idempotently using
 the `(factionId, tornChainId)` unique key. Financial history is protected by
 restrictive deletion behavior. Membership or scheme deletion therefore cannot
 cascade through finalized payouts.
+
+Member inactivity history is reconciled from verified `last_action` timestamps.
+One open setting per faction member prevents duplicate concurrent periods; a
+newer source timestamp closes that record and archives it under an immutable
+period identifier. Gaps qualify after a fixed 24 hours, while the separately
+stored owner-alert threshold controls escalation only. This preserves pattern
+comparability when a faction changes its policy. First/last observation times
+remain separate from the source-derived inactivity start and return times.
 
 ## Data-integrity mode
 

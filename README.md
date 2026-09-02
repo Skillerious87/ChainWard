@@ -93,6 +93,20 @@ managers can add append-only faction or leadership reports and assign/revoke
 recognition badges; Torn roster facts remain visually separate from these
 Chainward-authored records.
 
+Every verified roster check also reconciles a durable inactivity-period log.
+A period qualifies after 24 continuous hours without a Torn action and retains
+the inferred start, first and last observation, return timestamp, peak duration,
+and any holiday/watch context. The member workspace summarises repeat members,
+average and longest gaps, and typical start weekdays; the complete period log
+can be exported as CSV and each personnel report carries its own timeline. This
+fixed 24-hour history is intentionally independent of the changeable owner alert
+threshold, so policy changes do not rewrite prior patterns.
+
+The Members route is split into focused **Overview**, **Roster**, **Patterns**,
+and **Controls** views. Long roster, period, pattern, and management-history
+lists are paginated, while notification links open the relevant roster filter
+directly.
+
 Settings can download and restore portable faction-configuration backups. The
 JSON file contains reward schemes and selected workspace settings. It excludes
 API credentials, licence records, payment acknowledgements, audit records, and
@@ -142,7 +156,7 @@ supplied.
 
 ```bash
 npm run check           # lint, TypeScript, unit tests, production build
-npm run verify:offline  # 86 end-to-end assertions with no network access
+npm run verify:offline  # 90 end-to-end assertions with no network access
 npm run check:full      # both of the above
 ```
 

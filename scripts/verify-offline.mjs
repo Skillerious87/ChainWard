@@ -239,13 +239,17 @@ async function run() {
     check("live chain labels contributors as live, not last-completed", liveChain.html.includes("Live report contributors"));
 
     const membersPage = await getRoute("/members", session.cookie);
-    check("member activity renders the ranked follow-up queue", membersPage.html.includes("Smart follow-up queue") && membersPage.html.includes("member-priority-queue"));
+    check("member activity renders the ranked follow-up queue", membersPage.html.includes("Follow-up queue") && membersPage.html.includes("member-priority-queue"));
+    check("member activity uses focused workspace navigation", membersPage.html.includes("Members workspace views") && membersPage.html.includes("Overview") && membersPage.html.includes("Roster") && membersPage.html.includes("Patterns") && membersPage.html.includes("Controls"));
+    check("member activity limits long lists with pagination", membersPage.html.includes("member-pagination") && membersPage.html.includes("Previous members page") && membersPage.html.includes("Next members page"));
     check("member activity offers expanded escalation views", membersPage.html.includes("Due soon") && membersPage.html.includes("Expired holiday"));
     check("member activity offers a deliberate roster refresh", membersPage.html.includes("Refresh roster"));
     check("member activity links each roster row to its Chainward report", membersPage.html.includes('href="/members/9000002"'));
+    check("member activity persists an inactivity period log", membersPage.html.includes("Inactivity patterns") && membersPage.html.includes("Period log") && membersPage.html.includes("member-inactivity-log"));
     const memberReport = await getRoute("/members/9000002", session.cookie);
     check("member report renders verified tenure and activity facts", memberReport.html.includes("Chainward member report") && memberReport.html.includes("Faction tenure") && memberReport.html.includes("Torn API v2") === false);
     check("member report separates faction records from Torn facts", memberReport.html.includes("Reports and notes") && memberReport.html.includes("Awards on record") && memberReport.html.includes("Offline fixture"));
+    check("member report includes its durable inactivity timeline", memberReport.html.includes("Inactivity periods") && memberReport.html.includes("Activity pattern"));
 
     const history = await getRoute("/chains", session.cookie);
     check("chain history reports settlement standing", history.html.includes("history-summary__settlement") && history.html.includes("marked paid"));
