@@ -35,7 +35,7 @@ export const permissionCatalogue: readonly PermissionDescriptor[] = [
   { permission: "payout:manage", label: "Payouts", detail: "Acknowledge payouts and close settled chains." },
   { permission: "rewards:manage", label: "Rewards", detail: "Create and version reward schemes." },
   { permission: "members:manage", label: "Members", detail: "Manage member activity, reports, awards, and alert thresholds." },
-  { permission: "access:manage", label: "Access", detail: "Review sign-in requests and manage faction-scoped application roles." },
+  { permission: "access:manage", label: "Access", detail: "Owner-only review of sign-in requests and faction-scoped application roles." },
   { permission: "faction:backup", label: "Backup", detail: "Download a portable faction configuration backup." },
   { permission: "faction:manage", label: "Restore", detail: "Overwrite workspace configuration from a backup file." },
   { permission: "api:manage", label: "API credential", detail: "Replace the stored Torn API credential." },
@@ -54,16 +54,17 @@ const rolePermissions: Readonly<Record<FactionRole, ReadonlySet<Permission>>> = 
     "api:manage",
   ]),
   // Deliberately narrower than OWNER. A delegated administrator runs faction
-  // operations, but restoring a backup overwrites workspace configuration and
-  // replacing the stored credential changes who the workspace authenticates
-  // as — both stay with the verified owner.
+  // operations, but reviewing sign-in requests and assigning application roles
+  // grants control over who else can enter the workspace, restoring a backup
+  // overwrites workspace configuration, and replacing the stored credential
+  // changes who the workspace authenticates as — all three stay with the
+  // verified owner.
   ADMINISTRATOR: new Set([
     "faction:view",
     "chain:manage",
     "payout:manage",
     "rewards:manage",
     "members:manage",
-    "access:manage",
     "faction:backup",
   ]),
   CHAIN_MANAGER: new Set(["faction:view", "chain:manage", "payout:manage"]),
@@ -78,7 +79,7 @@ export interface RoleDefinition {
 }
 
 export const roleDefinitions: readonly RoleDefinition[] = [
-  { role: "ADMINISTRATOR", label: "Administrator", description: "Runs faction operations, reviews member access, and can export a configuration backup.", permissions: descriptorsFor("ADMINISTRATOR") },
+  { role: "ADMINISTRATOR", label: "Administrator", description: "Runs faction operations and can export a configuration backup. User access remains owner-only.", permissions: descriptorsFor("ADMINISTRATOR") },
   { role: "CHAIN_MANAGER", label: "Chain manager", description: "Operates live chains and acknowledges payouts.", permissions: descriptorsFor("CHAIN_MANAGER") },
   { role: "VIEWER", label: "Viewer", description: "Reads faction operations without changing anything.", permissions: descriptorsFor("VIEWER") },
 ];

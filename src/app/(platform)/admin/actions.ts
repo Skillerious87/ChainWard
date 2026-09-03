@@ -4,6 +4,7 @@ import "server-only";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { removeFactionMemberAccess, updateFactionMemberAccess, type FactionAccessActionResult } from "@/app/(platform)/faction/actions";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requirePlatformOwner } from "@/lib/auth/platform-owner";
 import { licensePlans } from "@/lib/licensing/pricing";
@@ -23,6 +24,22 @@ const reviewSchema = z.object({
 });
 
 export interface ReviewAccessResult { requestId: string; status: AccessRequestViewStatus; reviewedBy: TornIdentityView; reviewedAt: string }
+
+/** Owner-console entry points deliberately repeat the owner check before the
+ * faction action performs its own guard and object-level validation. */
+export async function updateAdminMemberAccess(input: unknown): Promise<FactionAccessActionResult> {
+  requirePlatformOwner(await getCurrentActor());
+  const result = await updateFactionMemberAccess(input);
+  revalidatePath("/admin");
+  return result;
+}
+
+export async function revokeAdminMemberAccess(input: unknown): Promise<FactionAccessActionResult> {
+  requirePlatformOwner(await getCurrentActor());
+  const result = await removeFactionMemberAccess(input);
+  revalidatePath("/admin");
+  return result;
+}
 
 export async function reviewAccessRequest(input: unknown): Promise<ReviewAccessResult> {
   const actor = await getCurrentActor();

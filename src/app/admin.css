@@ -715,3 +715,358 @@
   .admin-member-approvals { grid-template-columns: 40px minmax(0, 1fr); }
   .admin-member-approvals > em { grid-column: 2; }
 }
+
+/* ---------------------------------------------------------------------------
+   Member access control.
+
+   The owner-only screen that replaced the "N approvals waiting" link: a full
+   review surface for every verified sign-in and every application role,
+   without leaving /admin. Structure mirrors the rest of this file — a bordered
+   card with a header band, a bordered stat strip, a toolbar, a divided list,
+   and a footer note — so it reads as part of the same console rather than a
+   bolted-on panel.
+   --------------------------------------------------------------------------- */
+
+.admin-member-control {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background:
+    radial-gradient(90% 140% at 100% 0%, rgba(var(--accent-rgb), .04), transparent 55%),
+    #0d1216;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .02);
+}
+
+.admin-member-control__header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--admin-line);
+}
+.admin-member-control__mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), .26);
+  border-radius: 11px;
+  background: rgba(var(--accent-rgb), .07);
+  color: var(--accent);
+}
+.admin-member-control__header > div { min-width: 0; }
+.admin-member-control__header .eyebrow { font-size: 10px !important; letter-spacing: .8px; }
+.admin-member-control__header h2 { margin-top: 3px; font-size: 18px; font-weight: 650; letter-spacing: -.4px; }
+.admin-member-control__header p:last-child { margin-top: 4px; max-width: 60ch; color: var(--text-muted); font-size: 12px !important; line-height: 1.5; }
+
+.admin-owner-lock {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid rgba(var(--accent-rgb), .26);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .06);
+  color: var(--accent);
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-access-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--admin-line); }
+.admin-access-summary__item { display: flex; min-height: 74px; align-items: center; gap: 11px; padding: 13px 18px; border-right: 1px solid var(--admin-line); }
+.admin-access-summary__item:last-child { border-right: 0; }
+.admin-access-summary__item > span { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border-strong); border-radius: 9px; color: var(--text-secondary); }
+.admin-access-summary__item p { display: flex; flex-direction: column; }
+.admin-access-summary__item strong { font-size: 19px; font-weight: 660; letter-spacing: -.4px; font-variant-numeric: tabular-nums; }
+.admin-access-summary__item small { margin-top: 2px; color: var(--text-muted); font-size: 10.5px !important; letter-spacing: .3px; }
+.admin-access-summary__item--success > span { border-color: rgba(103, 211, 145, .26); background: rgba(103, 211, 145, .07); color: var(--success); }
+.admin-access-summary__item--success strong { color: var(--success); }
+.admin-access-summary__item--warning > span { border-color: rgba(245, 185, 76, .28); background: rgba(245, 185, 76, .08); color: var(--warning); }
+.admin-access-summary__item--warning strong { color: var(--warning); }
+.admin-access-summary__item--danger > span { border-color: rgba(242, 109, 109, .28); background: rgba(242, 109, 109, .06); color: var(--danger); }
+.admin-access-summary__item--danger strong { color: var(--danger); }
+.admin-access-summary__item--muted strong { color: #c7cdd1; }
+
+.admin-member-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--admin-line); }
+.admin-access-tabs { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.admin-access-tabs::-webkit-scrollbar { display: none; }
+.admin-access-tabs button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 32px;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+.admin-access-tabs button:hover { border-color: var(--border-strong); color: var(--text); }
+.admin-access-tabs button[aria-selected="true"] { border-color: rgba(var(--accent-rgb), .34); background: rgba(var(--accent-rgb), .07); color: var(--accent); }
+.admin-access-tabs button span { display: inline-flex; min-width: 19px; height: 18px; align-items: center; justify-content: center; border-radius: 999px; background: rgba(255, 255, 255, .06); font-size: 10px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.admin-access-tabs button[aria-selected="true"] span { background: rgba(var(--accent-rgb), .2); color: var(--accent); }
+.admin-member-search { width: 230px; flex: 0 0 auto; }
+
+.admin-access-alert { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border: 1px solid rgba(245, 185, 76, .26); border-radius: 9px; background: rgba(245, 185, 76, .05); color: var(--warning); }
+.admin-access-alert svg { flex: 0 0 auto; margin-top: 1px; }
+.admin-access-alert p { display: flex; flex-direction: column; }
+.admin-access-alert strong { color: #ead4a9; font-size: 12px; font-weight: 650; }
+.admin-access-alert span { margin-top: 2px; color: #a69472; font-size: 11.5px !important; line-height: 1.45; }
+.admin-access-alert--danger { border-color: rgba(242, 109, 109, .26); background: rgba(242, 109, 109, .05); color: var(--danger); }
+.admin-access-alert--danger strong { color: #e0b3b3; }
+.admin-access-alert--danger span { color: #a17f7f; }
+.admin-member-control > .admin-access-alert { margin: 14px 18px 0; }
+
+.admin-people-list { display: flex; flex-direction: column; max-height: 480px; padding: 4px 16px 8px; overflow-y: auto; scrollbar-gutter: stable; }
+.admin-person-row {
+  display: grid;
+  grid-template-columns: 29px minmax(150px, 1.3fr) minmax(96px, .6fr) auto minmax(92px, .6fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--admin-line);
+  transition: background 150ms ease;
+}
+.admin-person-row:last-child { border-bottom: 0; }
+.admin-person-row:hover { background: rgba(255, 255, 255, .016); }
+.admin-person-row--pending { background: linear-gradient(90deg, rgba(245, 185, 76, .055), transparent 42%); box-shadow: inset 2px 0 var(--warning); }
+.admin-person-row--stale { background: rgba(245, 185, 76, .03); }
+.admin-person-row--stale:hover { background: rgba(245, 185, 76, .055); }
+.admin-person-row__identity { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.admin-person-row__identity > small { color: var(--text-muted); font-size: 10.5px !important; }
+.admin-person-row__role { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.admin-person-row__role small { color: var(--text-muted); font-size: 10px !important; letter-spacing: .3px; text-transform: uppercase; }
+.admin-person-row__role strong { overflow: hidden; color: #cfd6da; font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.admin-person-row__activity { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.admin-person-row__activity small { color: var(--text-muted); font-size: 10px !important; letter-spacing: .3px; text-transform: uppercase; }
+.admin-person-row__activity time { color: #9aa4ab; font-size: 11px; font-variant-numeric: tabular-nums; }
+.admin-person-row__action { min-height: 32px; white-space: nowrap; }
+
+.admin-access-state { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid; border-radius: 999px; font-size: 10.5px; font-weight: 650; white-space: nowrap; }
+.admin-access-state i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.admin-access-state--pending { border-color: rgba(245, 185, 76, .32); background: rgba(245, 185, 76, .08); color: var(--warning); }
+.admin-access-state--stale { border-color: rgba(245, 185, 76, .3); background: rgba(245, 185, 76, .07); color: var(--warning); }
+.admin-access-state--active { border-color: rgba(103, 211, 145, .28); background: rgba(103, 211, 145, .06); color: var(--success); }
+.admin-access-state--suspended { border-color: rgba(242, 109, 109, .26); background: rgba(242, 109, 109, .05); color: var(--danger); }
+
+.admin-people-empty { display: flex; min-height: 180px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 28px 20px; text-align: center; color: var(--success); }
+.admin-people-empty strong { color: #dfe5e8; font-size: 13px; font-weight: 640; }
+.admin-people-empty p { max-width: 40ch; color: var(--text-muted); font-size: 11.5px !important; line-height: 1.5; }
+
+.admin-member-control__footer { display: flex; align-items: flex-start; gap: 9px; padding: 13px 20px; border-top: 1px solid var(--admin-line); color: var(--text-muted); }
+.admin-member-control__footer svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent); }
+.admin-member-control__footer span { font-size: 11.5px !important; line-height: 1.5; }
+.admin-member-control__footer strong { color: #c3ccd1; font-weight: 650; }
+
+/* Member access dialog -------------------------------------------------- */
+.dialog--admin-member-access { width: min(600px, calc(100vw - 32px)); }
+.admin-access-form { display: grid; gap: 14px; }
+.admin-access-form__person {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #0b1013;
+}
+
+.admin-role-picker,
+.admin-status-picker { margin: 0; padding: 0; border: 0; }
+.admin-role-picker legend,
+.admin-status-picker legend { padding: 0 0 8px; color: var(--text-muted); font-family: var(--font-inter), Inter, "Segoe UI", sans-serif; font-size: 10.5px; font-weight: 650; letter-spacing: .5px; text-transform: uppercase; }
+
+.admin-role-picker { display: grid; gap: 8px; }
+.admin-role-picker label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #0e1216;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.admin-role-picker label:hover { border-color: var(--border-strong); background: #11161a; }
+.admin-role-picker input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.admin-role-picker label > span { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text-secondary); }
+.admin-role-picker label > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.admin-role-picker label strong { color: #e2e7ea; font-size: 12.5px; font-weight: 640; }
+.admin-role-picker label small { color: var(--text-muted); font-size: 11px !important; line-height: 1.4; }
+.admin-role-picker label em { color: var(--text-muted); font-size: 10.5px; font-style: normal; white-space: nowrap; }
+.admin-role-picker label.admin-role-option--selected { border-color: rgba(var(--accent-rgb), .4); background: linear-gradient(100deg, rgba(var(--accent-rgb), .07), transparent 60%), #0e1216; }
+.admin-role-picker label.admin-role-option--selected > span { border-color: rgba(var(--accent-rgb), .34); background: rgba(var(--accent-rgb), .09); color: var(--accent); }
+.admin-role-picker label.admin-role-option--selected em { color: var(--accent); }
+.admin-role-picker[disabled] label { cursor: not-allowed; opacity: .5; }
+
+.admin-status-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin-status-picker label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #0e1216;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.admin-status-picker label:hover { border-color: var(--border-strong); }
+.admin-status-picker input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.admin-status-picker svg { flex: 0 0 auto; color: var(--text-muted); }
+.admin-status-picker span { display: flex; flex-direction: column; }
+.admin-status-picker strong { font-size: 12px; font-weight: 640; color: #dfe5e8; }
+.admin-status-picker small { color: var(--text-muted); font-size: 10.5px !important; }
+.admin-status-picker label.admin-status-option--active { border-color: rgba(103, 211, 145, .32); background: rgba(103, 211, 145, .06); }
+.admin-status-picker label.admin-status-option--active svg { color: var(--success); }
+.admin-status-picker label.admin-status-option--suspended { border-color: rgba(242, 109, 109, .3); background: rgba(242, 109, 109, .05); }
+.admin-status-picker label.admin-status-option--suspended svg { color: var(--danger); }
+
+.admin-revoke-control {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid rgba(242, 109, 109, .24);
+  border-radius: 9px;
+  background: rgba(242, 109, 109, .04);
+  color: var(--danger);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.admin-revoke-control:hover { border-color: rgba(242, 109, 109, .4); background: rgba(242, 109, 109, .07); }
+.admin-revoke-control svg { flex: 0 0 auto; }
+.admin-revoke-control span { display: flex; flex-direction: column; gap: 2px; }
+.admin-revoke-control strong { color: #e6a9a9; font-size: 12.5px; font-weight: 650; }
+.admin-revoke-control small { color: #b98787; font-size: 11px !important; line-height: 1.4; }
+
+/* Workstream heading, reused above the licensing block below the member
+   access panel. */
+.admin-workstream-heading { display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
+.admin-workstream-heading > span { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(var(--accent-rgb), .24); border-radius: 9px; background: rgba(var(--accent-rgb), .06); color: var(--accent); }
+.admin-workstream-heading > div { min-width: 0; }
+.admin-workstream-heading .eyebrow { font-size: 9.5px !important; letter-spacing: .8px; }
+.admin-workstream-heading h2 { margin-top: 2px; color: #e6ebed; font-size: 16px; font-weight: 650; }
+.admin-workstream-heading > p:last-child { flex: 1 1 260px; margin-left: auto; max-width: 44ch; color: var(--text-muted); font-size: 11.5px !important; line-height: 1.5; text-align: right; }
+
+@media (max-width: 980px) {
+  .admin-access-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-access-summary__item:nth-child(2) { border-right: 0; }
+  .admin-access-summary__item:nth-child(-n+2) { border-bottom: 1px solid var(--admin-line); }
+}
+
+/* Phone layout ---------------------------------------------------------
+   Below this width the panel stops being a shrunk dashboard and becomes a
+   stack of distinct, elevated cards: one glance per stat, one card per
+   person, one obvious full-width action per card. Divider lines give way to
+   spacing and shadow, and every tap target grows to a real thumb size. */
+@media (max-width: 760px) {
+  .admin-member-control { border-radius: 18px; }
+  .admin-member-control__header { grid-template-columns: 40px minmax(0, 1fr); row-gap: 10px; padding: 16px; }
+  .admin-owner-lock { grid-column: 1 / -1; width: fit-content; }
+
+  .admin-access-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; border-bottom: 0; }
+  .admin-access-summary__item {
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 13px 14px;
+    border: 1px solid var(--border);
+    border-right: 0 !important;
+    border-radius: 14px;
+    background: linear-gradient(165deg, rgba(255, 255, 255, .025), transparent 60%), #11161b;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .22);
+  }
+  .admin-access-summary__item--success { border-color: rgba(103, 211, 145, .22); }
+  .admin-access-summary__item--warning { border-color: rgba(245, 185, 76, .24); }
+  .admin-access-summary__item--danger { border-color: rgba(242, 109, 109, .24); }
+
+  .admin-member-toolbar { flex-direction: column; align-items: stretch; padding: 12px 14px; }
+  .admin-access-tabs button { min-height: 40px; padding: 0 14px; border-radius: 10px; font-size: 12.5px; }
+  .admin-access-tabs button[aria-selected="true"] { border-color: var(--accent); background: var(--accent); color: #10150d; }
+  .admin-access-tabs button[aria-selected="true"] span { background: rgba(0, 0, 0, .18); color: #10150d; }
+  .admin-member-search { width: 100%; height: 44px; }
+
+  .admin-member-control > .admin-access-alert { margin: 12px 12px 0; }
+
+  /* One elevated card per person, laid out as: avatar · name · status on the
+     first line, role and last-changed sharing a quiet second line, and a
+     full-width action a thumb can't miss on the third. */
+  .admin-people-list { max-height: none; padding: 12px; overflow: visible; gap: 10px; }
+  .admin-person-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "avatar identity state"
+      "role   role      activity"
+      "action action    action";
+    row-gap: 10px;
+    column-gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(165deg, rgba(255, 255, 255, .025), transparent 55%), #11161b;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .02);
+  }
+  .admin-person-row:last-child { border-bottom: 1px solid var(--border); }
+  .admin-person-row--pending { background: linear-gradient(165deg, rgba(245, 185, 76, .06), transparent 55%), #11161b; border-color: rgba(245, 185, 76, .3); box-shadow: 0 10px 24px rgba(245, 185, 76, .05), inset 0 1px rgba(255, 255, 255, .02); }
+  .admin-person-row--stale { background: linear-gradient(165deg, rgba(245, 185, 76, .045), transparent 55%), #11161b; border-color: rgba(245, 185, 76, .26); }
+  .admin-person-row > .avatar { grid-area: avatar; align-self: flex-start; width: 40px; height: 40px; font-size: 13px; }
+  .admin-person-row__identity { grid-area: identity; }
+  .admin-person-row > .admin-access-state { grid-area: state; justify-self: end; align-self: start; }
+  .admin-person-row__role,
+  .admin-person-row__activity { flex-direction: row; align-items: baseline; gap: 6px; }
+  .admin-person-row__role { grid-area: role; }
+  .admin-person-row__activity { grid-area: activity; justify-self: end; text-align: right; }
+  .admin-person-row__role > small,
+  .admin-person-row__activity > small { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .admin-person-row__role strong { font-size: 12.5px; }
+  .admin-person-row__activity time { color: #93a0a8; font-size: 11.5px; }
+  .admin-person-row__action {
+    grid-area: action;
+    justify-content: center;
+    width: 100%;
+    min-height: 46px;
+    border-radius: 12px;
+    background: #161c22;
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .admin-access-form__person { grid-template-columns: 36px minmax(0, 1fr); row-gap: 8px; border-radius: 12px; }
+  .admin-access-form__person > .admin-access-state { grid-column: 2; width: fit-content; }
+  .admin-role-picker label,
+  .admin-status-picker label { min-height: 56px; }
+  .admin-status-picker { grid-template-columns: 1fr; }
+  .admin-revoke-control { min-height: 56px; }
+
+  .admin-workstream-heading { flex-wrap: wrap; }
+  .admin-workstream-heading > p:last-child { flex-basis: 100%; margin-left: 0; text-align: left; }
+}
+
+@media (max-width: 540px) {
+  .admin-access-summary { grid-template-columns: 1fr; }
+  .admin-member-control__footer { padding-inline: 16px; }
+}

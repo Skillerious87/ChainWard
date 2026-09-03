@@ -64,7 +64,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
   const faction = telemetry.faction;
   const summary = useMemo(() => summarizeRoster(roster, rosterResult.checkedAt), [roster, rosterResult.checkedAt]);
   const assignmentById = useMemo(() => new Map(access.assignments.map((assignment) => [assignment.tornUserId, assignment])), [access.assignments]);
-  const requestById = useMemo(() => new Map(access.requests.map((request) => [request.tornUserId, request])), [access.requests]);
+  const requestById = useMemo(() => new Map((canManage ? access.requests : []).map((request) => [request.tornUserId, request])), [access.requests, canManage]);
   const [query, setQuery] = useState("");
   const [accessView, setAccessView] = useState<AccessView>("directory");
   const [assignmentQuery, setAssignmentQuery] = useState("");
@@ -290,7 +290,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
           }}>{!canManage ? "Restricted" : stale ? "Revoke" : "Manage"}</button>
         </article>;
       })}</div> : <div className="access-registry-empty"><span><KeyRound size={21} /></span><div><strong>{access.assignments.length ? "No assignments match" : "No roles assigned yet"}</strong><p>{access.assignments.length ? "Change the search or status filter to review other assignments." : `${access.message} Select a verified roster member from the directory to grant least-privilege access.`}</p></div></div>}
-      {!canManage && <footer className="access-owner-note"><LockKeyhole size={14} /> Role changes require an active faction Administrator or the platform owner.</footer>}
+      {!canManage && <footer className="access-owner-note"><LockKeyhole size={14} /> Role assignments and sign-in approvals are restricted to the platform owner.</footer>}
     </section>}
 
     {accessView === "roles" && <section className="panel access-policy-panel">
@@ -314,7 +314,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
 
     {accessView === "directory" && <section className="data-section access-roster-section">
       <div className="section-heading access-roster-heading"><div><h2>Roster and access control</h2><p>{filtered.length} of {roster.length} verified members match this view</p></div><div className="table-tools"><label className="search-field"><Search size={15} /><span className="sr-only">Search faction roster</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Member, position, or Torn ID" /></label><label className="access-position-filter"><SlidersHorizontal size={14} /><span className="sr-only">Faction position</span><select value={position} onChange={(event) => { setPosition(event.target.value); setPage(0); }}>{positions.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
-      <div className="roster-view-tabs" role="tablist" aria-label="Roster view">{([ ["all", "All members", roster.length], ["requested", "Awaiting approval", access.requests.length], ["recent", "Active 15m", summary.active15Minutes], ["attention", "Needs attention", Math.max(0, roster.length - summary.okay)], ["assigned", "Access assigned", access.assignments.length] ] as const).map(([value, label, count]) => <button role="tab" aria-selected={view === value} className={view === value ? "roster-view-tab--active" : undefined} key={value} onClick={() => changeView(value)}>{label}<span>{count}</span></button>)}</div>
+      <div className="roster-view-tabs" role="tablist" aria-label="Roster view">{([ ["all", "All members", roster.length], ...(canManage ? [["requested", "Awaiting approval", access.requests.length] as const] : []), ["recent", "Active 15m", summary.active15Minutes], ["attention", "Needs attention", Math.max(0, roster.length - summary.okay)], ["assigned", "Access assigned", access.assignments.length] ] as const).map(([value, label, count]) => <button role="tab" aria-selected={view === value} className={view === value ? "roster-view-tab--active" : undefined} key={value} onClick={() => changeView(value)}>{label}<span>{count}</span></button>)}</div>
       {canManage && selectedIds.size > 0 && <div className="access-bulk-bar">
         <span><Check size={14} /><strong>{selectedIds.size} selected</strong><button onClick={() => setSelectedIds(new Set())}>Clear</button></span>
         <label><span>Role</span><select value={bulkRole} onChange={(event) => setBulkRole(event.target.value as ManagedFactionRole)}>{roleOptions.map((definition) => <option key={definition.role} value={definition.role}>{definition.label}</option>)}</select></label>

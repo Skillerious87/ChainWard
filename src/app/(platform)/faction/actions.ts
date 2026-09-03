@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { roleLabel } from "@/lib/auth/authorization";
+import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { getFactionAccessWorkspace, revokeFactionAccess, setFactionAccess, setFactionAccessBatch } from "@/lib/auth/faction-access-store";
-import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
+import { PLATFORM_OWNER, requirePlatformOwner } from "@/lib/auth/platform-owner";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 const assignmentSchema = z.object({
@@ -28,9 +29,10 @@ export interface FactionAccessActionResult {
 }
 
 export async function updateFactionMemberAccess(input: unknown): Promise<FactionAccessActionResult> {
-  const parsed = assignmentSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "The access assignment was incomplete or invalid." };
   try {
+    await requireOwnerActor();
+    const parsed = assignmentSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, message: "The access assignment was incomplete or invalid." };
     const verified = await verifiedTarget(parsed.data.factionId, parsed.data.tornUserId);
     const changed = await setFactionAccess(verified.faction, verified.member, verified.actorTornUserId, parsed.data.role, parsed.data.status);
     revalidatePath("/faction");
@@ -41,9 +43,10 @@ export async function updateFactionMemberAccess(input: unknown): Promise<Faction
 }
 
 export async function removeFactionMemberAccess(input: unknown): Promise<FactionAccessActionResult> {
-  const parsed = revokeSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "The access removal request was invalid." };
   try {
+    await requireOwnerActor();
+    const parsed = revokeSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, message: "The access removal request was invalid." };
     const verified = await verifiedRevokeTarget(parsed.data.factionId, parsed.data.tornUserId);
     await revokeFactionAccess(verified.faction, verified.member, verified.actorTornUserId);
     revalidatePath("/faction");
@@ -54,9 +57,10 @@ export async function removeFactionMemberAccess(input: unknown): Promise<Faction
 }
 
 export async function updateFactionMemberAccessBatch(input: unknown): Promise<FactionAccessActionResult> {
-  const parsed = batchAssignmentSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Select between 1 and 50 valid faction members." };
   try {
+    await requireOwnerActor();
+    const parsed = batchAssignmentSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, message: "Select between 1 and 50 valid faction members." };
     const verified = await verifiedTargets(parsed.data.factionId, parsed.data.tornUserIds);
     const changed = await setFactionAccessBatch(verified.faction, verified.members, verified.actorTornUserId, parsed.data.role, parsed.data.status);
     revalidatePath("/faction");
@@ -126,6 +130,16 @@ function rejectOwnerTarget(tornUserId: number): void {
   if (tornUserId === PLATFORM_OWNER.tornUserId) {
     throw new Error("Platform owner access is intrinsic and cannot be assigned, suspended, or revoked.");
   }
+}
+
+/**
+ * Access administration is intentionally not delegated through faction roles.
+ * This guard runs before input parsing and is repeated by the faction-scoped
+ * verifier below, so neither a forged action request nor a stale client can
+ * turn an operational role into an access administrator.
+ */
+async function requireOwnerActor(): Promise<void> {
+  requirePlatformOwner(await getCurrentActor());
 }
 
 function safeMessage(error: unknown): string {

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { ArrowRight, ShieldCheck, UsersRound } from "lucide-react";
-import Link from "next/link";
+import { CreditCard, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AccessRequestTable } from "@/components/admin/access-request-table";
 import { AdminKpis } from "@/components/admin/admin-kpis";
+import { MemberAccessControl } from "@/components/admin/member-access-control";
 import { ServiceHealthPanel } from "@/components/admin/service-health-panel";
 import { AccessAuditTimeline, LicenseRegistry, PurchaseReviewGuide } from "@/components/admin/license-operations";
 import { getCurrentActor } from "@/lib/auth/current-actor";
@@ -13,13 +13,14 @@ import { getDatabaseStatus } from "@/lib/data/database-status";
 import { getAccessRequestQueue } from "@/lib/licensing/request-store";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 export const metadata: Metadata = { title: "Platform Administration" };
 
 export default async function AdminPage() {
   const actor = await getCurrentActor();
   if (!isPlatformOwner(actor)) notFound();
-  const [queue, telemetry, database, connection] = await Promise.all([getAccessRequestQueue(), getWorkspaceTelemetry(), getDatabaseStatus(), getConfiguredTornConnection()]);
+  const [queue, telemetry, database, connection, roster] = await Promise.all([getAccessRequestQueue(), getWorkspaceTelemetry(), getDatabaseStatus(), getConfiguredTornConnection(), getFactionRoster()]);
   const factionAccess = await getFactionAccessWorkspace(connection?.factionId ?? null);
   const licenceReviewCount = queue.requests.filter((request) => request.status === "Pending" || request.status === "Information").length;
   const memberReviewCount = factionAccess.requests.length;
@@ -35,7 +36,7 @@ export default async function AdminPage() {
         <div className="admin-masthead__identity">
           <p className="eyebrow">Owner console</p>
           <h1>Access management</h1>
-          <p>Approve faction licences, review payment references, and oversee platform service activity.</p>
+          <p>Control who can enter Chainward, exactly what they can do, and which factions hold an active licence.</p>
         </div>
         <div className="admin-masthead__side">
           <a className="admin-owner-chip" href={PLATFORM_OWNER.profileUrl} target="_blank" rel="noreferrer">
@@ -50,11 +51,13 @@ export default async function AdminPage() {
 
       <AdminKpis factionCount={queue.factionCount} activeLicenseCount={queue.activeLicenseCount} licenceReviewCount={licenceReviewCount} memberReviewCount={memberReviewCount} telemetry={telemetry} />
 
-      {memberReviewCount > 0 && <Link className="admin-member-approvals" href="/faction">
-        <span><UsersRound size={20} /></span>
-        <div><p className="eyebrow">Faction member approvals</p><strong>{memberReviewCount} verified player{memberReviewCount === 1 ? " is" : "s are"} waiting for a role</strong><small>{factionAccess.requests.slice(0, 3).map((request) => request.memberName).join(", ")}{memberReviewCount > 3 ? ` and ${memberReviewCount - 3} more` : ""}</small></div>
-        <em>Open faction access <ArrowRight size={14} /></em>
-      </Link>}
+      <MemberAccessControl access={factionAccess} rosterResult={roster} faction={telemetry.faction} />
+
+      <div className="admin-workstream-heading">
+        <span><CreditCard size={17} /></span>
+        <div><p className="eyebrow">Licensing &amp; operations</p><h2>Faction licence control</h2></div>
+        <p>Match purchase references, review requests, and monitor the services that protect each workspace.</p>
+      </div>
 
       {/* The queue is the work and takes the wide column; service state is a
           three-row readout and fits the rail. Stacking the four-step procedure

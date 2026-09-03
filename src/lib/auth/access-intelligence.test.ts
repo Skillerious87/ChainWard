@@ -12,13 +12,13 @@ describe("access change intelligence", () => {
   it("flags administrator grants as high trust and explains the added permissions", () => {
     const impact = analyzeAccessChange({ role: "VIEWER", status: "ACTIVE" }, { role: "ADMINISTRATOR", status: "ACTIVE" });
     expect(impact.tone).toBe("danger");
-    expect(impact.gained.map((item) => item.permission)).toEqual(["chain:manage", "payout:manage", "rewards:manage", "members:manage", "access:manage", "faction:backup"]);
+    expect(impact.gained.map((item) => item.permission)).toEqual(["chain:manage", "payout:manage", "rewards:manage", "members:manage", "faction:backup"]);
   });
 
   it("treats a downgrade as a positive least-privilege change", () => {
     const impact = analyzeAccessChange({ role: "ADMINISTRATOR", status: "ACTIVE" }, { role: "CHAIN_MANAGER", status: "ACTIVE" });
     expect(impact.tone).toBe("positive");
-    expect(impact.removed.map((item) => item.permission)).toEqual(["rewards:manage", "members:manage", "access:manage", "faction:backup"]);
+    expect(impact.removed.map((item) => item.permission)).toEqual(["rewards:manage", "members:manage", "faction:backup"]);
   });
 
   it("models suspension as removing every effective permission", () => {

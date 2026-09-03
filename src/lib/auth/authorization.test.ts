@@ -46,16 +46,16 @@ describe("RBAC", () => {
 
 describe("role policy", () => {
   it("keeps a delegated administrator strictly below the owner", () => {
-    const ownerOnly: Permission[] = ["faction:manage", "api:manage"];
+    const ownerOnly: Permission[] = ["access:manage", "faction:manage", "api:manage"];
     for (const permission of ownerOnly) {
       expect(hasPermission("OWNER", permission)).toBe(true);
       expect(hasPermission("ADMINISTRATOR", permission)).toBe(false);
     }
   });
 
-  it("lets an administrator export a backup but not overwrite the workspace", () => {
+  it("lets an administrator export a backup but not manage access or overwrite the workspace", () => {
     expect(hasPermission("ADMINISTRATOR", "faction:backup")).toBe(true);
-    expect(hasPermission("ADMINISTRATOR", "access:manage")).toBe(true);
+    expect(hasPermission("ADMINISTRATOR", "access:manage")).toBe(false);
     expect(hasPermission("CHAIN_MANAGER", "access:manage")).toBe(false);
     expect(hasPermission("ADMINISTRATOR", "faction:manage")).toBe(false);
     expect(() => requirePermission("ADMINISTRATOR", "faction:manage")).toThrow(AuthorizationError);
