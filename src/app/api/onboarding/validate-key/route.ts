@@ -7,6 +7,7 @@ import {
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 import { consumeGlobalRateLimit, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
+import { registerFactionAccessRequest } from "@/lib/auth/faction-access-store";
 import { MissingTornSelectionsError, validateTornConnection } from "@/lib/torn/connection-service";
 import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession } from "@/lib/torn/connection-session";
 import { TornApiError, userFacingTornError } from "@/lib/torn/errors";
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
       liveCacheSeconds: parsePositiveInteger(process.env.TORN_LIVE_CACHE_SECONDS, 30),
       historyCacheSeconds: parsePositiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 60),
     });
+    stage = "access-request";
+    await registerFactionAccessRequest(connection);
     let session:
       | { kind: "remembered"; value: Awaited<ReturnType<typeof createRememberedConnection>> }
       | { kind: "temporary"; value: string };

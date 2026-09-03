@@ -39,7 +39,7 @@ import { summarizeRoster } from "@/lib/intelligence/analytics";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
 
-type RosterView = "all" | "recent" | "attention" | "assigned";
+type RosterView = "all" | "requested" | "recent" | "attention" | "assigned";
 type AccessView = "directory" | "assignments" | "roles" | "audit";
 type SortKey = "activity" | "name" | "level" | "tenure" | "access";
 const pageSize = 15;
@@ -64,6 +64,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
   const faction = telemetry.faction;
   const summary = useMemo(() => summarizeRoster(roster, rosterResult.checkedAt), [roster, rosterResult.checkedAt]);
   const assignmentById = useMemo(() => new Map(access.assignments.map((assignment) => [assignment.tornUserId, assignment])), [access.assignments]);
+  const requestById = useMemo(() => new Map(access.requests.map((request) => [request.tornUserId, request])), [access.requests]);
   const [query, setQuery] = useState("");
   const [accessView, setAccessView] = useState<AccessView>("directory");
   const [assignmentQuery, setAssignmentQuery] = useState("");
@@ -106,18 +107,20 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
       const matchesQuery = !normalized || member.name.toLowerCase().includes(normalized) || String(member.tornId).includes(normalized) || member.position.toLowerCase().includes(normalized);
       const matchesPosition = position === "All" || (member.position || "Unassigned") === position;
       const matchesView = view === "all"
+        || (view === "requested" && requestById.has(member.tornId))
         || (view === "recent" && member.lastActionAt >= checkedAtSeconds - 15 * 60)
         || (view === "attention" && member.status.toLowerCase() !== "okay")
         || (view === "assigned" && Boolean(assignment));
       return matchesQuery && matchesPosition && matchesView;
     }).toSorted((left, right) => compareMembers(left, right, sortKey, assignmentById));
-  }, [assignmentById, checkedAtSeconds, position, query, roster, sortKey, view]);
+  }, [assignmentById, checkedAtSeconds, position, query, requestById, roster, sortKey, view]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
   const visible = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize);
   const visibleSelectableIds = visible.map((member) => member.tornId);
   const allVisibleSelected = visibleSelectableIds.length > 0 && visibleSelectableIds.every((tornUserId) => selectedIds.has(tornUserId));
   const selectedAssignment = selected ? assignmentById.get(selected.tornId) ?? null : null;
+  const selectedRequest = selected ? requestById.get(selected.tornId) ?? null : null;
   const accessImpact = selected ? analyzeAccessChange(selectedAssignment, { role: draftRole, status: draftStatus }) : null;
   const bulkChangedIds = [...selectedIds].filter((tornUserId) => {
     const current = assignmentById.get(tornUserId);
@@ -203,13 +206,32 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
   }
 
   return <div className="page-stack faction-access-workspace">
-    <PageHeader eyebrow="Workspace security" title="Faction access" description="Inspect verified roster readiness and control who can operate Chainward for this faction." actions={<ExportButton filename="chainward-faction-access.csv" label="Export roster" rows={filtered.map((member) => { const assignment = assignmentById.get(member.tornId); return { name: member.name, tornId: member.tornId, factionPosition: member.position, level: member.level, daysInFaction: member.daysInFaction, lastAction: member.lastAction, tornStatus: member.status, applicationRole: assignment ? roleLabel(assignment.role) : "None", accessStatus: assignment?.status ?? "None" }; })} />} />
+    <PageHeader eyebrow="Workspace administration" title="Faction access" description="Review member sign-ins first, then manage roles and verify the access record for this faction." actions={<ExportButton filename="chainward-faction-access.csv" label="Export roster" rows={filtered.map((member) => { const assignment = assignmentById.get(member.tornId); const request = requestById.get(member.tornId); return { name: member.name, tornId: member.tornId, factionPosition: member.position, level: member.level, daysInFaction: member.daysInFaction, lastAction: member.lastAction, tornStatus: member.status, applicationRole: assignment ? roleLabel(assignment.role) : request ? "Approval requested" : "None", accessStatus: assignment?.status ?? (request ? "Pending" : "None") }; })} />} />
 
     <section className="faction-command-hero">
       <span className="faction-command-hero__mark">{faction?.tag?.slice(0, 2).toUpperCase() || "—"}</span>
       <div className="faction-command-hero__identity"><p className="eyebrow">Verified Torn faction</p><h2>{faction?.name ?? "Faction unavailable"}</h2>{faction && <a href={`https://www.torn.com/factions.php?step=profile&ID=${faction.id}`} target="_blank" rel="noreferrer">Open Torn profile <ExternalLink size={13} /></a>}</div>
       <dl><div><dt>Faction ID</dt><dd>{faction?.id ?? "—"}</dd></div><div><dt>Roster coverage</dt><dd>{rosterResult.available ? `${roster.length} members` : "Unavailable"}</dd></div><div><dt>Positions</dt><dd>{summary.positions.length}</dd></div><div><dt>Last verified</dt><dd>{formatCheckedAt(rosterResult.checkedAt)}</dd></div></dl>
       <span className={`faction-command-hero__state faction-command-hero__state--${telemetry.source}`}><i />{telemetry.source === "live" ? "API verified" : "Unavailable"}</span>
+    </section>
+
+    <section className={`access-request-inbox${access.requests.length ? " access-request-inbox--waiting" : ""}`} aria-labelledby="access-request-title">
+      <header>
+        <span className="access-request-inbox__icon"><Clock3 size={19} /></span>
+        <div><p className="eyebrow">Administrator inbox</p><h2 id="access-request-title">Member approvals</h2><p>Verified Chainward sign-ins that still need a faction role.</p></div>
+        <strong className="access-request-inbox__count">{access.requests.length}<small>waiting</small></strong>
+      </header>
+      {access.requests.length ? <div className="access-request-list">{access.requests.map((request) => {
+        const member = roster.find((item) => item.tornId === request.tornUserId);
+        return <article key={request.tornUserId}>
+          <MemberAvatar name={member?.name ?? request.memberName} />
+          <TornUserName name={member?.name ?? request.memberName} tornUserId={request.tornUserId} detail={`Requested ${formatAuditTime(request.requestedAt)}`} />
+          <p><strong>{member?.position || "Faction position unavailable"}</strong><small>{member ? `Level ${member.level} · ${member.daysInFaction.toLocaleString()} days in faction` : "Not present in the latest verified roster"}</small></p>
+          <span className={`access-request-verification access-request-verification--${member ? "verified" : "blocked"}`}><i />{member ? "Roster verified" : "Roster check required"}</span>
+          <button className="button button--primary" disabled={!canManage || !member} onClick={() => member && inspect(member)}>{!canManage ? "Administrator only" : member ? "Review access" : "Cannot approve"}</button>
+        </article>;
+      })}</div> : <div className="access-request-empty"><BadgeCheck size={18} /><p><strong>No member approvals waiting</strong><small>New verified sign-ins for this faction will appear here automatically.</small></p></div>}
+      <footer><ShieldCheck size={14} /><span>Approval is faction-scoped. The server verifies the administrator, active licence, and current roster again before saving.</span></footer>
     </section>
 
     <section className="access-stat-grid">
@@ -268,7 +290,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
           }}>{!canManage ? "Restricted" : stale ? "Revoke" : "Manage"}</button>
         </article>;
       })}</div> : <div className="access-registry-empty"><span><KeyRound size={21} /></span><div><strong>{access.assignments.length ? "No assignments match" : "No roles assigned yet"}</strong><p>{access.assignments.length ? "Change the search or status filter to review other assignments." : `${access.message} Select a verified roster member from the directory to grant least-privilege access.`}</p></div></div>}
-      {!canManage && <footer className="access-owner-note"><LockKeyhole size={14} /> Role changes are restricted to the verified platform owner in this release.</footer>}
+      {!canManage && <footer className="access-owner-note"><LockKeyhole size={14} /> Role changes require an active faction Administrator or the platform owner.</footer>}
     </section>}
 
     {accessView === "roles" && <section className="panel access-policy-panel">
@@ -292,7 +314,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
 
     {accessView === "directory" && <section className="data-section access-roster-section">
       <div className="section-heading access-roster-heading"><div><h2>Roster and access control</h2><p>{filtered.length} of {roster.length} verified members match this view</p></div><div className="table-tools"><label className="search-field"><Search size={15} /><span className="sr-only">Search faction roster</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Member, position, or Torn ID" /></label><label className="access-position-filter"><SlidersHorizontal size={14} /><span className="sr-only">Faction position</span><select value={position} onChange={(event) => { setPosition(event.target.value); setPage(0); }}>{positions.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
-      <div className="roster-view-tabs" role="tablist" aria-label="Roster view">{([ ["all", "All members", roster.length], ["recent", "Active 15m", summary.active15Minutes], ["attention", "Needs attention", Math.max(0, roster.length - summary.okay)], ["assigned", "Access assigned", access.assignments.length] ] as const).map(([value, label, count]) => <button role="tab" aria-selected={view === value} className={view === value ? "roster-view-tab--active" : undefined} key={value} onClick={() => changeView(value)}>{label}<span>{count}</span></button>)}</div>
+      <div className="roster-view-tabs" role="tablist" aria-label="Roster view">{([ ["all", "All members", roster.length], ["requested", "Awaiting approval", access.requests.length], ["recent", "Active 15m", summary.active15Minutes], ["attention", "Needs attention", Math.max(0, roster.length - summary.okay)], ["assigned", "Access assigned", access.assignments.length] ] as const).map(([value, label, count]) => <button role="tab" aria-selected={view === value} className={view === value ? "roster-view-tab--active" : undefined} key={value} onClick={() => changeView(value)}>{label}<span>{count}</span></button>)}</div>
       {canManage && selectedIds.size > 0 && <div className="access-bulk-bar">
         <span><Check size={14} /><strong>{selectedIds.size} selected</strong><button onClick={() => setSelectedIds(new Set())}>Clear</button></span>
         <label><span>Role</span><select value={bulkRole} onChange={(event) => setBulkRole(event.target.value as ManagedFactionRole)}>{roleOptions.map((definition) => <option key={definition.role} value={definition.role}>{definition.label}</option>)}</select></label>
@@ -300,7 +322,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
         <small className="access-bulk-impact">{bulkChangedIds.length ? `${bulkChangedIds.length} will change${bulkChangedIds.length < selectedIds.size ? ` · ${selectedIds.size - bulkChangedIds.length} already match` : ""}` : "No changes needed"}</small>
         <button className="button button--primary" disabled={bulkWorking || !access.databaseAvailable || bulkChangedIds.length === 0} onClick={() => void saveBulkAccess()}>{bulkWorking && <Spinner size={14} label="Updating selected members" />}{bulkWorking ? "Updating…" : "Apply changes"}</button>
       </div>}
-      <div className="table-scroll" role="region" aria-label="Faction roster and access table" tabIndex={0}><table className="data-table access-roster-table"><thead><tr>{canManage && <th className="access-selection-cell"><AccessSelectionCheckbox checked={allVisibleSelected} onChange={toggleVisible} label="Select visible members" /></th>}<RosterSort label="Player" value="name" active={sortKey} onChange={setSortKey} /><th>Faction position</th><RosterSort label="Level" value="level" active={sortKey} onChange={setSortKey} numeric /><RosterSort label="Tenure" value="tenure" active={sortKey} onChange={setSortKey} numeric /><RosterSort label="Last action" value="activity" active={sortKey} onChange={setSortKey} /><th>Torn status</th><RosterSort label="App access" value="access" active={sortKey} onChange={setSortKey} /><th><span className="sr-only">Manage</span></th></tr></thead><tbody>{visible.map((member) => { const assignment = assignmentById.get(member.tornId); return <tr key={member.tornId}>{canManage && <td className="access-selection-cell"><AccessSelectionCheckbox checked={selectedIds.has(member.tornId)} onChange={(checked) => toggleSelected(member.tornId, checked)} label={`Select ${member.name}`} /></td>}<td><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail={`Level ${member.level}`} /></td><td>{member.position || <span className="muted-value">Not returned</span>}</td><td className="numeric"><strong>{member.level}</strong></td><td className="numeric"><strong>{member.daysInFaction.toLocaleString()}</strong><small className="cell-subtext">days</small></td><td><strong>{member.lastAction}</strong></td><td><span className={`member-status member-status--${memberStatusClass(member.status)}`} title={member.statusDescription}><i />{member.status}</span></td><td>{assignment ? <span className="roster-access-cell"><strong>{roleLabel(assignment.role)}</strong><small className={`access-copy--${assignment.status.toLowerCase()}`}>{titleCase(assignment.status)}</small></span> : <span className="roster-access-none"><ShieldOff size={13} />None</span>}</td><td><button className="row-manage-button" onClick={() => inspect(member)}>{canManage ? assignment ? "Manage" : "Grant access" : "Inspect"}</button></td></tr>; })}</tbody></table>{visible.length === 0 && <div className="table-empty">No faction members match the selected search and filters.</div>}</div>
+      <div className="table-scroll" role="region" aria-label="Faction roster and access table" tabIndex={0}><table className="data-table access-roster-table"><thead><tr>{canManage && <th className="access-selection-cell"><AccessSelectionCheckbox checked={allVisibleSelected} onChange={toggleVisible} label="Select visible members" /></th>}<RosterSort label="Player" value="name" active={sortKey} onChange={setSortKey} /><th>Faction position</th><RosterSort label="Level" value="level" active={sortKey} onChange={setSortKey} numeric /><RosterSort label="Tenure" value="tenure" active={sortKey} onChange={setSortKey} numeric /><RosterSort label="Last action" value="activity" active={sortKey} onChange={setSortKey} /><th>Torn status</th><RosterSort label="App access" value="access" active={sortKey} onChange={setSortKey} /><th><span className="sr-only">Manage</span></th></tr></thead><tbody>{visible.map((member) => { const assignment = assignmentById.get(member.tornId); const request = requestById.get(member.tornId); return <tr key={member.tornId} className={request ? "access-roster-row--requested" : undefined}>{canManage && <td className="access-selection-cell"><AccessSelectionCheckbox checked={selectedIds.has(member.tornId)} onChange={(checked) => toggleSelected(member.tornId, checked)} label={`Select ${member.name}`} /></td>}<td><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail={`Level ${member.level}`} /></td><td>{member.position || <span className="muted-value">Not returned</span>}</td><td className="numeric"><strong>{member.level}</strong></td><td className="numeric"><strong>{member.daysInFaction.toLocaleString()}</strong><small className="cell-subtext">days</small></td><td><strong>{member.lastAction}</strong></td><td><span className={`member-status member-status--${memberStatusClass(member.status)}`} title={member.statusDescription}><i />{member.status}</span></td><td>{assignment ? <span className="roster-access-cell"><strong>{roleLabel(assignment.role)}</strong><small className={`access-copy--${assignment.status.toLowerCase()}`}>{titleCase(assignment.status)}</small></span> : request ? <span className="roster-access-requested"><Clock3 size={13} />Approval requested</span> : <span className="roster-access-none"><ShieldOff size={13} />None</span>}</td><td><button className="row-manage-button" onClick={() => inspect(member)}>{canManage ? assignment ? "Manage" : request ? "Review request" : "Grant access" : "Inspect"}</button></td></tr>; })}</tbody></table>{visible.length === 0 && <div className="table-empty">No faction members match the selected search and filters.</div>}</div>
       <div className="table-footer"><span>Page {safePage + 1} of {pageCount} · sorted by {sortLabel(sortKey)}</span><div className="pagination"><button disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button><button disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next</button></div></div>
     </section>}
 
@@ -311,6 +333,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
 
     <Dialog open={Boolean(selected)} className="dialog--member-access" title={selected ? `${selected.name} · workspace access` : "Workspace access"} description={selected ? "Verified member of the connected Torn faction" : undefined} confirmLabel={!canManage ? "Close" : accessImpact?.changed ? selectedAssignment ? "Save access" : "Grant access" : "No changes"} cancelLabel="Cancel" hideCancel={!canManage} confirmDisabled={canManage && (!access.databaseAvailable || !faction || !accessImpact?.changed)} onConfirm={canManage ? saveAccess : async () => undefined} onClose={() => setSelected(null)}>
       {selected && <div className="member-access-editor">
+        {selectedRequest && <div className="member-access-request-context"><Clock3 size={17} /><p><strong>Approval requested</strong><span>This player verified their Chainward sign-in {formatAuditTime(selectedRequest.requestedAt)}. Choose the least-privilege role they need.</span></p></div>}
         <div className="member-access-profile"><MemberAvatar name={selected.name} /><div><strong>{selected.name}</strong><p>{selected.position || "Faction position unavailable"} · Level {selected.level}</p><span className={`member-status member-status--${memberStatusClass(selected.status)}`}><i />{selected.status}</span></div><button onClick={() => void copyTornId(selected.tornId)}><Copy size={13} />Copy ID</button></div>
         <dl className="member-access-facts"><div><dt>Last activity</dt><dd>{selected.lastAction}</dd></div><div><dt>Faction tenure</dt><dd>{selected.daysInFaction.toLocaleString()} days</dd></div><div><dt>Status detail</dt><dd>{selected.statusDescription || "No description returned"}</dd></div></dl>
         {canManage && <>
@@ -322,7 +345,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
                 {accessImpact.gained.length > 0 && <div><dt>Added</dt><dd>{accessImpact.gained.map((permission) => <em key={permission.permission}>+ {permission.label}</em>)}</dd></div>}
                 {accessImpact.removed.length > 0 && <div><dt>Removed</dt><dd>{accessImpact.removed.map((permission) => <em key={permission.permission}>− {permission.label}</em>)}</dd></div>}
               </dl>}
-              <small>The server rechecks owner authority, faction scope, and current roster membership before saving.</small>
+              <small>The server rechecks administrator authority, faction scope, and current roster membership before saving.</small>
             </div>
           </section>}
           {assignmentById.has(selected.tornId) && <button className="revoke-access-button" onClick={() => { setSelected(null); setRevokeTarget({ tornUserId: selected.tornId, name: selected.name, inRoster: true }); }}><CircleSlash2 size={14} />Revoke this member&apos;s application access</button>}

@@ -3,11 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { roleLabel } from "@/lib/auth/authorization";
-import { getCurrentActor } from "@/lib/auth/current-actor";
+import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { getFactionAccessWorkspace, revokeFactionAccess, setFactionAccess, setFactionAccessBatch } from "@/lib/auth/faction-access-store";
-import { isPlatformOwner, PLATFORM_OWNER } from "@/lib/auth/platform-owner";
-import { requireActiveFactionLicense } from "@/lib/licensing/guards";
-import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 const assignmentSchema = z.object({
@@ -70,16 +68,14 @@ export async function updateFactionMemberAccessBatch(input: unknown): Promise<Fa
 
 async function verifiedTarget(factionId: number, tornUserId: number) {
   rejectOwnerTarget(tornUserId);
-  const [actor, telemetry, roster] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getFactionRoster()]);
-  if (!isPlatformOwner(actor)) throw new Error("Only the platform owner can change application access in this release.");
-  if (telemetry.source !== "live" || !telemetry.faction || telemetry.faction.id !== factionId) throw new Error("The connected faction could not be verified for this request.");
-  await requireActiveFactionLicense(telemetry.faction.id);
+  const [authorized, roster] = await Promise.all([requireFactionPermission("access:manage"), getFactionRoster()]);
+  if (authorized.faction.id !== factionId) throw new Error("The requested faction does not match your verified connection.");
   if (!roster.available) throw new Error("The verified faction roster could not be read, so access was not changed.");
   const rosterMember = roster.data.find((member) => member.tornId === tornUserId);
   if (!rosterMember) throw new Error("The selected player is not in the current verified faction roster.");
   return {
-    actorTornUserId: actor.tornUserId,
-    faction: { id: telemetry.faction.id, name: telemetry.faction.name, tag: telemetry.faction.tag },
+    actorTornUserId: authorized.actor.tornUserId,
+    faction: authorized.faction,
     member: { tornUserId: rosterMember.tornId, memberName: rosterMember.name },
   };
 }
@@ -92,41 +88,37 @@ async function verifiedTarget(factionId: number, tornUserId: number) {
  */
 async function verifiedRevokeTarget(factionId: number, tornUserId: number) {
   rejectOwnerTarget(tornUserId);
-  const [actor, telemetry, roster] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getFactionRoster()]);
-  if (!isPlatformOwner(actor)) throw new Error("Only the platform owner can change application access in this release.");
-  if (telemetry.source !== "live" || !telemetry.faction || telemetry.faction.id !== factionId) throw new Error("The connected faction could not be verified for this request.");
-  await requireActiveFactionLicense(telemetry.faction.id);
-  const access = await getFactionAccessWorkspace(telemetry.faction.id);
+  const [authorized, roster] = await Promise.all([requireFactionPermission("access:manage"), getFactionRoster()]);
+  if (authorized.faction.id !== factionId) throw new Error("The requested faction does not match your verified connection.");
+  const access = await getFactionAccessWorkspace(authorized.faction.id);
   const assignment = access.assignments.find((item) => item.tornUserId === tornUserId);
   if (!assignment) throw new Error("This player does not have an application access assignment to revoke.");
   const rosterMember = roster.available ? roster.data.find((member) => member.tornId === tornUserId) : null;
   return {
-    actorTornUserId: actor.tornUserId,
-    faction: { id: telemetry.faction.id, name: telemetry.faction.name, tag: telemetry.faction.tag },
+    actorTornUserId: authorized.actor.tornUserId,
+    faction: authorized.faction,
     member: { tornUserId, memberName: rosterMember?.name ?? assignment.memberName },
   };
 }
 
 async function verifiedTargets(factionId: number, tornUserIds: number[]) {
   for (const tornUserId of tornUserIds) rejectOwnerTarget(tornUserId);
-  const [actor, telemetry, roster] = await Promise.all([getCurrentActor(), getWorkspaceTelemetry(), getFactionRoster()]);
-  if (!isPlatformOwner(actor)) throw new Error("Only the platform owner can change application access in this release.");
-  if (telemetry.source !== "live" || !telemetry.faction || telemetry.faction.id !== factionId) throw new Error("The connected faction could not be verified for this request.");
-  await requireActiveFactionLicense(telemetry.faction.id);
+  const [authorized, roster] = await Promise.all([requireFactionPermission("access:manage"), getFactionRoster()]);
+  if (authorized.faction.id !== factionId) throw new Error("The requested faction does not match your verified connection.");
   if (!roster.available) throw new Error("The current faction roster could not be verified.");
   const rosterById = new Map(roster.data.map((member) => [member.tornId, member]));
   const members = tornUserIds.map((tornUserId) => rosterById.get(tornUserId));
   if (members.some((member) => !member)) throw new Error("At least one selected player is not in the current verified faction roster.");
   return {
-    actorTornUserId: actor.tornUserId,
-    faction: { id: telemetry.faction.id, name: telemetry.faction.name, tag: telemetry.faction.tag },
+    actorTornUserId: authorized.actor.tornUserId,
+    faction: authorized.faction,
     members: members.map((member) => ({ tornUserId: member!.tornId, memberName: member!.name })),
   };
 }
 
 /**
- * The role policy screen states that owner access cannot be assigned,
- * suspended, or revoked. Enforce that here rather than relying on the interface
+ * Platform-owner access cannot be assigned, suspended, or revoked. Enforce
+ * that here rather than relying on the interface
  * to hide the control: a stored `Skillerious — Viewer — Suspended` row would
  * contradict the access the owner actually keeps through `isPlatformOwner`.
  */

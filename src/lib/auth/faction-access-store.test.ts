@@ -3,10 +3,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLocalDatabase } from "@/lib/data/local-database";
-import { getFactionAccessWorkspace, revokeFactionAccess, setFactionAccess, setFactionAccessBatch } from "./faction-access-store";
+import type { ValidatedTornConnection } from "@/lib/torn/connection-service";
+import { getFactionAccessWorkspace, registerFactionAccessRequest, revokeFactionAccess, setFactionAccess, setFactionAccessBatch } from "./faction-access-store";
 
 describe.sequential("faction access store", () => {
   const originalPath = process.env.CHAINWARD_LOCAL_DB_PATH;
+  const originalAppDataDirectory = process.env.CHAINWARD_APP_DATA_DIR;
   const originalDatabaseUrl = process.env.DATABASE_URL;
   let directory: string | null = null;
 
@@ -15,6 +17,8 @@ describe.sequential("faction access store", () => {
     else process.env.CHAINWARD_LOCAL_DB_PATH = originalPath;
     if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalAppDataDirectory === undefined) delete process.env.CHAINWARD_APP_DATA_DIR;
+    else process.env.CHAINWARD_APP_DATA_DIR = originalAppDataDirectory;
     if (directory) rmSync(directory, { recursive: true, force: true });
     directory = null;
   });
@@ -22,6 +26,7 @@ describe.sequential("faction access store", () => {
   it("persists, updates, audits, and revokes local access", async () => {
     directory = mkdtempSync(path.join(tmpdir(), "chainward-access-"));
     process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "access.sqlite");
+    process.env.CHAINWARD_APP_DATA_DIR = path.join(directory, "appdata");
     delete process.env.DATABASE_URL;
     createLocalDatabase();
     const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
@@ -43,6 +48,7 @@ describe.sequential("faction access store", () => {
   it("updates multiple local assignments in one operation", async () => {
     directory = mkdtempSync(path.join(tmpdir(), "chainward-access-batch-"));
     process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "access.sqlite");
+    process.env.CHAINWARD_APP_DATA_DIR = path.join(directory, "appdata");
     delete process.env.DATABASE_URL;
     createLocalDatabase();
     const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
@@ -56,4 +62,33 @@ describe.sequential("faction access store", () => {
     expect(workspace.assignments.every((assignment) => assignment.role === "CHAIN_MANAGER" && assignment.status === "ACTIVE")).toBe(true);
     expect(workspace.audit.map((event) => event.action)).toEqual(["GRANTED", "GRANTED"]);
   });
+
+  it("turns an unassigned verified sign-in into an administrator approval request", async () => {
+    directory = mkdtempSync(path.join(tmpdir(), "chainward-access-request-"));
+    process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "access.sqlite");
+    process.env.CHAINWARD_APP_DATA_DIR = path.join(directory, "appdata");
+    delete process.env.DATABASE_URL;
+    createLocalDatabase();
+    const connection = connectionFixture();
+
+    await expect(registerFactionAccessRequest(connection)).resolves.toBe(true);
+    await expect(registerFactionAccessRequest(connection)).resolves.toBe(false);
+    let workspace = await getFactionAccessWorkspace(connection.faction.id);
+    expect(workspace.requests).toEqual([expect.objectContaining({ tornUserId: connection.player.id, memberName: connection.player.name })]);
+
+    await setFactionAccess(connection.faction, { tornUserId: connection.player.id, memberName: connection.player.name }, 3_212_954, "VIEWER", "ACTIVE");
+    workspace = await getFactionAccessWorkspace(connection.faction.id);
+    expect(workspace.requests).toEqual([]);
+    expect(workspace.assignments).toEqual([expect.objectContaining({ tornUserId: connection.player.id, role: "VIEWER", status: "ACTIVE" })]);
+  });
 });
+
+function connectionFixture(): ValidatedTornConnection {
+  return {
+    player: { id: 123_456, name: "Waiting member" },
+    faction: { id: 51_393, name: "Prive Cartel", tag: "PRIVE" },
+    key: { accessType: "Limited Access", hasFactionPermission: true, selections: ["basic", "chain", "chains", "chainreport", "members"] },
+    capabilities: { identity: "verified", faction: "verified", liveChain: "verified", completedChains: "verified", members: "verified", chainReports: "verified" },
+    checkedAt: "2026-09-03T15:00:00.000Z",
+  };
+}

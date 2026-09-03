@@ -147,6 +147,14 @@ function initializeSchema(database: DatabaseSync): void {
       PRIMARY KEY (faction_id, torn_user_id)
     );
 
+    CREATE TABLE IF NOT EXISTS faction_access_requests (
+      faction_id INTEGER NOT NULL,
+      torn_user_id INTEGER NOT NULL,
+      member_name TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      PRIMARY KEY (faction_id, torn_user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS faction_access_audit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       faction_id INTEGER NOT NULL,
@@ -230,6 +238,7 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS reward_schemes_faction_status ON reward_schemes(faction_id, status, updated_at);
     CREATE INDEX IF NOT EXISTS chain_settlements_faction_status ON chain_settlements(faction_id, status, paid_at);
     CREATE INDEX IF NOT EXISTS faction_access_status ON faction_access_assignments(faction_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS faction_access_requests_recent ON faction_access_requests(faction_id, requested_at DESC);
     CREATE INDEX IF NOT EXISTS faction_access_audit_recent ON faction_access_audit(faction_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS member_activity_audit_recent ON member_activity_audit(faction_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS licensing_requests_status ON licensing_access_requests(status, created_at DESC);

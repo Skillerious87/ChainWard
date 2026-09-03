@@ -287,6 +287,12 @@ async function run() {
     const guestSession = await openOfflineSession("guest");
     const guestDashboard = await getRoute("/dashboard", guestSession.cookie);
     check("an unassigned faction member is redirected to player approval", redirectTarget(guestDashboard).includes("/unlock"), `status ${guestDashboard.status} target "${redirectTarget(guestDashboard)}"`);
+    const guestApproval = await getRoute("/unlock", guestSession.cookie);
+    check("the waiting member sees a recorded approval request", guestApproval.html.includes("Approval request sent") && guestApproval.html.includes("Approval request recorded"));
+    const factionApprovals = await getRoute("/faction", session.cookie);
+    check("the faction administrator sees the waiting member", factionApprovals.html.includes("Member approvals") && factionApprovals.html.includes("Nova Chain") && factionApprovals.html.includes("Review access"));
+    const ownerApprovals = await getRoute("/admin", owner.cookie);
+    check("the owner console surfaces the faction member queue", ownerApprovals.html.includes("admin-member-approvals") && ownerApprovals.html.includes("Nova Chain") && ownerApprovals.html.includes("Open faction access"));
     const departedSession = await openOfflineSession("departed");
     const departedDashboard = await getRoute("/dashboard", departedSession.cookie);
     check("a previously assigned player who left the Torn roster is denied", redirectTarget(departedDashboard).includes("/unlock"), `status ${departedDashboard.status} target "${redirectTarget(departedDashboard)}"`);

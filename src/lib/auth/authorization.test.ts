@@ -55,6 +55,8 @@ describe("role policy", () => {
 
   it("lets an administrator export a backup but not overwrite the workspace", () => {
     expect(hasPermission("ADMINISTRATOR", "faction:backup")).toBe(true);
+    expect(hasPermission("ADMINISTRATOR", "access:manage")).toBe(true);
+    expect(hasPermission("CHAIN_MANAGER", "access:manage")).toBe(false);
     expect(hasPermission("ADMINISTRATOR", "faction:manage")).toBe(false);
     expect(() => requirePermission("ADMINISTRATOR", "faction:manage")).toThrow(AuthorizationError);
   });

@@ -74,13 +74,14 @@ async function reviewPostgresAccessRequest(
         : await tx.factionLicense.create({ data: { factionId: existing.factionId, status: "ACTIVE", term: plan.licenseTerm, reference: existing.reference, issuedAt: reviewedAt, expiresAt, approvedById: reviewer.id, paymentNotes: paymentNote, internalNotes: parsed.note || null } });
 
       const previousMembership = await tx.factionMembership.findUnique({ where: { factionId_userId: { factionId: existing.factionId, userId: existing.submittedById } } });
-      const purchaserRole = previousMembership && previousMembership.role !== "OWNER" ? previousMembership.role : renewal ? "VIEWER" : "ADMINISTRATOR";
+      const previousRoleIsActive = previousMembership && previousMembership.status !== "INVITED" && previousMembership.status !== "REMOVED";
+      const purchaserRole = previousRoleIsActive && previousMembership.role !== "OWNER" ? previousMembership.role : renewal ? "VIEWER" : "ADMINISTRATOR";
       const membership = await tx.factionMembership.upsert({
         where: { factionId_userId: { factionId: existing.factionId, userId: existing.submittedById } },
         update: { role: purchaserRole, status: "ACTIVE" },
         create: { factionId: existing.factionId, userId: existing.submittedById, role: purchaserRole, status: "ACTIVE" },
       });
-      await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: "faction_access.purchaser_granted", entityType: "FactionMembership", entityId: membership.id, metadata: { tornUserId: existing.submittedBy.tornUserId, memberName: existing.submittedBy.name, action: previousMembership ? "UPDATED" : "GRANTED", role: purchaserRole, status: "ACTIVE", source: "verified_payment", reference: existing.reference } } });
+      await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: "faction_access.purchaser_granted", entityType: "FactionMembership", entityId: membership.id, metadata: { tornUserId: existing.submittedBy.tornUserId, memberName: existing.submittedBy.name, action: previousRoleIsActive ? "UPDATED" : "GRANTED", role: purchaserRole, status: "ACTIVE", source: "verified_payment", reference: existing.reference } } });
       await tx.auditLog.create({ data: { factionId: existing.factionId, actorId: reviewer.id, action: renewal ? "FACTION_LICENSE_RENEWED" : "FACTION_LICENSE_ACTIVATED", entityType: "FactionLicense", entityId: licence.id, metadata: { reference: existing.reference, previousReference: currentLicense?.reference ?? null, renewal, expiresAt: expiresAt?.toISOString() ?? null } } });
     }
 

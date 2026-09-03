@@ -33,7 +33,7 @@ describe.sequential("local SQLite database", () => {
     expect(database).not.toBeNull();
     try {
       const tables = database!.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as unknown as { name: string }[];
-      expect(tables.map((table) => table.name)).toEqual(expect.arrayContaining(["reward_schemes", "reward_tiers", "chain_settlements", "faction_settings", "faction_access_assignments", "faction_access_audit", "member_activity_audit", "licensing_access_requests", "licensing_faction_licenses", "licensing_audit"]));
+      expect(tables.map((table) => table.name)).toEqual(expect.arrayContaining(["reward_schemes", "reward_tiers", "chain_settlements", "faction_settings", "faction_access_assignments", "faction_access_requests", "faction_access_audit", "member_activity_audit", "licensing_access_requests", "licensing_faction_licenses", "licensing_audit"]));
       expect(tables.map((table) => table.name)).not.toContain("remembered_torn_connections");
     } finally { database?.close(); }
   });

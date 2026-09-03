@@ -5,8 +5,8 @@ import { UnlockWorkspace } from "./unlock-workspace";
 describe("UnlockWorkspace active access", () => {
   it("keeps an unassigned faction member locked even when the faction licence is active", () => {
     const html = renderToStaticMarkup(<UnlockWorkspace factionId={51_393} factionName="Prive Cartel" access={{ state: "active", label: "Monthly access", expiresAt: "2026-09-20T00:00:00.000Z", reference: "CW-51393-LOCKED", startedAt: "2026-08-20T00:00:00.000Z", plan: "MONTHLY", payment: null, message: null }} />);
-    expect(html).toContain("Player approval required");
-    expect(html).toContain("licence or role from a previous faction never follows you");
+    expect(html).toContain("Approval request sent");
+    expect(html).toContain("Approval request recorded");
     expect(html).not.toContain('href="/dashboard"');
   });
 

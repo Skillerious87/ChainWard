@@ -8,6 +8,7 @@ const MAX_STACK_LENGTH = 6_000;
 
 export type OnboardingValidationStage =
   | "torn-api-validation"
+  | "access-request"
   | "remembered-connection"
   | "temporary-session"
   | "response-construction";

@@ -11,8 +11,8 @@ export function UpgradeAccess({ access, workspaceAuthorized }: { access: Faction
     href="/unlock"
     aria-label={active ? "View Chainward faction access" : memberApprovalRequired ? "Your player needs approval for this faction" : pending ? "View pending Chainward access request" : "Unlock Chainward features"}
   >
-    <span className={`topbar-upgrade__icon${active ? " topbar-upgrade__icon--secured" : ""}`}>{pending ? <Clock3 size={16} /> : <Crown size={16} />}{active && <ShieldCheck size={10} />}</span>
-    <span className="topbar-upgrade__copy"><strong>{active ? "Chainward protected" : memberApprovalRequired ? "Player approval required" : pending ? "Request pending · locked" : "Workspace locked"}</strong><small>{active ? access.label : memberApprovalRequired ? "Access does not transfer between factions" : "Unlock complete access"}</small></span>
+    <span className={`topbar-upgrade__icon${active ? " topbar-upgrade__icon--secured" : ""}`}>{pending || memberApprovalRequired ? <Clock3 size={16} /> : <Crown size={16} />}{active && <ShieldCheck size={10} />}</span>
+    <span className="topbar-upgrade__copy"><strong>{active ? "Chainward protected" : memberApprovalRequired ? "Approval request waiting" : pending ? "Request pending · locked" : "Workspace locked"}</strong><small>{active ? access.label : memberApprovalRequired ? "Faction administrator action required" : "Unlock complete access"}</small></span>
     {(active || pending) && <span className="topbar-upgrade__status"><Check size={11} /></span>}
   </Link>;
 }

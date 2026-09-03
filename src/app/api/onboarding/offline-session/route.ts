@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { registerFactionAccessRequest } from "@/lib/auth/faction-access-store";
 import { mutationDeniedResponse, isTrustedMutationRequest } from "@/lib/security/request-origin";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { readLimitedJson } from "@/lib/security/request-body";
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Choose a valid offline test identity." }, { status: 400 });
 
   const connection = offlineConnection(parsed.data.identity);
+  await registerFactionAccessRequest(connection);
   const response = NextResponse.json({
     ...connection,
     apiKey: undefined,

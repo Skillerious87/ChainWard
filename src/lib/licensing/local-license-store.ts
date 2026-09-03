@@ -210,16 +210,18 @@ export function reviewLocalAccessRequest(input: {
         }
 
         const previousAssignment = database.prepare("SELECT role, status FROM faction_access_assignments WHERE faction_id = ? AND torn_user_id = ?").get(existing.faction_id, existing.submitted_by_torn_id) as unknown as { role: string; status: string } | undefined;
-        const purchaserRole = previousAssignment && previousAssignment.role !== "OWNER" ? previousAssignment.role : renewal ? "VIEWER" : "ADMINISTRATOR";
+        const previousRoleIsActive = previousAssignment && previousAssignment.status !== "REMOVED";
+        const purchaserRole = previousRoleIsActive && previousAssignment.role !== "OWNER" ? previousAssignment.role : renewal ? "VIEWER" : "ADMINISTRATOR";
         database.prepare(`
           INSERT INTO faction_access_assignments (faction_id, torn_user_id, member_name, role, status, assigned_by_torn_id, updated_at)
           VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
           ON CONFLICT(faction_id, torn_user_id) DO UPDATE SET member_name = excluded.member_name, role = excluded.role, status = 'ACTIVE', assigned_by_torn_id = excluded.assigned_by_torn_id, updated_at = excluded.updated_at
         `).run(existing.faction_id, existing.submitted_by_torn_id, existing.submitted_by_name, purchaserRole, input.actor.tornUserId, reviewedAt);
+        database.prepare("DELETE FROM faction_access_requests WHERE faction_id = ? AND torn_user_id = ?").run(existing.faction_id, existing.submitted_by_torn_id);
         database.prepare(`
           INSERT INTO faction_access_audit (faction_id, torn_user_id, member_name, action, role, status, actor_torn_user_id, created_at)
           VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
-        `).run(existing.faction_id, existing.submitted_by_torn_id, existing.submitted_by_name, previousAssignment ? "UPDATED" : "GRANTED", purchaserRole, input.actor.tornUserId, reviewedAt);
+        `).run(existing.faction_id, existing.submitted_by_torn_id, existing.submitted_by_name, previousRoleIsActive ? "UPDATED" : "GRANTED", purchaserRole, input.actor.tornUserId, reviewedAt);
         insertAudit(database, { factionId: existing.faction_id, actorTornUserId: input.actor.tornUserId, action: renewal ? "FACTION_LICENSE_RENEWED" : "FACTION_LICENSE_ACTIVATED", entityId: licenceId, metadata: { reference: existing.reference, previousReference: currentLicense?.reference ?? null, renewal, expiresAt }, createdAt: reviewedAt });
       }
 

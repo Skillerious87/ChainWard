@@ -29,11 +29,11 @@ export function UnlockWorkspace({ factionId, factionName, access, workspaceAutho
 
 function MemberApprovalRequired({ factionName }: { factionName: string | null }) {
   return <div className="unlock-workspace unlock-state-page">
-    <header className="unlock-state-hero unlock-state-hero--restricted"><span><ShieldAlert size={25} /></span><div><p className="eyebrow">Player approval required</p><h1>This faction is licensed. Your player is not yet authorised.</h1><p>Access is bound to both your verified Torn identity and <strong>{factionName ?? "this faction"}</strong>. A licence or role from a previous faction never follows you when you move.</p></div></header>
+    <header className="unlock-state-hero unlock-state-hero--restricted"><span><ShieldAlert size={25} /></span><div><p className="eyebrow">Approval request sent</p><h1>This faction is licensed. Your player is waiting for a role.</h1><p>Your verified sign-in is now visible to an administrator for <strong>{factionName ?? "this faction"}</strong>. Access stays bound to this exact Torn player and faction.</p></div></header>
     <section className="unlock-status-card unlock-member-approval">
       <header><div><small>Security boundary</small><strong>Exact player + exact faction</strong></div><span><LockKeyhole size={14} /> Workspace locked</span></header>
-      <ol><li className="unlock-status-step--done"><span><Check size={14} /></span><p><strong>Faction licence verified</strong><small>The connected faction has an active paid Chainward term.</small></p></li><li><span>2</span><p><strong>Ask a faction administrator</strong><small>They must approve this Torn player in Faction access.</small></p></li><li><span>3</span><p><strong>Reconnect after approval</strong><small>Chainward verifies that you still belong to this same faction before opening any data.</small></p></li></ol>
-      <footer><Link className="button button--secondary" href="/connect">Verify another connection</Link></footer>
+      <ol><li className="unlock-status-step--done"><span><Check size={14} /></span><p><strong>Faction and player verified</strong><small>The connected faction has an active Chainward licence and your Torn identity matches.</small></p></li><li className="unlock-status-step--done"><span><Check size={14} /></span><p><strong>Approval request recorded</strong><small>Faction Administrators can now review this player in Faction access.</small></p></li><li><span>3</span><p><strong>Administrator assigns a role</strong><small>Refresh this page after approval; Chainward will verify current faction membership before opening data.</small></p></li></ol>
+      <footer><Link className="button button--secondary" href="/connect">Verify another connection</Link><button className="button button--primary" onClick={() => window.location.reload()}>Check approval status</button></footer>
     </section>
   </div>;
 }
