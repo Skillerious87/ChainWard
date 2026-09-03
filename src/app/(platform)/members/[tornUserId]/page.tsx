@@ -50,6 +50,7 @@ export default async function MemberReportPage({ params }: { params: Promise<{ t
     checkedAt={roster.checkedAt}
     profile={profile}
     activity={activityAssessment}
+    thresholdDays={activity.policy.thresholdDays}
     inactivityPeriods={inactivityPeriods.filter((period) => period.tornUserId === tornUserId)}
     canManage={canManage}
   />;

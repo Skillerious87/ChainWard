@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  Activity,
+  AlertTriangle,
   Award,
   BadgeCheck,
   BookOpenText,
   CalendarDays,
   ChevronLeft,
   Clock3,
+  Eye,
   ExternalLink,
   FilePlus2,
   History,
@@ -15,6 +18,7 @@ import {
   MessageSquareText,
   ShieldCheck,
   Sparkles,
+  Umbrella,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -37,8 +41,21 @@ interface MemberReportWorkspaceProps {
   checkedAt: string;
   profile: MemberProfileWorkspace;
   activity: MemberActivityAssessment;
+  thresholdDays: number;
   inactivityPeriods: MemberInactivityPeriod[];
   canManage: boolean;
+}
+
+type ActivityTone = "current" | "protected" | "watch" | "attention" | "critical";
+
+interface ActivityPresentation {
+  tone: ActivityTone;
+  icon: typeof Activity;
+  eyebrow: string;
+  title: string;
+  summary: string;
+  badge: string;
+  posture: string;
 }
 
 const reportCategories: ReadonlyArray<{ id: MemberReportCategory; label: string; detail: string }> = [
@@ -48,7 +65,7 @@ const reportCategories: ReadonlyArray<{ id: MemberReportCategory; label: string;
   { id: "GENERAL", label: "General", detail: "Other useful faction context." },
 ];
 
-export function MemberReportWorkspace({ member, factionId, source, checkedAt, profile, activity, inactivityPeriods, canManage }: MemberReportWorkspaceProps) {
+export function MemberReportWorkspace({ member, factionId, source, checkedAt, profile, activity, thresholdDays, inactivityPeriods, canManage }: MemberReportWorkspaceProps) {
   const router = useRouter();
   const [reportOpen, setReportOpen] = useState(false);
   const [awardOpen, setAwardOpen] = useState(false);
@@ -64,6 +81,8 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
   const awardHistory = useMemo(() => profile.awards.filter((award) => award.revokedAt), [profile.awards]);
   const inactivityInsights = useMemo(() => buildMemberInactivityInsights(inactivityPeriods, checkedAt), [checkedAt, inactivityPeriods]);
   const joinedAt = approximateJoinDate(member.daysInFaction, checkedAt);
+  const activityPresentation = describeActivity(activity);
+  const ActivityIcon = activityPresentation.icon;
 
   async function saveReport(): Promise<void> {
     const result = await addMemberReport({ factionId, tornUserId: member.tornId, category, visibility, title, body });
@@ -100,10 +119,10 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       <span>Personnel record <i /> #{member.tornId}</span>
     </header>
 
-    <section className="member-report-hero">
+    <section className={`member-report-hero member-report-hero--${activityPresentation.tone}`}>
       <div className="member-report-hero__identity">
         <MemberAvatar name={member.name} />
-        <div><p className="eyebrow">Chainward member report</p><h1>{member.name}</h1><p>{member.position || "Unassigned"} <span>·</span> Level {member.level} <span>·</span> Torn ID {member.tornId}</p></div>
+        <div className="member-report-hero__copy"><p className="eyebrow">Chainward member report</p><div className="member-report-hero__title-row"><h1>{member.name}</h1><span className={`member-report-hero__state member-report-hero__state--${activityPresentation.tone}`}><ActivityIcon size={12} />{activityPresentation.badge}</span></div><p>{member.position || "Unassigned"} <span>·</span> Level {member.level} <span>·</span> Torn ID {member.tornId}</p></div>
       </div>
       <div className="member-report-hero__actions">
         <a className="button button--secondary" href={`https://www.torn.com/profiles.php?XID=${member.tornId}`} target="_blank" rel="noreferrer">Torn profile <ExternalLink size={14} /></a>
@@ -112,6 +131,8 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       <div className="member-report-hero__source"><ShieldCheck size={14} /><span><strong>Verified roster facts</strong> from {source}</span><time dateTime={checkedAt}>Checked {formatDateTime(checkedAt)}</time></div>
     </section>
 
+    <ActivitySnapshot activity={activity} thresholdDays={thresholdDays} presentation={activityPresentation} />
+
     <section className="member-report-facts" aria-label="Current member facts">
       <Fact icon={CalendarDays} label="Faction tenure" value={`${member.daysInFaction.toLocaleString()} days`} detail={joinedAt ? `Approx. since ${joinedAt}` : "Join date unavailable"} />
       <Fact icon={UserRound} label="Position" value={member.position || "Unassigned"} detail={`Level ${member.level}`} />
@@ -119,7 +140,7 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       <Fact icon={ShieldCheck} label="Torn status" value={member.status || "Unknown"} detail={member.statusDescription || "No status detail"} />
     </section>
 
-    <MemberInactivityRecord periods={inactivityPeriods} checkedAt={checkedAt} periodCount={inactivityInsights.recordedPeriods} averageCompletedSeconds={inactivityInsights.averageCompletedSeconds} longestSeconds={inactivityInsights.longestPeriodSeconds} />
+    <MemberInactivityRecord activity={activity} periods={inactivityPeriods} checkedAt={checkedAt} periodCount={inactivityInsights.recordedPeriods} averageCompletedSeconds={inactivityInsights.averageCompletedSeconds} longestSeconds={inactivityInsights.longestPeriodSeconds} />
 
     <section className="member-award-showcase">
       <header><div><p className="eyebrow"><Sparkles size={12} /> Recognition</p><h2>Awards on record</h2><p>Deliberate faction recognition assigned by authorised Chainward managers.</p></div>{canManage && <button className="button button--secondary" disabled={!profile.databaseAvailable} onClick={() => setAwardOpen(true)}><Award size={15} /> Award badge</button>}</header>
@@ -133,7 +154,7 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       </section>
 
       <aside className="member-report-context">
-        <section><header><ActivityMark band={activity.band} /><div><p className="eyebrow">Activity context</p><h2>{activity.band}</h2></div></header><p>{activity.reason}</p><dl><div><dt>Policy threshold</dt><dd>{Math.round(activity.daysInactive) < 1 ? "Within one day" : `${Math.floor(activity.daysInactive)} days inactive`}</dd></div><div><dt>Managed state</dt><dd>{activity.record?.state === "HOLIDAY" ? "Holiday" : activity.record?.state === "WATCH" ? "Watch list" : "Standard"}</dd></div></dl><small>Current activity is Torn-derived. Holiday and watch state are separate Chainward records.</small></section>
+        <section className="member-report-overview"><header><BookOpenText size={18} /><h2>Record overview</h2></header><dl><div><dt>Reports</dt><dd>{profile.reports.length}</dd></div><div><dt>Active awards</dt><dd>{activeAwards.length}</dd></div><div><dt>Inactivity periods</dt><dd>{inactivityInsights.recordedPeriods}</dd></div><div><dt>Activity posture</dt><dd>{activityPresentation.badge}</dd></div></dl><small>Live roster facts and managed faction context are brought together without changing their source.</small></section>
         <section className="member-report-governance"><header><ShieldCheck size={18} /><h2>Record boundaries</h2></header><ul><li><span>Torn facts</span><strong>Current roster API</strong></li><li><span>Reports</span><strong>{canManage ? "Faction + leadership views" : "Faction-visible only"}</strong></li><li><span>Changes</span><strong>Managers only</strong></li><li><span>History</span><strong>Attribution retained</strong></li></ul></section>
         {awardHistory.length > 0 && <section className="member-award-history"><header><History size={17} /><h2>Revoked awards</h2></header>{awardHistory.map((award) => <article key={award.id}><strong>{memberBadgeDefinition(award.badgeId).label}</strong><span>{award.revokeReason}</span><small>Revoked {formatDateTime(award.revokedAt!)}</small></article>)}</section>}
       </aside>
@@ -161,19 +182,103 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
 }
 
 function Fact({ icon: Icon, label, value, detail }: { icon: typeof CalendarDays; label: string; value: string; detail: string }) { return <article><span><Icon size={18} /></span><div><small>{label}</small><strong>{value}</strong><p>{detail}</p></div></article>; }
-function MemberInactivityRecord({ periods, checkedAt, periodCount, averageCompletedSeconds, longestSeconds }: { periods: MemberInactivityPeriod[]; checkedAt: string; periodCount: number; averageCompletedSeconds: number; longestSeconds: number }) {
+function ActivitySnapshot({ activity, thresholdDays, presentation }: { activity: MemberActivityAssessment; thresholdDays: number; presentation: ActivityPresentation }) {
+  const Icon = presentation.icon;
+  const managedState = activity.record?.state === "HOLIDAY" ? "Holiday" : activity.record?.state === "WATCH" ? "Watch list" : "Standard policy";
+  const managedDetail = activity.record?.state === "HOLIDAY"
+    ? activity.record.holidayUntil ? `Protected through ${formatShortDate(activity.record.holidayUntil)}` : "Open-ended protection"
+    : activity.record?.state === "WATCH" ? "Manual follow-up" : "No manual override";
+  return <section className={`member-report-activity member-report-activity--${presentation.tone}`} aria-labelledby="member-activity-heading">
+    <div className="member-report-activity__lead">
+      <span className="member-report-activity__icon"><Icon size={21} /></span>
+      <div><p className="eyebrow">{presentation.eyebrow}</p><h2 id="member-activity-heading">{presentation.title}</h2><p>{presentation.summary}</p></div>
+      <span className="member-report-activity__posture"><i />{presentation.posture}</span>
+    </div>
+    <div className="member-report-activity__details">
+      <dl>
+        <div><dt>Last active</dt><dd>{formatRelativeActivity(activity.ageSeconds)}</dd><small>Verified Torn timestamp</small></div>
+        <div><dt>Review threshold</dt><dd>{thresholdDays} inactive day{thresholdDays === 1 ? "" : "s"}</dd><small>{activity.holidayActive ? "Paused while protected" : "Faction policy"}</small></div>
+        <div><dt>Managed state</dt><dd>{managedState}</dd><small>{managedDetail}</small></div>
+      </dl>
+      {activity.record?.note && <div className="member-report-activity__note"><MessageSquareText size={14} /><p><strong>Manager note</strong><span>{activity.record.note}</span></p></div>}
+      <footer>{activity.record ? <><span>Updated by <strong>{activity.record.updatedByName}</strong></span><time dateTime={activity.record.updatedAt}>{formatDateTime(activity.record.updatedAt)}</time></> : <><span><strong>Standard activity policy</strong></span><span>No managed holiday or watch record</span></>}</footer>
+    </div>
+  </section>;
+}
+function MemberInactivityRecord({ activity, periods, checkedAt, periodCount, averageCompletedSeconds, longestSeconds }: { activity: MemberActivityAssessment; periods: MemberInactivityPeriod[]; checkedAt: string; periodCount: number; averageCompletedSeconds: number; longestSeconds: number }) {
   const parsedCheckedAt = Date.parse(checkedAt);
   const checkedAtSeconds = Math.floor((Number.isNaN(parsedCheckedAt) ? Date.now() : parsedCheckedAt) / 1_000);
   const completedCount = periods.filter((period) => period.endedAt !== null).length;
-  return <section className="member-report-inactivity">
-    <header><div><p className="eyebrow"><History size={12} /> Activity pattern</p><h2>Inactivity periods</h2><p>Persistent gaps of 24 hours or longer inferred from verified Torn last_action timestamps.</p></div><span className={`inactivity-period-state${periods.some((period) => period.endedAt === null) ? " inactivity-period-state--open" : ""}`}><i />{periods.some((period) => period.endedAt === null) ? "Currently inactive" : "No open period"}</span></header>
-    {periods.length ? <><dl><div><dt>Periods logged</dt><dd>{periodCount}</dd></div><div><dt>Completed</dt><dd>{completedCount}</dd></div><div><dt>Average completed</dt><dd>{completedCount ? formatInactivityDuration(averageCompletedSeconds) : "—"}</dd></div><div><dt>Longest observed</dt><dd>{formatInactivityDuration(longestSeconds)}</dd></div></dl><div className="member-report-inactivity__timeline">{periods.slice(0, 12).map((period) => <article key={period.id}><span className={period.endedAt ? undefined : "member-report-inactivity__open"}><i /></span><div><strong>{formatShortDateTime(period.startedAt)} <em>to</em> {period.endedAt ? formatShortDateTime(period.endedAt) : "ongoing"}</strong><p>{formatInactivityDuration(periodDurationSeconds(period, checkedAtSeconds))}{period.holidayProtected ? " · holiday protected" : ""}{period.watchListed ? " · watch-listed" : ""}</p><small>First observed {formatShortDateTime(period.firstObservedAt)}</small></div></article>)}</div></> : <div className="member-report-inactivity__empty"><Clock3 size={18} /><p><strong>No inactivity periods logged</strong><span>A period will appear after a verified roster check finds this member inactive for at least 24 hours.</span></p></div>}
+  const hasOpenPeriod = periods.some((period) => period.endedAt === null);
+  const stateClass = activity.holidayActive ? " inactivity-period-state--protected" : hasOpenPeriod ? " inactivity-period-state--open" : "";
+  const stateLabel = activity.holidayActive ? hasOpenPeriod ? "Inactive · protected" : "Holiday protected" : hasOpenPeriod ? "Currently inactive" : "No open period";
+  const emptyDetail = activity.holidayActive
+    ? "Holiday protection is active. Verified 24-hour gaps will still be recorded without triggering inactivity attention."
+    : "A period will appear after a verified roster check finds this member inactive for at least 24 hours.";
+  return <section className={`member-report-inactivity${activity.holidayActive ? " member-report-inactivity--protected" : ""}`}>
+    <header><div><p className="eyebrow"><History size={12} /> Activity pattern</p><h2>Inactivity periods</h2><p>Persistent gaps of 24 hours or longer inferred from verified Torn last_action timestamps.</p></div><span className={`inactivity-period-state${stateClass}`}><i />{stateLabel}</span></header>
+    {periods.length ? <><dl><div><dt>Periods logged</dt><dd>{periodCount}</dd></div><div><dt>Completed</dt><dd>{completedCount}</dd></div><div><dt>Average completed</dt><dd>{completedCount ? formatInactivityDuration(averageCompletedSeconds) : "—"}</dd></div><div><dt>Longest observed</dt><dd>{formatInactivityDuration(longestSeconds)}</dd></div></dl><div className="member-report-inactivity__timeline">{periods.slice(0, 12).map((period) => <article key={period.id}><span className={period.endedAt ? undefined : "member-report-inactivity__open"}><i /></span><div><strong>{formatShortDateTime(period.startedAt)} <em>to</em> {period.endedAt ? formatShortDateTime(period.endedAt) : "ongoing"}</strong><p className="member-report-inactivity__period-meta"><span>{formatInactivityDuration(periodDurationSeconds(period, checkedAtSeconds))}</span>{period.holidayProtected && <em><Umbrella size={11} />Holiday protected</em>}{period.watchListed && <em><Eye size={11} />Watch-listed</em>}</p><small>First observed {formatShortDateTime(period.firstObservedAt)}</small></div></article>)}</div></> : <div className="member-report-inactivity__empty">{activity.holidayActive ? <Umbrella size={18} /> : <Clock3 size={18} />}<p><strong>No inactivity periods logged</strong><span>{emptyDetail}</span></p></div>}
   </section>;
 }
 function AwardCard({ award, canManage, onRevoke }: { award: MemberAward; canManage: boolean; onRevoke: () => void }) { const badge = memberBadgeDefinition(award.badgeId); return <article><BadgeGlyph badgeId={award.badgeId} /><div><header><h3>{badge.label}</h3><time dateTime={award.awardedAt}>{formatShortDate(award.awardedAt)}</time></header><p>{award.citation}</p><footer><span>Awarded by <strong>{award.awardedByName}</strong></span>{canManage && <button onClick={onRevoke}>Revoke</button>}</footer></div></article>; }
 function BadgeGlyph({ badgeId }: { badgeId: MemberBadgeId }) { const index = MEMBER_BADGES.findIndex((badge) => badge.id === badgeId); const Icon = [Award, BadgeCheck, ShieldCheck, Sparkles, Medal, CalendarDays][index] ?? Award; return <span className={`member-badge-glyph member-badge-glyph--${index + 1}`}><Icon size={20} /></span>; }
 function ReportIcon({ category }: { category: MemberReportCategory }) { if (category === "RECOGNITION") return <Sparkles size={15} />; if (category === "DEVELOPMENT") return <BookOpenText size={15} />; if (category === "INCIDENT") return <LockKeyhole size={15} />; return <MessageSquareText size={15} />; }
-function ActivityMark({ band }: { band: MemberActivityAssessment["band"] }) { return <span className={`member-report-activity-mark member-report-activity-mark--${band.toLowerCase().replaceAll(" ", "-")}`}><i /></span>; }
+function describeActivity(activity: MemberActivityAssessment): ActivityPresentation {
+  if (activity.holidayActive) return {
+    tone: "protected",
+    icon: Umbrella,
+    eyebrow: "Managed holiday",
+    title: "Holiday protection is active",
+    summary: activity.record?.holidayUntil ? `Inactivity alerts are paused through ${formatShortDate(activity.record.holidayUntil)}. Torn activity remains visible and continues to build an accurate history.` : "Inactivity alerts are paused until the holiday record is cleared. Torn activity remains visible and continues to build an accurate history.",
+    badge: activity.record?.holidayUntil ? `Holiday through ${formatShortDate(activity.record.holidayUntil)}` : "Open-ended holiday",
+    posture: "No inactivity alert",
+  };
+  if (activity.holidayExpired) return {
+    tone: activity.critical ? "critical" : "attention",
+    icon: AlertTriangle,
+    eyebrow: "Holiday ended",
+    title: activity.critical ? "Review required after holiday" : "Holiday protection has ended",
+    summary: `${activity.reason}. Confirm whether this member has returned or needs a new managed state.`,
+    badge: "Holiday expired",
+    posture: "Needs review",
+  };
+  if (activity.record?.state === "WATCH") return {
+    tone: "watch",
+    icon: Eye,
+    eyebrow: "Managed follow-up",
+    title: "This member is on the watch list",
+    summary: activity.reason,
+    badge: "Watch list",
+    posture: "Manual follow-up",
+  };
+  if (activity.critical) return {
+    tone: "critical",
+    icon: AlertTriangle,
+    eyebrow: "Activity alert",
+    title: "Critical inactivity review",
+    summary: activity.reason,
+    badge: "Critical",
+    posture: "Action required",
+  };
+  if (activity.needsAttention || activity.band === "Due soon") return {
+    tone: "attention",
+    icon: Clock3,
+    eyebrow: "Activity signal",
+    title: activity.band === "Due soon" ? "Approaching review threshold" : "Activity review is due",
+    summary: activity.reason,
+    badge: activity.band,
+    posture: activity.needsAttention ? "Needs review" : "Monitor",
+  };
+  return {
+    tone: "current",
+    icon: Activity,
+    eyebrow: "Activity signal",
+    title: "Activity is within policy",
+    summary: activity.reason,
+    badge: activity.band,
+    posture: "No action required",
+  };
+}
 function categoryLabel(category: MemberReportCategory): string { return reportCategories.find((item) => item.id === category)?.label ?? category; }
 function approximateJoinDate(days: number, checkedAt: string): string | null { const checked = Date.parse(checkedAt); if (Number.isNaN(checked) || !Number.isFinite(days)) return null; return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(checked - days * 86_400_000)); }
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "time unavailable" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date); }
