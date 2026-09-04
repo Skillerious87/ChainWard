@@ -85,7 +85,7 @@ export async function dispatchPushNotifications(now = new Date()): Promise<PushD
       const apiKey = decryptCredential(credential.encryptedKey, credential.encryptionIv, credentialEncryptionSecret());
       const client = createTornClient(apiKey);
       const chain = await client.getCurrentChain(faction.tornFactionId, { forceRefresh: true, bypassUpstreamCache: true });
-      await dispatchChainAlerts(faction.id, faction.name, faction.pushSubscriptions, faction.chainWatchSlots[0] ?? null, chain.chain, result, now);
+      await dispatchChainAlerts(String(faction.tornFactionId), faction.name, faction.pushSubscriptions, faction.chainWatchSlots[0] ?? null, chain.chain, result, now);
       await dispatchMemberAlerts(faction, credential.ownerTornUserId, client, result, now);
     } catch {
       // One inaccessible Torn credential must not block other subscribed factions.
@@ -181,7 +181,7 @@ async function dispatchMemberAlerts(
         ? `${criticalCount} critical member alert${criticalCount === 1 ? "" : "s"}`
         : `${alerts.length} member${alerts.length === 1 ? "" : "s"} need review`,
       body: `${faction.name}: open the protected member queue for details.`,
-      tag: `chainward-members-${faction.id}`,
+      tag: `chainward-members-${faction.tornFactionId}`,
       url: "/members?view=attention",
       critical: criticalCount > 0,
       requireInteraction: criticalCount > 0 && preferences.keepCriticalVisible,

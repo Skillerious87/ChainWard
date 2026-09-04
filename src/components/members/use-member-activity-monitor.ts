@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   ensureNotificationWorker,
   getBrowserNotificationPermission,
-  hasActivePushSubscription,
   isNotificationQuietTime,
   showWindowsNotification,
   useMemberNotificationPreferences,
@@ -85,10 +84,6 @@ export function eligibleMemberAlerts(alerts: MemberActivityAlert[], preferences:
 
 async function maybeNotify(snapshot: MemberActivityMonitorSnapshot, preferences: MemberNotificationPreferences): Promise<void> {
   if (getBrowserNotificationPermission() !== "granted") return;
-  // The server-side Web Push monitor owns delivery for subscribed devices.
-  // Retain this local path only as a fallback so one condition cannot produce
-  // both a push and a foreground notification.
-  if (await hasActivePushSubscription()) return;
   const alerts = eligibleMemberAlerts(snapshot.alerts, preferences);
   const fingerprint = alerts.map((alert) => `${alert.tornUserId}:${alert.severity}:${alert.trigger}`).toSorted().join("|");
   const previous = readMonitorState(snapshot.factionId);

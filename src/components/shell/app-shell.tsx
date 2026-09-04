@@ -67,6 +67,12 @@ import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
 import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
+import {
+  getBrowserNotificationPermission,
+  isNotificationQuietTime,
+  showDeviceNotification,
+  useMemberNotificationPreferences,
+} from "@/lib/member-notification-preferences";
 import { buildOperationalNotifications, type OperationalNotification } from "@/lib/notifications/notification-intelligence";
 import { pollSecondsForChain } from "@/lib/torn/polling-policy";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
@@ -126,6 +132,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const pathname = usePathname();
   const router = useRouter();
   const preferences = useAppearancePreferences();
+  const deviceAlertPreferences = useMemberNotificationPreferences();
   const collapsed = preferences.sidebarCollapsed;
   const compact = preferences.compact;
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -145,6 +152,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const liveTelemetry = newestTelemetry(telemetry, telemetryOverride);
   const { seconds: chainSeconds, deadlineAtSeconds, nowSeconds, applyReading } = usePersistentChainCountdown(liveTelemetry);
   const latestTelemetryRef = useRef(liveTelemetry);
+  const chainAlertInFlightRef = useRef<string | null>(null);
   const syncLabel = syncState === "syncing"
     ? "Syncing..."
     : syncState === "failed"
@@ -273,6 +281,34 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     else delete root.dataset.chainDanger;
     return () => { delete root.dataset.chainDanger; };
   }, [chainSeconds, liveTelemetry.chain?.state]);
+
+  useEffect(() => {
+    const currentChain = liveTelemetry.chain;
+    if (!deviceAlertPreferences.enabled || !deviceAlertPreferences.includeChainAlerts || getBrowserNotificationPermission() !== "granted" || currentChain?.state !== "active") return;
+    if (chainSeconds > deviceAlertPreferences.chainWarningSeconds) return;
+    const critical = chainSeconds <= 60;
+    if (!critical && isNotificationQuietTime(deviceAlertPreferences)) return;
+    const resetMarker = currentChain.current >= 10 ? String(currentChain.current) : "warmup";
+    const eventKey = `${currentChain.id}:${resetMarker}:${critical ? "critical" : "warning"}`;
+    const storageKey = `chainward:chain-device-alert:v1:${liveTelemetry.faction?.id ?? "global"}`;
+    if (chainAlertInFlightRef.current === eventKey || readChainAlertKey(storageKey) === eventKey) return;
+    chainAlertInFlightRef.current = eventKey;
+    void showDeviceNotification(
+      critical ? `Chain critical · ${formatChainCountdown(chainSeconds)}` : `Chain warning · ${formatChainCountdown(chainSeconds)}`,
+      {
+        body: `${liveTelemetry.faction?.name ?? "Your faction"}: ${currentChain.current.toLocaleString()} / ${currentChain.maximum.toLocaleString()} hits. Open the live chain now.`,
+        icon: "/icons/android-chrome-192x192.png",
+        badge: "/icons/favicon-32x32.png",
+        tag: `chainward-chain-${liveTelemetry.faction?.id ?? "global"}-${currentChain.id}`,
+        requireInteraction: critical && deviceAlertPreferences.keepCriticalVisible,
+        data: { url: "/live-chain" },
+      },
+    ).then((shown) => {
+      if (shown) saveChainAlertKey(storageKey, eventKey);
+    }).finally(() => {
+      if (chainAlertInFlightRef.current === eventKey) chainAlertInFlightRef.current = null;
+    });
+  }, [chainSeconds, deviceAlertPreferences, liveTelemetry.chain, liveTelemetry.faction]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setReadNotificationIds(loadReadNotificationIds(notificationScope)), 0);
@@ -813,4 +849,19 @@ function shouldAcceptTelemetry(current: WorkspaceTelemetry, incoming: WorkspaceT
   if (!currentChain || !incomingChain) return Boolean(incomingChain) || !currentChain;
   if (currentChain.id !== incomingChain.id || currentChain.state !== incomingChain.state) return true;
   return incomingChain.current >= currentChain.current;
+}
+
+function formatChainCountdown(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function readChainAlertKey(storageKey: string): string | null {
+  try { return window.localStorage.getItem(storageKey); }
+  catch { return null; }
+}
+
+function saveChainAlertKey(storageKey: string, eventKey: string): void {
+  try { window.localStorage.setItem(storageKey, eventKey); }
+  catch { /* The persistent shell ref still deduplicates this page lifetime. */ }
 }
