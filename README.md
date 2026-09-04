@@ -89,11 +89,12 @@ expired-holiday, quiet-hour, deduplication, reminder, and interval controls.
 The service worker can show these alerts while Chainward is closed, provided
 the browser or installed web app is still permitted to run notifications.
 
-Hosted deployments require HTTPS, PostgreSQL, and a scheduler
-for `/api/notifications/dispatch`; `vercel.json` configures a one-minute Vercel
-cron. `CRON_SECRET` is strongly recommended; a durable one-run-per-minute
-database reservation bounds safe operation when it is absent. Push endpoints
-and browser key material are encrypted at rest. Delivery
+Hosted deployments require HTTPS, PostgreSQL, and a one-minute scheduler for
+`/api/notifications/dispatch`. Vercel Hobby permits only daily cron jobs, which
+is not safe for a chain timer; use Vercel Pro cron or an external scheduler for
+closed-app delivery. `CRON_SECRET` is strongly recommended; a durable
+one-run-per-minute database reservation bounds safe operation when it is
+absent. Push endpoints and browser key material are encrypted at rest. Delivery
 event keys are stored separately to suppress duplicates across cron retries.
 Every member dispatch rechecks stored faction roles before including member
 activity. Each current roster member also has a
