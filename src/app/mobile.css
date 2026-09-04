@@ -11,7 +11,9 @@
 /* These elements exist at every width but only become visible or condensed as
    space runs out. Keeping their base state here avoids route-specific mobile
    navigation and provenance styles drifting apart. */
-.mobile-tabbar { display: none; }
+.mobile-tabbar,
+.mobile-data-cards,
+.mobile-sort-control { display: none; }
 :root {
   --mobile-safe-area-top: env(safe-area-inset-top, 0px);
   --mobile-safe-area-right: env(safe-area-inset-right, 0px);
@@ -672,8 +674,29 @@
   .reward-console__identity h1 { font-size: 21px; }
   .reward-console__actions .button { flex: 1; justify-content: center; }
   .reward-console__grid { min-height: 0; grid-template-columns: 1fr; }
-  .reward-console .reward-library { max-height: 260px; }
+  .reward-console .reward-library { max-height: none; }
   .reward-console .reward-library > header { min-height: 56px; }
+  .reward-console .reward-library__list {
+    display: flex;
+    min-height: 0;
+    flex: 0 0 auto;
+    gap: 9px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 10px 10px;
+    scroll-padding-inline: 10px;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: none;
+  }
+  .reward-console .reward-library__list::-webkit-scrollbar { display: none; }
+  .reward-console .reward-library__item {
+    width: min(250px, 76vw);
+    min-height: 58px;
+    flex: 0 0 min(250px, 76vw);
+    margin: 10px 0 0;
+    scroll-snap-align: start;
+  }
+  .reward-console .reward-library__empty { width: 100%; min-height: 96px; }
 
   .reward-editor__top { align-items: stretch; padding: 13px 15px; }
   .reward-editor__identity h2 { white-space: normal; }
@@ -1016,10 +1039,13 @@
 
   .page-header__actions,
   .dashboard-greeting__actions,
-  .member-report-hero__actions { display: grid; grid-template-columns: 1fr; }
+  .member-report-hero__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page-header__actions > *,
   .dashboard-greeting__actions > *,
   .member-report-hero__actions > * { width: 100%; }
+  .page-header__actions > :only-child,
+  .dashboard-greeting__actions > :only-child,
+  .member-report-hero__actions > :only-child { grid-column: 1 / -1; }
 
   .service-summary__facts { grid-template-columns: 1fr; }
   .service-summary__facts > div { border-right: 0; }
@@ -1093,6 +1119,9 @@
   .faction-selector__copy strong { max-width: 28vw; }
 
   .app-shell .app-scroll > .page-content { padding-inline: max(10px, var(--mobile-safe-area-left)) max(10px, var(--mobile-safe-area-right)); }
+  .page-header__actions,
+  .dashboard-greeting__actions,
+  .member-report-hero__actions { grid-template-columns: 1fr; }
   .reward-tier-row { grid-template-columns: 1fr; }
   .reward-tier-row > label,
   .reward-tier-row .tier-amount,
@@ -1123,7 +1152,7 @@
    icon-first grammar as native mobile navigation. The licence queue becomes
    a vertical review deck instead of exposing a clipped desktop table. */
 @media (max-width: 760px) {
-  .app-shell:has(.workspace-view-nav) { --mobile-status-banner-height: 62px; --workspace-strip-height: 62px; }
+  .app-shell:has(.workspace-view-nav) { --mobile-status-banner-height: 58px; --workspace-strip-height: 58px; }
   .workspace-view-nav { min-height: var(--workspace-strip-height); }
   .workspace-view-nav__inner { width: 100%; padding: 0; }
   .workspace-view-nav__item {
@@ -1134,7 +1163,7 @@
     border-radius: 0;
     -webkit-tap-highlight-color: transparent;
   }
-  .workspace-view-nav__item > span { width: 28px; height: 28px; }
+  .workspace-view-nav__item > span { width: 26px; height: 26px; }
   .workspace-view-nav__item small { max-width: 100%; font-size: 9.5px !important; line-height: 1.15 !important; }
   .workspace-view-nav__item::after { right: 24%; left: 24%; }
 
@@ -1272,4 +1301,223 @@
   .app-shell:has(.workspace-view-nav) { --mobile-status-banner-height: 54px; --workspace-strip-height: 54px; }
   .workspace-view-nav__item { flex-direction: row; gap: 5px; }
   .workspace-view-nav__item > span { width: 24px; height: 24px; }
+}
+
+/* Mobile data records -------------------------------------------------------
+   Chain contributors, completed chains, and payout records carry too much
+   meaning for a clipped desktop row. Their phone presentation keeps the same
+   filters and pagination, then groups each record into a readable audit card. */
+@media (max-width: 760px) {
+  .mobile-sort-control {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 46px;
+    flex: 1 1 100%;
+    align-items: center;
+    gap: 9px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: #0c1114;
+    color: #77848c;
+  }
+  .mobile-sort-control select {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #c6ced2;
+    font-family: inherit;
+  }
+
+  .data-section:has(.contribution-table) > .table-scroll,
+  .chain-history-page .data-section:has(.history-table) > .table-scroll,
+  .professional-payout-ledger > .table-scroll {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+  .contribution-table,
+  .history-table,
+  .professional-payout-ledger .payout-ledger-table { display: none; }
+
+  .mobile-data-cards {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 11px;
+    list-style: none;
+  }
+  .mobile-data-cards > li {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #2d3740;
+    border-radius: 14px;
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, .026), transparent 46%),
+      #0f1519;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, .2), inset 0 1px rgba(255, 255, 255, .018);
+  }
+  .mobile-data-cards :where(header, dl, dt, dd, p) { margin: 0; }
+  .mobile-data-cards dt {
+    color: #6f7c84;
+    font-size: 9.5px;
+    font-weight: 720;
+    letter-spacing: .62px;
+    text-transform: uppercase;
+  }
+  .mobile-data-cards dd {
+    min-width: 0;
+    color: #d7dee1;
+    font-size: 13px;
+    font-weight: 660;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-record-action {
+    display: flex;
+    min-height: 45px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 14px;
+    border-top: 1px solid #273139;
+    color: #aab6bc;
+    font-size: 11.5px;
+    font-weight: 650;
+    text-decoration: none;
+  }
+  .mobile-record-action span,
+  .mobile-record-action svg { color: var(--accent); }
+
+  .contribution-mobile-card { padding: 14px; }
+  .contribution-mobile-card > header {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+  }
+  .contribution-mobile-card > header .rank { width: 30px; height: 30px; }
+  .contribution-mobile-card > header .member-cell { min-width: 0; }
+  .contribution-mobile-card > header .member-status { justify-self: end; }
+  .contribution-mobile-card > dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin-top: 13px;
+    overflow: hidden;
+    border: 1px solid #28323a;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, .12);
+  }
+  .contribution-mobile-card > dl > div {
+    display: flex;
+    min-height: 59px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 9px 11px;
+    border-right: 1px solid #28323a;
+  }
+  .contribution-mobile-card > dl > div:nth-child(even) { border-right: 0; }
+  .contribution-mobile-card > dl > .contribution-mobile-card__wide {
+    grid-column: 1 / -1;
+    border-top: 1px solid #28323a;
+    border-right: 0;
+  }
+  .contribution-mobile-card__wide dd { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 10px; }
+  .contribution-mobile-card__wide .mini-progress { width: 100%; }
+  .contribution-mobile-card > footer {
+    display: flex;
+    min-height: 55px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 13px -14px -14px;
+    padding: 8px 14px;
+    border-top: 1px solid #28323a;
+    background: rgba(var(--accent-rgb), .018);
+  }
+  .contribution-mobile-card > footer > span:first-child { color: #748089; font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+  .contribution-mobile-card > footer .reward-amount { margin-left: auto; }
+
+  .history-mobile-card > header {
+    display: flex;
+    min-height: 53px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #28323a;
+  }
+  .history-mobile-card > p { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px 5px; }
+  .history-mobile-card > p strong { color: #d9dfe2; font-size: 13px; }
+  .history-mobile-card > p span { color: #77838b; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .history-mobile-card > dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 7px 14px 13px;
+    overflow: hidden;
+    border: 1px solid #28323a;
+    border-radius: 10px;
+  }
+  .history-mobile-card > dl > div { display: flex; min-height: 62px; flex-direction: column; justify-content: center; gap: 4px; padding: 9px 11px; border-right: 1px solid #28323a; border-bottom: 1px solid #28323a; }
+  .history-mobile-card > dl > div:nth-child(even) { border-right: 0; }
+  .history-mobile-card > dl > div:nth-last-child(-n + 2) { border-bottom: 0; }
+  .history-mobile-card .reward-amount { align-items: flex-start; }
+
+  .payout-mobile-card { position: relative; }
+  .payout-mobile-card::before { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #607079; content: ""; }
+  .payout-mobile-card--paid::before { background: var(--success); }
+  .payout-mobile-card--approved::before { background: #62b8e8; }
+  .payout-mobile-card--pending::before { background: var(--warning); }
+  .payout-mobile-card--held::before { background: var(--danger); }
+  .payout-mobile-card > header {
+    display: flex;
+    min-height: 59px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 13px 10px 15px;
+    border-bottom: 1px solid #28323a;
+  }
+  .payout-mobile-card > header .ledger-member { min-width: 0; }
+  .payout-mobile-card > header .payout-badge { flex: 0 0 auto; }
+  .payout-mobile-card__decision {
+    display: flex;
+    min-height: 72px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 11px 14px 11px 16px;
+  }
+  .payout-mobile-card__decision > span { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .payout-mobile-card__decision > span small { overflow: hidden; max-width: 40vw; color: #75828a; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .payout-mobile-card__decision .reward-amount { flex: 0 0 auto; }
+  .payout-mobile-card > dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 14px 13px 16px;
+    overflow: hidden;
+    border: 1px solid #28323a;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, .1);
+  }
+  .payout-mobile-card > dl > div { display: flex; min-height: 68px; min-width: 0; flex-direction: column; justify-content: center; gap: 5px; padding: 9px 10px; border-right: 1px solid #28323a; }
+  .payout-mobile-card > dl > div:last-child { border-right: 0; }
+  .payout-mobile-card > dl dd { overflow: hidden; font-weight: 560; }
+  .payout-mobile-card > dl .ledger-processor { max-width: 100%; }
+  .payout-mobile-card > dl .torn-user-link__copy { min-width: 0; }
+  .payout-mobile-card > dl .torn-user-link__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (max-width: 430px) {
+  .mobile-data-cards { gap: 9px; padding: 10px; }
+  .contribution-mobile-card > header { grid-template-columns: 30px minmax(0, 1fr); }
+  .contribution-mobile-card > header .member-status,
+  .contribution-mobile-card > header > .muted-value { grid-column: 2; justify-self: start; }
+  .payout-mobile-card > dl { grid-template-columns: 1fr; }
+  .payout-mobile-card > dl > div { border-right: 0; border-bottom: 1px solid #28323a; }
+  .payout-mobile-card > dl > div:last-child { border-bottom: 0; }
 }

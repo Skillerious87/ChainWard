@@ -56,12 +56,19 @@ export function ContributionTable({ members, title = "Chain contribution", compa
     setSortDirection(nextKey === "name" ? "asc" : "desc");
   }
 
+  function changeMobileSort(value: string): void {
+    const [nextKey, nextDirection] = value.split(":") as [SortKey, SortDirection];
+    setSortKey(nextKey);
+    setSortDirection(nextDirection);
+  }
+
   return (
     <section className="data-section">
       <div className="section-heading section-heading--table">
         <div><h2>{title}</h2><p>{members.length} contributors returned by Torn’s chain report</p></div>
         <div className="table-tools">
           <label className="search-field"><Search size={15} /><span className="sr-only">Search members</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search member or ID" /></label>
+          <label className="mobile-sort-control"><ChevronsUpDown size={15} /><span className="sr-only">Sort contributors</span><select value={`${sortKey}:${sortDirection}`} onChange={(event) => changeMobileSort(event.target.value)}><option value="rank:asc">Contributor rank</option><option value="hits:desc">Most chain hits</option>{!compact && <option value="contribution:desc">Highest contribution</option>}<option value="respect:desc">Most respect</option><option value="name:asc">Member name</option></select></label>
           <div className="menu-control">
             <button className={`button button--quiet${statusFilter !== "All" ? " button--active" : ""}`} onClick={() => setFilterOpen((value) => !value)} aria-expanded={filterOpen}><SlidersHorizontal size={15} /> Filter{statusFilter !== "All" ? " · On" : ""}</button>
             {filterOpen && <><button className="menu-control__scrim" aria-label="Close filters" onClick={() => setFilterOpen(false)} /><div className="filter-popover"><div><strong>Torn status</strong><small>Filter the joined faction roster</small></div>{statuses.map((status) => <button key={status} onClick={() => { setStatusFilter(status); setFilterOpen(false); }}><span>{status}</span>{statusFilter === status && <Check size={13} />}</button>)}</div></>}
@@ -88,6 +95,23 @@ export function ContributionTable({ members, title = "Chain contribution", compa
             {!compact && <td data-label="Torn status">{member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Unavailable</span>}</td>}
           </tr>)}</tbody>
         </table>
+        <ol className="mobile-data-cards contribution-mobile-list" aria-label="Chain contributors">
+          {renderedMembers.map((member) => <li key={member.tornId} className="contribution-mobile-card">
+            <header>
+              <span className={`rank${member.rank <= 3 ? " rank--top" : ""}`} aria-label={`Rank ${member.rank}`}>{member.rank}</span>
+              <TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail="View Torn profile" />
+              {!compact && (member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Unavailable</span>)}
+            </header>
+            <dl>
+              <div><dt>Chain hits</dt><dd>{member.hits.toLocaleString()}</dd></div>
+              <div><dt>Respect</dt><dd>{member.respect.toFixed(2)}</dd></div>
+              {!compact && <div className="contribution-mobile-card__wide"><dt>Contribution</dt><dd><span>{member.contribution.toFixed(1)}%</span><span className="mini-progress"><i style={{ width: `${Math.min(member.contribution, 100)}%` }} /></span></dd></div>}
+            </dl>
+            {rewardColumnVisible && <footer><span>Member reward</span>{rewards
+              ? <RewardAmount amount={rewards[member.tornId]?.amount ?? 0} unit={rewardUnit ?? "units"} detail={rewards[member.tornId]?.tierLabel ?? "No matching tier"} paid={payoutStatus === "PAID"} size="compact" />
+              : <span className="reward-pending"><strong>Not calculated</strong><small>Review reward setup</small></span>}</footer>}
+          </li>)}
+        </ol>
         {visibleMembers.length === 0 && <div className="table-empty">{query ? `No members match “${query}”.` : emptyMessage}</div>}
       </div>
       <div className="table-footer"><span>Showing {renderedMembers.length} of {visibleMembers.length} verified contributors</span>{compact && visibleMembers.length > 6 && <button onClick={() => setExpanded((value) => !value)}>{expanded ? "Show leading contributors" : "View all contributors"} →</button>}</div>
