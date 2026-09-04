@@ -49,6 +49,11 @@ import { AboutDialog } from "@/components/shell/about-dialog";
 import { ProfileMenu } from "@/components/shell/profile-menu";
 import { NavigationBeacon, publishNavigationState, RouteProgress } from "@/components/shell/route-progress";
 import { ServiceStateDrawer } from "@/components/shell/service-state-drawer";
+import {
+  hasWorkspaceSectionNavigation,
+  WorkspaceSectionNavigation,
+  WorkspaceSectionNavigationProvider,
+} from "@/components/shell/workspace-section-navigation";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Spinner } from "@/components/ui/spinner";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
@@ -165,6 +170,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const workspaceLocked = !workspaceAuthorized;
   const ownerAccess = currentUser.isPlatformAdmin && currentUser.tornUserId === PLATFORM_OWNER.tornUserId;
   const adminRoute = ownerAccess && (pathname === "/admin" || pathname.startsWith("/admin/"));
+  const workspaceNavigationRoute = hasWorkspaceSectionNavigation(pathname);
   const visibleNavigation = navigation
     .filter((group) => group.label !== "Platform" || ownerAccess)
     .map((group) => ({ ...group, items: group.items.map((item) => {
@@ -556,6 +562,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
 
       {mobileOpen && <button className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />}
 
+      <WorkspaceSectionNavigationProvider pathname={pathname}>
       <AdminWorkspaceNavigationProvider active={adminRoute}>
       <div className="app-main">
         <header className="topbar">
@@ -625,7 +632,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           </div>
         </header>
 
-        {adminRoute ? <AdminWorkspaceNavigation /> : (
+        {adminRoute ? <AdminWorkspaceNavigation /> : workspaceNavigationRoute ? <WorkspaceSectionNavigation pathname={pathname} /> : (
           <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status">
             <span className="data-source-banner__label">{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>
             <span className="data-source-banner__message" title={liveTelemetry.message}>{liveTelemetry.message}</span>
@@ -643,6 +650,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
         </div>
       </div>
       </AdminWorkspaceNavigationProvider>
+      </WorkspaceSectionNavigationProvider>
 
       <nav className="mobile-tabbar" aria-label="Mobile workspace navigation">
         {mobileNavigation.map((item) => {

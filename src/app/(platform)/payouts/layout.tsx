@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { PayoutWorkspaceNavigation } from "@/components/rewards/payout-workspace-navigation";
 import { ExportButton } from "@/components/ui/action-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireLicensedPage } from "@/lib/licensing/guards";
@@ -9,7 +8,7 @@ export const metadata: Metadata = { title: "Payout ledger" };
 
 export default async function PayoutsLayout({ children }: { children: React.ReactNode }) {
   await requireLicensedPage();
-  const { corrections, ledger, recipientCount } = await getPayoutWorkspace();
+  const { ledger } = await getPayoutWorkspace();
   const exportRows = ledger.entries.map((entry) => ({
     chainId: entry.chainId,
     tornUserId: entry.tornUserId,
@@ -31,11 +30,6 @@ export default async function PayoutsLayout({ children }: { children: React.Reac
         title="Payout ledger"
         description="Reconcile reward decisions, member liability, payment acknowledgements, and settlement corrections without losing the audit trail."
         actions={<ExportButton filename="chainward-payout-ledger.csv" label="Export complete ledger" rows={exportRows} />}
-      />
-      <PayoutWorkspaceNavigation
-        registerCount={ledger.entries.length}
-        recipientCount={recipientCount}
-        correctionCount={corrections.length}
       />
       <div className="payout-workspace__view">{children}</div>
     </div>

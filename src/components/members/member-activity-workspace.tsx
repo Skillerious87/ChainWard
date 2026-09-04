@@ -12,12 +12,10 @@ import {
   Clock3,
   Eye,
   FileUser,
-  LayoutDashboard,
   ListFilter,
   RefreshCw,
   Repeat2,
   Search,
-  Settings2,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -29,6 +27,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { updateMemberActivity, updateMemberActivityPolicy } from "@/app/(platform)/members/actions";
+import { useWorkspaceSectionNavigation } from "@/components/shell/workspace-section-navigation";
 import { ExportButton } from "@/components/ui/action-controls";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
@@ -65,11 +64,12 @@ interface MemberActivityWorkspaceProps {
 
 export function MemberActivityWorkspace({ rosterResult, telemetry, activity, canManage }: MemberActivityWorkspaceProps) {
   const router = useRouter();
+  const { view: workspaceViewValue, selectView: selectWorkspaceSection } = useWorkspaceSectionNavigation("members");
+  const workspaceView = isWorkspaceView(workspaceViewValue) ? workspaceViewValue : "overview";
   const members = rosterResult.data;
   const faction = telemetry.faction;
   const parsedCheckedAt = Date.parse(rosterResult.checkedAt);
   const checkedAt = Math.floor((Number.isNaN(parsedCheckedAt) ? Date.now() : parsedCheckedAt) / 1_000);
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("overview");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ActivityView>("all");
   const [position, setPosition] = useState("All positions");
@@ -130,33 +130,32 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
 
   useEffect(() => {
     const parameters = new URLSearchParams(window.location.search);
-    const requestedSection = parameters.get("section");
     const requestedView = parameters.get("view");
     const timer = window.setTimeout(() => {
-      if (isWorkspaceView(requestedSection)) setWorkspaceView(requestedSection);
       if (isActivityView(requestedView)) {
         setView(requestedView);
-        if (!isWorkspaceView(requestedSection)) setWorkspaceView("roster");
+        if (!parameters.get("section")) selectWorkspaceSection("roster");
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [selectWorkspaceSection]);
 
   function selectWorkspaceView(next: WorkspaceView): void {
-    setWorkspaceView(next);
-    const parameters = new URLSearchParams(window.location.search);
-    parameters.set("section", next);
-    window.history.replaceState(null, "", `${window.location.pathname}?${parameters.toString()}`);
+    selectWorkspaceSection(next);
+    if (next !== "roster") {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("view");
+      window.history.replaceState(null, "", nextUrl);
+    }
   }
 
   function selectActivityView(next: ActivityView): void {
     setView(next);
     setRosterPage(1);
-    setWorkspaceView("roster");
-    const parameters = new URLSearchParams(window.location.search);
-    parameters.set("section", "roster");
-    parameters.set("view", next);
-    window.history.replaceState(null, "", `${window.location.pathname}?${parameters.toString()}`);
+    selectWorkspaceSection("roster");
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("view", next);
+    window.history.replaceState(null, "", nextUrl);
   }
 
   function inspect(member: TornRosterMember): void {
@@ -238,8 +237,6 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
       </>}
     />
 
-    <WorkspaceNavigation active={workspaceView} memberCount={members.length} attentionCount={summary.attention} periodCount={activity.inactivityPeriods.length} thresholdDays={thresholdDays} onSelect={selectWorkspaceView} />
-
     <section id="members-panel-overview" className="member-workspace-panel" role="tabpanel" aria-labelledby="members-tab-overview" hidden={workspaceView !== "overview"}>
       <section className={`member-activity-brief${summary.critical ? " member-activity-brief--critical" : summary.attention ? " member-activity-brief--attention" : ""}`}>
         <span><Activity size={22} /></span>
@@ -282,16 +279,6 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
       {selected && <div className="member-activity-editor"><div className="member-activity-editor__identity"><TornUserLink name={selected.name} tornUserId={selected.tornId} detail={`${selected.position || "Unassigned"} · ${selected.lastAction}`} /></div>{canManage ? <><div className="member-activity-state-options">{([ ["STANDARD", ShieldCheck, "Standard", "Use the saved owner inactivity threshold."], ["HOLIDAY", Umbrella, "On holiday", "Exclude from inactivity alerts until return."], ["WATCH", Eye, "Watch", "Keep visible for deliberate owner follow-up."] ] as const).map(([value, Icon, label, detail]) => <button type="button" key={value} aria-pressed={draftState === value} className={draftState === value ? "member-activity-state-option--active" : undefined} onClick={() => setDraftState(value)}><span><Icon size={16} /></span><p><strong>{label}</strong><small>{detail}</small></p>{draftState === value && <Check size={14} />}</button>)}</div>{draftState === "HOLIDAY" && <label className={`member-activity-date${holidayDateInvalid ? " member-activity-date--invalid" : ""}`}><span>Protected through <small>Optional</small></span><input type="date" min={utcDateInputValue(new Date())} value={holidayUntil} aria-invalid={holidayDateInvalid || undefined} onChange={(event) => setHolidayUntil(event.target.value)} /><small>{holidayDateInvalid ? "Choose today or a future return date." : "The selected calendar date is protected in UTC. Leave blank for an open-ended exemption."}</small></label>}<label className="member-activity-note"><span>Internal activity note <small>{note.length}/500</small></span><textarea value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} placeholder={draftState === "HOLIDAY" ? "Reason or return context…" : draftState === "WATCH" ? "What should leaders follow up on?" : "Optional note about returning to standard policy…"} /></label><div className="access-safety-note"><ShieldCheck size={15} /><p><strong>Verified write boundary</strong><span>The server rechecks your member-management permission, faction, and current roster before saving.</span></p></div></> : <div className="member-activity-readonly"><ShieldCheck size={16} /><p><strong>Read-only activity access</strong><span>An Administrator or platform owner can change holiday, watch, and alert-policy records.</span></p></div>}</div>}
     </Dialog>
   </div>;
-}
-
-function WorkspaceNavigation({ active, memberCount, attentionCount, periodCount, thresholdDays, onSelect }: { active: WorkspaceView; memberCount: number; attentionCount: number; periodCount: number; thresholdDays: number; onSelect: (view: WorkspaceView) => void }) {
-  const items = [
-    { id: "overview" as const, icon: LayoutDashboard, label: "Overview", detail: "Posture and follow-up", value: attentionCount ? `${attentionCount} review` : "Clear" },
-    { id: "roster" as const, icon: UsersRound, label: "Roster", detail: "Search and manage", value: String(memberCount) },
-    { id: "patterns" as const, icon: CalendarRange, label: "Patterns", detail: "Periods and trends", value: String(periodCount) },
-    { id: "controls" as const, icon: Settings2, label: "Controls", detail: "Policy and audit", value: `${thresholdDays}d` },
-  ];
-  return <nav className="member-workspace-nav" role="tablist" aria-label="Members workspace views">{items.map((item) => { const Icon = item.icon; return <button id={`members-tab-${item.id}`} key={item.id} type="button" role="tab" aria-selected={active === item.id} aria-controls={`members-panel-${item.id}`} className={active === item.id ? "member-workspace-nav__active" : undefined} onClick={() => onSelect(item.id)}><span><Icon size={17} /></span><p><strong>{item.label}</strong><small>{item.detail}</small></p><em>{item.value}</em></button>; })}</nav>;
 }
 
 function InactivityHistory({ periods, checkedAt, databaseAvailable }: { periods: MemberInactivityPeriod[]; checkedAt: string; databaseAvailable: boolean }) {

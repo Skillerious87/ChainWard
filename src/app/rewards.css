@@ -660,53 +660,10 @@
 :root.reduced-motion .payout-lifecycle__bar i,
 :root.reduced-motion .professional-payout-ledger .payout-ledger-table tbody tr { transition: none; }
 
-/* Payout workspace navigation and register ---------------------------------
-   The ledger reads as one operating surface: section navigation, intelligence,
-   register, and supporting records share dividers instead of becoming a stack
-   of unrelated cards. */
+/* Payout workspace and register --------------------------------------------
+   The ledger reads as one operating surface: intelligence, register, and
+   supporting records share dividers instead of becoming unrelated cards. */
 .payout-workspace-section { scroll-margin-top: 82px; }
-.payout-workspace-nav {
-  position: sticky;
-  z-index: 12;
-  top: 8px;
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  overflow: hidden;
-  border-block: 1px solid #2c363d;
-  background: rgba(10, 14, 17, .92);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
-  backdrop-filter: blur(16px) saturate(1.15);
-}
-.payout-workspace-nav__sections,
-.payout-workspace-nav__routes { display: flex; min-width: 0; align-items: center; }
-.payout-workspace-nav__sections { align-self: stretch; overflow-x: auto; scrollbar-width: none; }
-.payout-workspace-nav__sections::-webkit-scrollbar { display: none; }
-.payout-workspace-nav__sections a,
-.payout-workspace-nav__routes a {
-  display: inline-flex;
-  min-width: max-content;
-  align-items: center;
-  gap: 7px;
-  color: #7f8b93;
-  font-size: 11px;
-  font-weight: 640;
-  text-decoration: none;
-  transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
-}
-.payout-workspace-nav__sections a { position: relative; min-height: 100%; padding: 0 14px; }
-.payout-workspace-nav__sections a::after { position: absolute; right: 14px; bottom: -1px; left: 14px; height: 2px; border-radius: 2px 2px 0 0; background: transparent; content: ""; }
-.payout-workspace-nav__sections a:hover,
-.payout-workspace-nav__routes a:hover { color: #d5ddda; }
-.payout-workspace-nav__sections .payout-workspace-nav__active { background: linear-gradient(180deg, transparent, rgba(var(--accent-rgb), .045)); color: var(--accent); }
-.payout-workspace-nav__sections .payout-workspace-nav__active::after { background: var(--accent); }
-.payout-workspace-nav__sections small { min-width: 21px; padding: 2px 5px; border-radius: 999px; background: #182027; color: #77848d; font-size: 9px; text-align: center; }
-.payout-workspace-nav__active small { background: rgba(var(--accent-rgb), .11); color: var(--accent); }
-.payout-workspace-nav__routes { gap: 2px; padding-right: 8px; }
-.payout-workspace-nav__routes a { min-height: 32px; padding: 0 9px; border-radius: 7px; }
-.payout-workspace-nav__routes a:hover { background: rgba(255, 255, 255, .035); }
 
 .payout-intelligence {
   border-right: 0;
@@ -767,8 +724,6 @@
 .payout-corrections__list > .payout-support-empty { border: 0; border-radius: 0; background: transparent; }
 
 @media (max-width: 1050px) {
-  .payout-workspace-nav__routes { display: none; }
-  .payout-workspace-nav__sections { width: 100%; }
   .payout-ledger-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .payout-ledger-filters label select { width: 100%; min-width: 0 !important; }
   .payout-filter-reset { grid-column: 1 / -1; width: fit-content; margin-left: 0; }
@@ -777,9 +732,6 @@
 }
 
 @media (max-width: 620px) {
-  .payout-workspace-nav { top: 4px; }
-  .payout-workspace-nav__sections a { padding-inline: 11px; }
-  .payout-workspace-nav__sections a::after { right: 11px; left: 11px; }
   .payout-ledger-toolbar__primary { align-items: stretch; flex-direction: column; }
   .payout-ledger-export { width: 100%; justify-content: center; }
   .payout-ledger-filters { grid-template-columns: 1fr 1fr; }

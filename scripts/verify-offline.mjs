@@ -222,8 +222,8 @@ async function run() {
     check("dashboard shows the fixture faction", dashboard.html.includes("Chainward Test Faction"));
     check("top bar exposes a labelled server check with its timestamp", dashboard.html.includes("Offline fixture") && dashboard.html.includes("Checked "));
     check("shell resolves the saved rail width before paint", dashboard.html.includes('data-sidebar='));
-    check("workspace scrolls inside the shell, not the document", dashboard.html.includes('class="app-scroll"'), "the top bar and provenance banner must stay outside the scroll region");
-    check("provenance banner precedes the scroll region", dashboard.html.indexOf("data-source-banner") < dashboard.html.indexOf('class="app-scroll"'));
+    check("workspace scrolls inside the shell, not the document", dashboard.html.includes('class="app-scroll"'), "the top bar and section navigation must stay outside the scroll region");
+    check("section navigation precedes the scroll region", dashboard.html.indexOf("workspace-view-nav") < dashboard.html.indexOf('class="app-scroll"'));
 
     const rewards = await getRoute("/rewards", session.cookie);
     check("reward console renders", rewards.html.includes("reward-console") && rewards.html.includes("Scheme library"));
@@ -290,9 +290,9 @@ async function run() {
     const guestApproval = await getRoute("/unlock", guestSession.cookie);
     check("the waiting member sees a recorded approval request", guestApproval.html.includes("Approval request sent") && guestApproval.html.includes("Approval request recorded"));
     const factionApprovals = await getRoute("/faction", session.cookie);
-    check("the faction administrator sees the waiting member", factionApprovals.html.includes("Member approvals") && factionApprovals.html.includes("Nova Chain") && factionApprovals.html.includes("Review access"));
+    check("the licensed faction workspace sees the waiting member", factionApprovals.html.includes("Member approvals") && factionApprovals.html.includes("Nova Chain") && (factionApprovals.html.includes("Review access") || factionApprovals.html.includes("Administrator only")));
     const ownerApprovals = await getRoute("/admin", owner.cookie);
-    check("the owner console surfaces the faction member queue", ownerApprovals.html.includes("admin-member-approvals") && ownerApprovals.html.includes("Nova Chain") && ownerApprovals.html.includes("Open faction access"));
+    check("the owner console surfaces the faction member queue", ownerApprovals.html.includes("admin-member-control") && ownerApprovals.html.includes("Nova Chain") && ownerApprovals.html.includes("Awaiting review"));
     const departedSession = await openOfflineSession("departed");
     const departedDashboard = await getRoute("/dashboard", departedSession.cookie);
     check("a previously assigned player who left the Torn roster is denied", redirectTarget(departedDashboard).includes("/unlock"), `status ${departedDashboard.status} target "${redirectTarget(departedDashboard)}"`);
