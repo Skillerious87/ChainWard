@@ -34,7 +34,7 @@ describe("current actor", () => {
     expect(getMyProfileDetails).not.toHaveBeenCalled();
   });
 
-  it("keeps the trusted identity when Torn has no profile image", async () => {
+  it("keeps the trusted identity and refreshes sessions without a stored image", async () => {
     const getMyProfile = vi.fn();
     const getMyProfileDetails = vi.fn().mockResolvedValue({
       profile: { id: 123_456, name: "Verified member", image: null },
@@ -55,7 +55,7 @@ describe("current actor", () => {
       profileImageUrl: null,
     });
     expect(getMyProfile).not.toHaveBeenCalled();
-    expect(getMyProfileDetails).not.toHaveBeenCalled();
+    expect(getMyProfileDetails).toHaveBeenCalledOnce();
   });
 
   it("recovers a legacy session identity and image from the full profile", async () => {

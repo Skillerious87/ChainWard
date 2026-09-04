@@ -69,6 +69,7 @@ import type { FactionAccessSummary } from "@/lib/licensing/types";
 import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
 import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
 import {
+  ensureNotificationWorker,
   getBrowserNotificationPermission,
   isNotificationQuietTime,
   showDeviceNotification,
@@ -269,6 +270,13 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   useEffect(() => {
     applyAppearancePreferences(preferences);
   }, [preferences]);
+
+  // Registered unconditionally (not just for members who opt into push
+  // alerts) so the worker's fetch handler can cache the signed-in member's
+  // Torn profile image on-device, regardless of notification preferences.
+  useEffect(() => {
+    void ensureNotificationWorker();
+  }, []);
 
   useEffect(() => {
     latestTelemetryRef.current = liveTelemetry;

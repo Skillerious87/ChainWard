@@ -1,6 +1,66 @@
 /* Chainward's same-origin worker receives standards-based Web Push messages.
    A push event must always create a visible notification; silent background
-   work is intentionally unsupported by browsers and by Chainward. */
+   work is intentionally unsupported by browsers and by Chainward. It also
+   caches the signed-in member's own Torn profile image on-device (see the
+   fetch handler below) so the avatar survives a flaky Torn CDN and loads
+   instantly on repeat visits. */
+const AVATAR_CACHE_NAME = "chainward-avatar-cache-v1";
+const AVATAR_IMAGE_HOST = "profileimages.torn.com";
+
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  // Takes control of already-open tabs immediately, so a member does not
+  // need to reload once before their avatar starts being cached.
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.method !== "GET") return;
+  let requestUrl;
+  try { requestUrl = new URL(request.url); } catch { return; }
+  if (requestUrl.hostname !== AVATAR_IMAGE_HOST) return;
+  event.respondWith(respondWithCachedAvatar(request));
+});
+
+/* Torn's avatar CDN sends no CORS headers, so a page script can only ever
+   fetch these images as opaque, unreadable responses. Caching them here,
+   where the response is handed straight back to the <img> element instead
+   of into script, is the only place that works. Only one identity is ever
+   signed in per browser, so any entry in this cache is that member's own
+   avatar -- safe to serve as a last-known-good image if Torn's CDN is
+   briefly unreachable for a newer, not-yet-cached version of it. */
+async function respondWithCachedAvatar(request) {
+  const cache = await caches.open(AVATAR_CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
+  try {
+    const response = await fetch(request);
+    await cache.put(request, response.clone());
+    await pruneAvatarCache(cache, request.url);
+    return response;
+  } catch (error) {
+    const lastKnownGood = await mostRecentCacheEntry(cache);
+    if (lastKnownGood) return lastKnownGood;
+    throw error;
+  }
+}
+
+async function pruneAvatarCache(cache, keepUrl) {
+  const keys = await cache.keys();
+  await Promise.all(keys.filter((key) => key.url !== keepUrl).map((key) => cache.delete(key)));
+}
+
+async function mostRecentCacheEntry(cache) {
+  const keys = await cache.keys();
+  const lastKey = keys.at(-1);
+  return lastKey ? cache.match(lastKey) : undefined;
+}
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }

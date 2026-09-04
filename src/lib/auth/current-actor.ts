@@ -10,17 +10,29 @@ export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
     const connection = await getConfiguredTornConnection();
     if (!connection) return unauthenticatedActor();
 
-    if (connection.tornUserName) {
+    const storedProfileImageUrl = normalizeTornProfileImageUrl(connection.tornUserImageUrl);
+    if (connection.tornUserName && storedProfileImageUrl) {
       return {
         name: connection.tornUserName,
         tornUserId: connection.tornUserId,
         isPlatformAdmin: connection.tornUserId === PLATFORM_OWNER.tornUserId,
-        profileImageUrl: normalizeTornProfileImageUrl(connection.tornUserImageUrl),
+        profileImageUrl: storedProfileImageUrl,
       };
     }
 
     const detailedProfile = await connection.client.getMyProfileDetails().catch(() => null);
     const profileMatchesConnection = detailedProfile?.profile.id === connection.tornUserId;
+    if (connection.tornUserName) {
+      return {
+        name: connection.tornUserName,
+        tornUserId: connection.tornUserId,
+        isPlatformAdmin: connection.tornUserId === PLATFORM_OWNER.tornUserId,
+        profileImageUrl: profileMatchesConnection
+          ? normalizeTornProfileImageUrl(detailedProfile.profile.image)
+          : null,
+      };
+    }
+
     if (profileMatchesConnection) {
       return {
         name: detailedProfile.profile.name,
