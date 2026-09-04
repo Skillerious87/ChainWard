@@ -213,10 +213,12 @@ svg { display: block; }
   cursor: pointer;
 }
 .faction-monogram, .user-menu__avatar {
+  position: relative;
   display: grid;
   width: 32px;
   height: 32px;
   place-items: center;
+  overflow: hidden;
   border: 1px solid #39422f;
   border-radius: 6px;
   background: var(--accent-soft);
