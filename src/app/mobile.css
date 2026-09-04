@@ -62,7 +62,9 @@
   .topbar__menu { display: inline-grid !important; }
   .collapse-button,
   .sidebar-rail-toggle { display: none !important; }
+  .route-loading-core,
   .route-loading-core::before,
+  .view-loading__centre,
   .view-loading__centre::before { left: 0; }
 
   /* A saved collapsed preference must not collapse the contents of the drawer. */
@@ -187,7 +189,6 @@
   .upgrade-reference-row > button,
   .revoke-access-button,
   .unlock-status-reference button,
-  .login-card .connection-confirmation__reset,
   .welcome-nav__workspace,
   .data-table .sort-button,
   .platform-route-stage .torn-user-link,
@@ -256,10 +257,14 @@
   .view-loading__centre {
     padding: max(18px, var(--mobile-safe-area-top)) max(18px, var(--mobile-safe-area-right)) max(18px, var(--mobile-safe-area-bottom)) max(18px, var(--mobile-safe-area-left));
   }
+  .route-loading-core,
   .route-loading-core::before,
+  .view-loading__centre,
   .view-loading__centre::before {
     top: calc(var(--topbar-height) + var(--mobile-status-banner-height) + 2px);
+    right: 0;
     bottom: var(--mobile-bottom-nav-height);
+    left: 0;
   }
   .command-layer {
     display: flex;
@@ -569,7 +574,7 @@
   .onboarding-form-shell__topline { min-height: 42px; padding-inline: 18px; }
   .onboarding-form-shell__topline > span { font-size: 10.5px; }
   .onboarding-form-shell .connect-form { min-height: 0; padding: 20px 18px; }
-  .connect-stage--entry, .connection-confirmation { min-height: 0; }
+  .connect-stage--entry { min-height: 0; }
   .onboarding-form-shell .connect-form__heading { gap: 11px; padding-bottom: 16px; }
   .onboarding-form-shell .connect-form__heading > span { width: 38px; height: 38px; }
   .onboarding-form-shell .connect-form__heading h2 { font-size: 18px; }
@@ -579,9 +584,9 @@
   .onboarding-form-shell .api-key-field button { width: 52px; }
   .onboarding-form-shell .remember-connection { padding: 12px; }
   .onboarding-form-shell .connect-submit { min-height: 54px; font-size: 14px; }
-  .connect-requirements { margin-top: 14px; padding-top: 13px; }
-  .connect-requirements li { padding: 5px 8px; font-size: 10.5px; }
-  .connect-data-disclosure dl > div { grid-template-columns: 1fr; gap: 2px; padding-block: 8px; font-size: 10.5px; }
+  .connect-details { margin-top: 14px; }
+  .connect-details__selections li { padding: 5px 8px; font-size: 10.5px; }
+  .connect-details dl > div { grid-template-columns: 1fr; gap: 2px; padding-block: 8px; font-size: 10.5px; }
   .onboarding-form-shell > footer { padding: 13px 18px; }
 
   .onboarding-page .onboarding-journey > li { padding: 13px 0; }
@@ -598,14 +603,6 @@
   .onboarding-disclosure > footer { align-items: flex-start; flex-direction: column; gap: 7px; }
   .onboarding-footer { align-items: flex-start; flex-direction: column; gap: 9px; min-height: 0; padding: 22px 0 calc(24px + var(--mobile-safe-area-bottom)); }
 
-  .connection-confirmation__crest { width: 60px; height: 60px; }
-  .connection-confirmation__hero h2 { font-size: 22px; }
-  .connection-confirmation__identity { grid-template-columns: 1fr 1fr; }
-  .connection-confirmation__identity > div:nth-child(2) { border-right: 0; }
-  .connection-confirmation__identity > div:last-child { grid-column: 1 / -1; border-top: 1px solid #2b3731; }
-  .connection-confirmation__capabilities { grid-template-columns: 1fr 1fr; }
-  .connection-confirmation__actions { grid-template-columns: 1fr; margin-top: 20px; }
-  .connection-confirmation__actions .button { min-height: 52px; }
   .offline-test-entry > div { grid-template-columns: 1fr; }
 
   .welcome-page,
@@ -634,8 +631,7 @@
   .login-topbar__back,
   .welcome-assurance__intro > a,
   .api-key-field > small a,
-  .connect-requirements summary,
-  .connect-data-disclosure summary,
+  .connect-details summary,
   .offline-test-entry summary {
     min-width: 44px;
     min-height: 44px;
@@ -648,8 +644,7 @@
     display: inline-flex;
     align-items: center;
   }
-  .connect-requirements summary,
-  .connect-data-disclosure summary,
+  .connect-details summary,
   .offline-test-entry summary { margin-block: 0; padding-block: 0; }
   .not-found-page {
     padding-right: max(14px, var(--mobile-safe-area-right));
@@ -670,7 +665,6 @@
   .onboarding-form-shell .connect-form { padding-inline: 15px; }
   .onboarding-form-shell__topline,
   .onboarding-form-shell > footer { padding-inline: 15px; }
-  .connection-confirmation__capabilities { grid-template-columns: 1fr; }
 }
 
 /* Reward console ------------------------------------------------------------ */
@@ -891,8 +885,6 @@
     .member-activity-stats p,
     .member-activity-audit article > div > p,
     .licence-tier-card__description strong,
-    .connection-confirmation__identity dd,
-    .connection-confirmation__capabilities strong,
     .service-summary__facts dd,
     .about-dialog__facts dd
   ) {
@@ -1108,10 +1100,6 @@
   .professional-switch { grid-column: 1; }
   .tier-order { grid-area: 1 / 1; }
   .tier-actions { grid-area: 1 / 1; justify-self: end; }
-  .connection-confirmation__identity { grid-template-columns: 1fr; }
-  .connection-confirmation__identity > div { border-right: 0; border-top: 1px solid #2b3731; }
-  .connection-confirmation__identity > div:first-child { border-top: 0; }
-  .connection-confirmation__identity > div:last-child { grid-column: 1; }
 }
 
 /* Short landscape viewports need the same guarantees with less fixed chrome.

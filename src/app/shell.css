@@ -33,7 +33,10 @@
 .route-loading-core {
   position: fixed;
   z-index: 70;
-  inset: 0;
+  top: calc(var(--topbar-height) + 31px);
+  right: 0;
+  bottom: 0;
+  left: var(--rail-width);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -655,6 +658,7 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 }
 
 @media (max-width: 960px) {
+  .route-loading-core,
   .route-loading-core::before { left: 0; }
 }
 

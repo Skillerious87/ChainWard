@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   ArrowRight,
-  BadgeCheck,
   Check,
   ChevronDown,
   Eye,
@@ -12,12 +11,11 @@ import {
   KeyRound,
   Laptop,
   LockKeyhole,
-  RefreshCcw,
   ShieldCheck,
   UserRoundCog,
 } from "lucide-react";
 import type { Route } from "next";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { enterConnectedWorkspace } from "./workspace-navigation";
@@ -40,16 +38,10 @@ type ConnectionError = { message: string; code: string | null };
 const REQUIRED_SELECTIONS = ["key/info", "user/basic", "faction/basic", "chain", "chains", "chainreport", "members"] as const;
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
-  const confirmationHeadingRef = useRef<HTMLHeadingElement>(null);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<ConnectionError | null>(null);
-  const [result, setResult] = useState<ConnectionResult | null>(null);
-
-  useEffect(() => {
-    if (result) confirmationHeadingRef.current?.focus();
-  }, [result]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -76,7 +68,11 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       }
       formElement.reset();
       setVisible(false);
-      setResult(payload);
+      // Verification success and workspace entry are the same moment from the
+      // player's side: no confirmation screen sits between "Verify" and being
+      // inside the app.
+      setOpening(true);
+      enterConnectedWorkspace(connectionNextPath(payload));
     } catch (cause: unknown) {
       setError({
         message: cause instanceof Error ? cause.message : "The key could not be validated.",
@@ -101,7 +97,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       });
       const payload: unknown = await response.json();
       if (!response.ok || !isConnectionResult(payload)) throw new Error(isErrorPayload(payload) ? payload.error : "The offline session could not be opened.");
-      setResult(payload);
+      setOpening(true);
+      enterConnectedWorkspace(connectionNextPath(payload));
     } catch (cause) {
       setError({ message: cause instanceof Error ? cause.message : "The offline session could not be opened.", code: null });
     } finally {
@@ -109,58 +106,14 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     }
   }
 
-  async function resetConnection(): Promise<void> {
-    if (loading) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const response = await fetch("/api/onboarding/disconnect", { method: "POST" });
-      if (!response.ok) throw new Error("The current session could not be cleared. Please try again.");
-      setResult(null);
-      setVisible(false);
-    } catch (cause) {
-      setError({ message: cause instanceof Error ? cause.message : "The current session could not be cleared.", code: null });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const formState = result ? "verified" : loading ? "validating" : "entry";
+  const formState = loading || opening ? "validating" : "entry";
   const className = `connect-form connect-form--${formState}${offlineEnabled ? " connect-form--offline" : ""}`;
 
   return (
     <form className={className} onSubmit={submit} aria-busy={loading || opening}>
       <WorkspaceLoadingOverlay visible={opening} />
       <span className="connect-form__activity" aria-hidden="true" />
-      {result ? (
-        <section className="connection-confirmation" aria-labelledby="connection-confirmation-title">
-          <header className="connection-confirmation__hero">
-            <div className="connection-confirmation__crest" aria-hidden="true"><span><BadgeCheck size={24} /></span><i /></div>
-            <p className="connection-confirmation__eyebrow"><Check size={12} /> {result.offline ? "Offline preview verified" : "Connection verified"}</p>
-            <h2 id="connection-confirmation-title" ref={confirmationHeadingRef} tabIndex={-1}>Your workspace is ready.</h2>
-            <p>Everything checks out. Continue to your verified faction workspace.</p>
-          </header>
-
-          <dl className="connection-confirmation__identity" aria-label="Verified connection">
-            <div><dt>Signed in as</dt><dd><span>{result.player.name}</span><small>#{result.player.id}</small></dd></div>
-            <div><dt>Faction workspace</dt><dd><span>{result.faction.name}</span><small>{result.faction.tag ? `[${result.faction.tag}]` : `#${result.faction.id}`}</small></dd></div>
-          </dl>
-
-          <div className="connection-confirmation__security">
-            <span><ShieldCheck size={17} /></span>
-            <p><strong>{result.key.accessType} key approved</strong><small>{result.session.remembered ? "Securely remembered on this browser for 30 days." : "Private session secured for up to 12 hours."}</small></p>
-            <Check size={15} aria-hidden="true" />
-          </div>
-
-          {error && <div className="form-error connection-confirmation__error" role="alert"><AlertTriangle size={17} /><div><strong>Session could not be cleared</strong><span>{error.message}</span></div></div>}
-
-          <div className="connection-confirmation__actions">
-            <button type="button" className="button button--primary" disabled={loading || opening} onClick={() => { setOpening(true); enterConnectedWorkspace(connectionNextPath(result)); }}>{opening ? <Spinner size={16} label="Opening workspace" /> : null}{opening ? "Opening workspace…" : <>Open workspace <ArrowRight size={16} /></>}</button>
-            <button type="button" className="connection-confirmation__reset" disabled={loading || opening} onClick={() => void resetConnection()}>{loading ? <Spinner size={14} label="Clearing connection" /> : <RefreshCcw size={14} />} {loading ? "Clearing session…" : "Use a different key"}</button>
-          </div>
-        </section>
-      ) : (
-        <div className="connect-stage connect-stage--entry">
+      <div className="connect-stage connect-stage--entry">
           <header className="connect-form__heading">
             <p><ShieldCheck size={13} /> Secure sign in</p>
             <h2>Welcome to Chainward</h2>
@@ -180,33 +133,24 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
           {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
           <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Verifying Torn connection" /> Verifying securely…</> : <>Verify and continue <ArrowRight size={16} /></>}</button>
           <p className="connect-security-note"><LockKeyhole size={15} /><span><strong>Encrypted handoff</strong><small>Your raw key is handled server-side and never returned to browser code.</small></span></p>
-          <div className="connect-form__disclosures">
-            <details className="connect-requirements">
-              <summary><KeyRound size={14} /> Required API access <ChevronDown size={15} /></summary>
-              <p>Chainward checks these selections before opening a workspace.</p>
-              <ul>{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
-            </details>
-            <details className="connect-data-disclosure">
-              <summary><ShieldCheck size={14} /> Data protection <ChevronDown size={15} /></summary>
-              <div>
-                <p>Clear boundaries for the credential and the records created inside Chainward.</p>
-                <dl>
-              <div><dt>Stored data</dt><dd>Operational records, member reports, and awards persist in the configured Chainward database until the workspace operator removes that data. Torn roster responses are briefly cached.</dd></div>
-              <div><dt>Shared with</dt><dd>The connected faction workspace. Entries marked leadership-only are restricted to authorised member managers.</dd></div>
-              <div><dt>Purpose</dt><dd>Faction chain operations, member activity, internal personnel reports, and deliberate member recognition.</dd></div>
-              <div><dt>API key</dt><dd>Used server-side only. A temporary connection is encrypted for up to 12 hours; “Keep me signed in” stores the encrypted key server-side for up to 30 days.</dd></div>
-              <div><dt>Access requested</dt><dd>Limited Access is enough. Chainward verifies only key/info, user/basic, and faction basic, chain, chains, chainreport, and members selections.</dd></div>
-                </dl>
-              </div>
-            </details>
-          </div>
+          <details className="connect-details">
+            <summary><ShieldCheck size={14} /> Access &amp; data details <ChevronDown size={15} /></summary>
+            <div>
+              <p>Chainward checks these selections before opening a workspace, and keeps clear boundaries for everything it stores.</p>
+              <ul className="connect-details__selections">{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
+              <dl>
+                <div><dt>Stored data</dt><dd>Operational records, member reports, and awards persist in the configured Chainward database until the workspace operator removes that data. Torn roster responses are briefly cached.</dd></div>
+                <div><dt>Shared with</dt><dd>The connected faction workspace. Entries marked leadership-only are restricted to authorised member managers.</dd></div>
+                <div><dt>API key</dt><dd>Used server-side only. A temporary connection is encrypted for up to 12 hours; “Keep me signed in” stores the encrypted key server-side for up to 30 days.</dd></div>
+              </dl>
+            </div>
+          </details>
           {offlineEnabled && <details className="offline-test-entry">
             <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>
             <p>Development fixture only. Never available in production.</p>
             <div><button type="button" disabled={loading} onClick={() => void openOfflineSession("member")}><KeyRound size={14} /><span><strong>Faction tester</strong><small>Preview member access</small></span></button><button type="button" disabled={loading} onClick={() => void openOfflineSession("owner")}><UserRoundCog size={14} /><span><strong>Owner reviewer</strong><small>Preview owner access</small></span></button></div>
           </details>}
-        </div>
-      )}
+      </div>
     </form>
   );
 }
