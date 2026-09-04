@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  AlarmClock,
   ArrowRight,
   BarChart3,
   Bell,
@@ -83,6 +84,7 @@ const navigation: NavigationGroup[] = [
     label: "Chain operations",
     items: [
       { label: "Live chain", href: "/live-chain", icon: Activity, shortcut: "G L", requiresLicense: true },
+      { label: "Watch schedule", href: "/chain-watch", icon: AlarmClock, shortcut: "G W", requiresLicense: true },
       { label: "Members", href: "/members", icon: Users, shortcut: "G M", requiresLicense: true },
       { label: "Chain history", href: "/chains", icon: History, shortcut: "G H", requiresLicense: true },
       { label: "Analytics", href: "/analytics", icon: BarChart3, shortcut: "G A", requiresLicense: true },

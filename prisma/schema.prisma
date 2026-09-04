@@ -143,6 +143,8 @@ model Faction {
   auditEvents         AuditLog[]
   syncLogs            SyncLog[]
   settings            FactionSetting[]
+  chainWatchSettings  ChainWatchSettings?
+  chainWatchSlots     ChainWatchSlot[]
 }
 
 model FactionMembership {
@@ -431,4 +433,39 @@ model ApplicationSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+/**
+ * One row per faction. `roleName` lets the chain manager rename the assigned
+ * duty (default "Chain Watcher") everywhere it appears in the UI; `bufferSeconds`
+ * is the "call for a hit with this much left on the timer" threshold the
+ * schedule view highlights against the live countdown.
+ */
+model ChainWatchSettings {
+  id            String   @id @default(uuid()) @db.Uuid
+  factionId     String   @unique @db.Uuid
+  faction       Faction  @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  roleName      String   @default("Chain Watcher")
+  bufferSeconds Int      @default(120)
+  updatedAt     DateTime @updatedAt
+}
+
+/** A planned coverage window: who is responsible for keeping the chain alive
+ *  between `startAt` and `endAt`, with an optional backup for redundancy. */
+model ChainWatchSlot {
+  id                String   @id @default(uuid()) @db.Uuid
+  factionId         String   @db.Uuid
+  faction           Faction  @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  startAt           DateTime
+  endAt             DateTime
+  primaryTornUserId Int
+  primaryMemberName String
+  backupTornUserId  Int?
+  backupMemberName  String?
+  note              String?
+  createdByTornId   Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([factionId, startAt])
 }

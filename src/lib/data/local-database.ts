@@ -224,6 +224,28 @@ function initializeSchema(database: DatabaseSync): void {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS chain_watch_settings (
+      faction_id INTEGER PRIMARY KEY,
+      role_name TEXT NOT NULL DEFAULT 'Chain Watcher',
+      buffer_seconds INTEGER NOT NULL DEFAULT 120,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chain_watch_slots (
+      id TEXT PRIMARY KEY,
+      faction_id INTEGER NOT NULL,
+      start_at TEXT NOT NULL,
+      end_at TEXT NOT NULL,
+      primary_torn_user_id INTEGER NOT NULL,
+      primary_member_name TEXT NOT NULL,
+      backup_torn_user_id INTEGER,
+      backup_member_name TEXT,
+      note TEXT,
+      created_by_torn_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS licensing_audit (
       id TEXT PRIMARY KEY,
       faction_id INTEGER REFERENCES licensing_factions(faction_id) ON DELETE RESTRICT,
@@ -246,6 +268,7 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS licensing_licenses_faction ON licensing_faction_licenses(faction_id, status, expires_at);
     CREATE INDEX IF NOT EXISTS licensing_audit_recent ON licensing_audit(action, created_at DESC);
     CREATE INDEX IF NOT EXISTS chain_settlement_reverts_recent ON chain_settlement_reverts(faction_id, reverted_at DESC);
+    CREATE INDEX IF NOT EXISTS chain_watch_slots_faction_time ON chain_watch_slots(faction_id, start_at);
   `);
   ensureColumn(database, "chain_settlements", "paid_by_name", "TEXT");
 }
