@@ -52,6 +52,14 @@ export const userBasicResponseSchema = z.object({
   }),
 });
 
+export const userProfileResponseSchema = z.object({
+  profile: z.object({
+    id: z.number().int().positive(),
+    name: z.string(),
+    image: z.string().nullable(),
+  }).loose(),
+});
+
 export const factionBasicResponseSchema = z.object({
   basic: z.object({
     id: z.number().int().positive(),
@@ -190,6 +198,7 @@ export const factionMembersResponseSchema = z.object({
 
 export type KeyInfoResponse = z.infer<typeof keyInfoResponseSchema>;
 export type UserBasicResponse = z.infer<typeof userBasicResponseSchema>;
+export type UserProfileResponse = z.infer<typeof userProfileResponseSchema>;
 export type FactionBasicResponse = z.infer<typeof factionBasicResponseSchema>;
 export type OngoingChainResponse = z.infer<typeof ongoingChainResponseSchema>;
 export type ChainsResponse = z.infer<typeof chainsResponseSchema>;

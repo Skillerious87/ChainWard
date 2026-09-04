@@ -3,6 +3,22 @@ import { TornClient } from "./client";
 import { TornApiError, userFacingTornError } from "./errors";
 
 describe("TornClient", () => {
+  it("retrieves the current profile image from the public profile endpoint", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      profile: {
+        id: 3_212_954,
+        name: "Skillerious",
+        image: "https://profileimages.torn.com/skillerious.gif?v=2",
+      },
+    }));
+    const client = new TornClient({ apiKey: "profile-image-test", fetchImplementation: fetchMock });
+
+    await expect(client.getMyProfileDetails()).resolves.toMatchObject({
+      profile: { image: "https://profileimages.torn.com/skillerious.gif?v=2" },
+    });
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/v2/user/profile");
+  });
+
   it("sends the API key only in the authorization header", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({

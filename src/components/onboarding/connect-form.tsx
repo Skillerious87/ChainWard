@@ -35,7 +35,7 @@ type ConnectionResult = {
 type ConnectionError = { message: string; code: string | null };
 
 /** Mirrors the selections `validateTornConnection` requires before connecting. */
-const REQUIRED_SELECTIONS = ["key/info", "user/basic", "faction/basic", "chain", "chains", "chainreport", "members"] as const;
+const REQUIRED_SELECTIONS = ["key/info", "user/basic", "user/profile", "faction/basic", "chain", "chains", "chainreport", "members"] as const;
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
   const [visible, setVisible] = useState(false);
@@ -180,6 +180,6 @@ function errorTitle(code: string | null): string {
 function errorGuidance(code: string | null): string {
   if (code === "INVALID_KEY") return "Check for a rotated or deleted key, then copy its value again from Torn Settings → API Keys.";
   if (code === "KEY_PAUSED") return "Resume the key in Torn, or create a new Limited Access key, before retrying.";
-  if (code === "MISSING_SELECTIONS" || code === "INSUFFICIENT_PERMISSION") return "Use a Limited Access key, or a custom key containing basic, chain, chains, chainreport, and members.";
+  if (code === "MISSING_SELECTIONS" || code === "INSUFFICIENT_PERMISSION") return "Use a Limited Access key, or a custom key containing user basic and profile plus faction basic, chain, chains, chainreport, and members.";
   return "No connection was saved and no unverified Torn values will be displayed.";
 }

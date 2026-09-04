@@ -1,12 +1,14 @@
 import "server-only";
 
 import { TornClient } from "./client";
-import type { ChainReportResponse, ChainsResponse, FactionBasicResponse, FactionMembersResponse, KeyInfoResponse, OngoingChainResponse, UserBasicResponse } from "./schemas";
+import { normalizeTornProfileImageUrl } from "./profile-image";
+import type { ChainReportResponse, ChainsResponse, FactionBasicResponse, FactionMembersResponse, KeyInfoResponse, OngoingChainResponse, UserBasicResponse, UserProfileResponse } from "./schemas";
 
 const requiredFactionSelections = ["basic", "chain", "chains", "chainreport", "members"] as const;
+const requiredUserSelections = ["basic", "profile"] as const;
 
 export interface ValidatedTornConnection {
-  player: { id: number; name: string };
+  player: { id: number; name: string; imageUrl: string | null };
   faction: { id: number; name: string; tag: string };
   key: { accessType: string; hasFactionPermission: boolean; selections: string[] };
   capabilities: {
@@ -23,6 +25,7 @@ export interface ValidatedTornConnection {
 interface ConnectionClient {
   getKeyInfo(): Promise<KeyInfoResponse>;
   getMyProfile(): Promise<UserBasicResponse>;
+  getMyProfileDetails(): Promise<UserProfileResponse>;
   getFactionBasic(factionId?: number): Promise<FactionBasicResponse>;
   getCurrentChain(factionId?: number): Promise<OngoingChainResponse>;
   getCompletedChains(factionId?: number, options?: { limit?: number }): Promise<ChainsResponse>;
@@ -47,13 +50,18 @@ export async function validateTornConnectionWithClient(client: ConnectionClient)
   if (!factionId) throw new Error("The Torn account is not currently in a faction.");
 
   if (keyInfo.info.access.type === "Custom") {
-    const selected = new Set(keyInfo.info.selections.faction);
-    const missing = requiredFactionSelections.filter((name) => !selected.has(name));
+    const selectedFaction = new Set(keyInfo.info.selections.faction);
+    const selectedUser = new Set(keyInfo.info.selections.user);
+    const missing = [
+      ...requiredFactionSelections.filter((name) => !selectedFaction.has(name)).map((name) => `faction/${name}`),
+      ...requiredUserSelections.filter((name) => !selectedUser.has(name)).map((name) => `user/${name}`),
+    ];
     if (missing.length > 0) throw new MissingTornSelectionsError(missing);
   }
 
-  const [profile, faction, currentChain, completedChains, members] = await Promise.all([
+  const [profile, profileDetails, faction, currentChain, completedChains, members] = await Promise.all([
     client.getMyProfile(),
+    client.getMyProfileDetails(),
     client.getFactionBasic(factionId),
     client.getCurrentChain(),
     client.getCompletedChains(undefined, { limit: 1 }),
@@ -61,6 +69,7 @@ export async function validateTornConnectionWithClient(client: ConnectionClient)
   ]);
 
   if (profile.profile.id !== keyInfo.info.user.id) throw new Error("The API key identity response was inconsistent.");
+  if (profileDetails.profile.id !== profile.profile.id) throw new Error("The API key profile response was inconsistent.");
   if (faction.basic.id !== factionId) throw new Error("The API key faction response was inconsistent.");
   if (currentChain.chain.id < 0) throw new Error("The live-chain response was inconsistent.");
   if (!Array.isArray(members.members) || !Array.isArray(completedChains.chains)) throw new Error("A faction capability response was inconsistent.");
@@ -72,7 +81,11 @@ export async function validateTornConnectionWithClient(client: ConnectionClient)
   }
 
   return {
-    player: { id: profile.profile.id, name: profile.profile.name },
+    player: {
+      id: profile.profile.id,
+      name: profile.profile.name,
+      imageUrl: normalizeTornProfileImageUrl(profileDetails.profile.image),
+    },
     faction: { id: faction.basic.id, name: faction.basic.name, tag: faction.basic.tag },
     key: { accessType: keyInfo.info.access.type, hasFactionPermission: keyInfo.info.access.faction, selections: [...keyInfo.info.selections.faction] },
     capabilities: {

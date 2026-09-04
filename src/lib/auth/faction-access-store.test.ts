@@ -85,7 +85,7 @@ describe.sequential("faction access store", () => {
 
 function connectionFixture(): ValidatedTornConnection {
   return {
-    player: { id: 123_456, name: "Waiting member" },
+    player: { id: 123_456, name: "Waiting member", imageUrl: null },
     faction: { id: 51_393, name: "Prive Cartel", tag: "PRIVE" },
     key: { accessType: "Limited Access", hasFactionPermission: true, selections: ["basic", "chain", "chains", "chainreport", "members"] },
     capabilities: { identity: "verified", faction: "verified", liveChain: "verified", completedChains: "verified", members: "verified", chainReports: "verified" },

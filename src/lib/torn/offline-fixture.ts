@@ -27,7 +27,7 @@ export function offlineConnection(identity: OfflineIdentity): ValidatedTornConne
   const actor = OFFLINE_IDENTITIES[identity];
   return {
     apiKey: actor.apiKey,
-    player: { id: actor.id, name: actor.name },
+    player: { id: actor.id, name: actor.name, imageUrl: null },
     faction: OFFLINE_FACTION,
     key: {
       accessType: "Offline test fixture",
@@ -60,12 +60,13 @@ export function createOfflineFixtureFetch(apiKey: string): typeof fetch {
 
     if (path.endsWith("/key/info")) return json({
       info: {
-        selections: { faction: ["basic", "chain", "chains", "chainreport", "members"], user: ["basic"], key: ["info"] },
+        selections: { faction: ["basic", "chain", "chains", "chainreport", "members"], user: ["basic", "profile"], key: ["info"] },
         access: { level: 2, type: "Limited Access", faction: true, company: false },
         user: { id: actor.id, faction_id: OFFLINE_FACTION.id, company_id: null },
       },
     });
     if (path.endsWith("/user/basic")) return json({ profile: profileFor(actor.id, actor.name) });
+    if (path.endsWith("/user/profile")) return json({ profile: { id: actor.id, name: actor.name, image: null } });
     if (/\/faction(?:\/\d+)?\/basic$/.test(path)) return json({
       basic: {
         id: OFFLINE_FACTION.id,

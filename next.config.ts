@@ -13,7 +13,7 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://profileimages.torn.com",
   "font-src 'self' data:",
   `connect-src 'self'${development ? " ws: wss:" : ""}`,
   "worker-src 'self' blob:",
@@ -28,6 +28,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,
+  images: {
+    remotePatterns: [{ protocol: "https", hostname: "profileimages.torn.com", pathname: "/**" }],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "256kb",

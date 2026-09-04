@@ -13,8 +13,8 @@ describe("offline Torn fixture", () => {
 
   it("creates deterministic member and owner identities only when explicitly enabled", () => {
     expect(offlineTestModeEnabled()).toBe(true);
-    expect(offlineConnection("member").player).toEqual({ id: 9_000_001, name: "Offline Tester" });
-    expect(offlineConnection("owner").player).toEqual({ id: 3_212_954, name: "Skillerious" });
+    expect(offlineConnection("member").player).toEqual({ id: 9_000_001, name: "Offline Tester", imageUrl: null });
+    expect(offlineConnection("owner").player).toEqual({ id: 3_212_954, name: "Skillerious", imageUrl: null });
   });
 
   it("exercises all Torn-backed workspace reads without the network", async () => {
@@ -26,8 +26,9 @@ describe("offline Torn fixture", () => {
       sleep: async () => undefined,
     });
 
-    const [profile, faction, chain, history, members, report] = await Promise.all([
+    const [profile, profileDetails, faction, chain, history, members, report] = await Promise.all([
       client.getMyProfile(),
+      client.getMyProfileDetails(),
       client.getFactionBasic(),
       client.getCurrentChain(),
       client.getCompletedChains(),
@@ -36,6 +37,7 @@ describe("offline Torn fixture", () => {
     ]);
 
     expect(profile.profile.id).toBe(connection.player.id);
+    expect(profileDetails.profile.image).toBeNull();
     expect(faction.basic.id).toBe(connection.faction.id);
     expect(chain.chain.current).toBe(742);
     expect(history.chains).toHaveLength(3);

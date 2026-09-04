@@ -72,6 +72,7 @@ export async function POST(request: Request) {
         kind: "temporary",
         value: createConnectionSession(parsed.data.apiKey, connection.player.id, connection.faction.id, {
           tornUserName: connection.player.name,
+          tornUserImageUrl: connection.player.imageUrl,
           factionName: connection.faction.name,
           factionTag: connection.faction.tag,
         }),

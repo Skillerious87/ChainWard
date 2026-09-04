@@ -50,6 +50,7 @@ describe.sequential("remembered Torn connections", () => {
       apiKey,
       tornUserId: 3_212_954,
       tornUserName: "Skillerious",
+      tornUserImageUrl: "https://profileimages.torn.com/skillerious.png",
       factionId: 51_393,
       factionName: "Prive Cartel",
       factionTag: "PRIVE",
@@ -73,7 +74,7 @@ describe.sequential("remembered Torn connections", () => {
 
 function connectionFixture(): ValidatedTornConnection {
   return {
-    player: { id: 3_212_954, name: "Skillerious" },
+    player: { id: 3_212_954, name: "Skillerious", imageUrl: "https://profileimages.torn.com/skillerious.png" },
     faction: { id: 51_393, name: "Prive Cartel", tag: "PRIVE" },
     key: { accessType: "Limited Access", hasFactionPermission: true, selections: ["basic", "chain", "chains", "chainreport", "members"] },
     capabilities: {

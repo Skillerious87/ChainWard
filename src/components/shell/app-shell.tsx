@@ -60,6 +60,7 @@ import {
 } from "@/components/shell/workspace-section-navigation";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Spinner } from "@/components/ui/spinner";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { enqueueToast, notify, toastDurationMs, toastKey, type ToastDetail, type ToastQueueItem, type ToastTone } from "@/lib/client-actions";
@@ -211,7 +212,6 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const searchableItemsRef = useRef(searchableItems);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [navigating, startNavigation] = useTransition();
-  const initials = currentUser.name.slice(0, 2).toUpperCase();
   const syncing = syncLabel.startsWith("Syncing");
   const chainActive = chain?.state === "active";
   const chainStatusLabel = chainActive
@@ -671,7 +671,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
             </div>
             <div className="topbar-popover-wrap">
               <button ref={userMenuRef} className="user-menu" onClick={() => setOpenPanel(openPanel === "user" ? null : "user")} aria-label="Open user menu" aria-expanded={openPanel === "user"}>
-                <span className="user-menu__avatar">{initials}</span><span className="user-menu__copy"><strong>{currentUser.name}</strong><small>{ownerAccess ? "Platform owner" : currentUser.tornUserId ? "Faction member" : "Not connected"}</small></span><ChevronDown size={14} />
+                <span className="user-menu__avatar"><UserAvatar className="user-avatar__image" imageUrl={currentUser.profileImageUrl} name={currentUser.name} size={30} /></span><span className="user-menu__copy"><strong>{currentUser.name}</strong><small>{ownerAccess ? "Platform owner" : currentUser.tornUserId ? "Faction member" : "Not connected"}</small></span><ChevronDown size={14} />
               </button>
               {openPanel === "user" && (
                 <TopbarPopover className="topbar-popover--user" close={() => setOpenPanel(null)}>

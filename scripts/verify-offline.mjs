@@ -173,7 +173,7 @@ async function run() {
     }
     const connect = await getRoute("/connect");
     check("/connect offers the offline test identities", connect.html.includes("Faction tester") && connect.html.includes("Owner reviewer"));
-    check("/connect lists the verified key selections", connect.html.includes("chainreport"));
+    check("/connect lists the verified key selections", connect.html.includes("chainreport") && connect.html.includes("user/profile"));
     check("/connect discloses persistent member records and their audience", connect.html.includes("member reports") && connect.html.includes("leadership-only") && connect.html.includes("30 days"));
     check("/connect declares a responsive viewport", /<meta name="viewport" content="[^"]*width=device-width/.test(connect.html));
     check("/connect keeps the key entry inside the primary login flow", connect.html.indexOf("login-intro") < connect.html.indexOf("login-card") && connect.html.indexOf("login-card") < connect.html.indexOf("login-footer"), "the intro, key entry, and footer must retain their reading order");
@@ -221,6 +221,7 @@ async function run() {
     check("dashboard is labelled as offline test data", dashboard.html.includes("Offline test data") || dashboard.html.includes("Offline fixture"));
     check("dashboard shows the fixture faction", dashboard.html.includes("Chainward Test Faction"));
     check("top bar exposes a labelled server check with its timestamp", dashboard.html.includes("Offline fixture") && dashboard.html.includes("Checked "));
+    check("top bar uses the generated avatar when Torn has no profile image", dashboard.html.includes("/images/default-profile-avatar.webp"));
     check("shell resolves the saved rail width before paint", dashboard.html.includes('data-sidebar='));
     check("workspace scrolls inside the shell, not the document", dashboard.html.includes('class="app-scroll"'), "the top bar and section navigation must stay outside the scroll region");
     check("section navigation precedes the scroll region", dashboard.html.indexOf("workspace-view-nav") < dashboard.html.indexOf('class="app-scroll"'));

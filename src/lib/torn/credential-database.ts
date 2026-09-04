@@ -23,6 +23,7 @@ export function openCredentialDatabase(): DatabaseSync {
       token_hash TEXT PRIMARY KEY,
       torn_user_id INTEGER NOT NULL,
       torn_user_name TEXT NOT NULL,
+      torn_user_image_url TEXT,
       faction_id INTEGER NOT NULL,
       faction_name TEXT NOT NULL,
       faction_tag TEXT NOT NULL DEFAULT '',
@@ -40,8 +41,16 @@ export function openCredentialDatabase(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS remembered_torn_connections_user
       ON remembered_torn_connections(torn_user_id, expires_at);
   `);
+  ensureCredentialColumns(database);
   migrateLegacyCredentialRows(database);
   return database;
+}
+
+function ensureCredentialColumns(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(remembered_torn_connections)").all() as unknown as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "torn_user_image_url")) {
+    database.exec("ALTER TABLE remembered_torn_connections ADD COLUMN torn_user_image_url TEXT");
+  }
 }
 
 function migrateLegacyCredentialRows(destination: DatabaseSync): void {
@@ -58,16 +67,17 @@ function migrateLegacyCredentialRows(destination: DatabaseSync): void {
     try {
       const insert = destination.prepare(`
         INSERT OR IGNORE INTO remembered_torn_connections (
-          token_hash, torn_user_id, torn_user_name, faction_id, faction_name, faction_tag,
+          token_hash, torn_user_id, torn_user_name, torn_user_image_url, faction_id, faction_name, faction_tag,
           encrypted_key, encryption_iv, key_fingerprint, key_last_four, access_type,
           selections_json, expires_at, last_seen_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const row of rows) {
         insert.run(
           row.token_hash as string,
           row.torn_user_id as number,
           row.torn_user_name as string,
+          (row.torn_user_image_url as string | undefined) ?? null,
           row.faction_id as number,
           row.faction_name as string,
           row.faction_tag as string,

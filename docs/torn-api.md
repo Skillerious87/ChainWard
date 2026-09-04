@@ -24,6 +24,7 @@ Official sources:
 | --- | --- | --- | --- |
 | Key identity and selections | `GET /key/info` | Any key | `info` |
 | Current player's basic profile | `GET /user/basic` | Public | `profile` |
+| Current player's full profile and image | `GET /user/profile` | Public | `profile` |
 | Current faction identity | `GET /faction/basic` | Public | `basic` |
 | Specific faction identity | `GET /faction/{id}/basic` | Public | `basic` |
 | Own current chain | `GET /faction/chain` | Public | `chain` |
@@ -126,7 +127,9 @@ For custom keys, onboarding explicitly verifies these faction selections:
 - `chainreport`
 - `members`
 
-The connection also uses `key/info` and `user/basic`. The UI should guide users
+The connection also uses `key/info`, `user/basic`, and `user/profile`. Custom
+keys must include both user selections so the authenticated shell can use the
+nullable profile image returned by Torn. The UI should guide users
 toward the narrowest custom key that works and never encourage full access.
 
 ## Limits and cache behavior

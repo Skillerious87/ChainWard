@@ -17,6 +17,7 @@ describe("Torn connection session", () => {
   it("round trips a verified connection without exposing plaintext", () => {
     const token = createConnectionSession("example-torn-key-A8F2", 3_212_954, 51_393, {
       tornUserName: "Skillerious",
+      tornUserImageUrl: "https://profileimages.torn.com/skillerious.png",
       factionName: "Prive Cartel",
       factionTag: "PRIVE",
     });
@@ -25,6 +26,7 @@ describe("Torn connection session", () => {
       apiKey: "example-torn-key-A8F2",
       tornUserId: 3_212_954,
       tornUserName: "Skillerious",
+      tornUserImageUrl: "https://profileimages.torn.com/skillerious.png",
       factionId: 51_393,
       factionName: "Prive Cartel",
       factionTag: "PRIVE",
@@ -34,6 +36,7 @@ describe("Torn connection session", () => {
   it("rejects a modified session token", () => {
     const token = createConnectionSession("example-torn-key-A8F2", 3_212_954, 51_393, {
       tornUserName: "Skillerious",
+      tornUserImageUrl: null,
       factionName: "Prive Cartel",
       factionTag: "PRIVE",
     });
@@ -57,6 +60,7 @@ describe("Torn connection session", () => {
     expect(readConnectionSession(token)).toMatchObject({
       tornUserId: 3_212_954,
       tornUserName: null,
+      tornUserImageUrl: null,
       factionId: 51_393,
       factionName: null,
       factionTag: null,

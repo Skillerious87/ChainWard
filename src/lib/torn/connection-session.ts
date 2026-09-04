@@ -13,6 +13,7 @@ export interface ConnectionSessionPayload {
   apiKey: string;
   tornUserId: number;
   tornUserName: string | null;
+  tornUserImageUrl: string | null;
   factionId: number;
   factionName: string | null;
   factionTag: string | null;
@@ -25,12 +26,13 @@ export function createConnectionSession(
   apiKey: string,
   tornUserId: number,
   factionId: number,
-  identity: { tornUserName: string; factionName: string; factionTag: string },
+  identity: { tornUserName: string; tornUserImageUrl: string | null; factionName: string; factionTag: string },
 ): string {
   const payload: ConnectionSessionPayload = {
     apiKey,
     tornUserId,
     tornUserName: identity.tornUserName.trim(),
+    tornUserImageUrl: identity.tornUserImageUrl,
     factionId,
     factionName: identity.factionName.trim(),
     factionTag: identity.factionTag.trim(),
@@ -49,12 +51,13 @@ export function readConnectionSession(value: string | undefined): ConnectionSess
     const parsed = JSON.parse(plaintext) as Partial<ConnectionSessionPayload>;
     if (typeof parsed.apiKey !== "string" || typeof parsed.tornUserId !== "number" || typeof parsed.factionId !== "number" || typeof parsed.expiresAt !== "number" || parsed.expiresAt <= Date.now()) return null;
     // Sessions issued before identity fields were added remain valid. Their
-    // player name is revalidated once through Torn by getCurrentActor, while
-    // new sessions use the identity that was already verified at connection.
+    // player profile is revalidated once through Torn by getCurrentActor,
+    // while new sessions use the identity and image verified at connection.
     return {
       apiKey: parsed.apiKey,
       tornUserId: parsed.tornUserId,
       tornUserName: nonEmptyString(parsed.tornUserName),
+      tornUserImageUrl: nonEmptyString(parsed.tornUserImageUrl),
       factionId: parsed.factionId,
       factionName: nonEmptyString(parsed.factionName),
       factionTag: nonEmptyString(parsed.factionTag),

@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import type { PlatformActor } from "@/lib/auth/platform-owner";
 
 interface ProfileMenuProps {
@@ -32,14 +33,13 @@ export function ProfileMenu({
   onOpenAbout,
   onToggleDensity,
 }: ProfileMenuProps) {
-  const initials = actor.name.slice(0, 2).toUpperCase();
   const connected = actor.tornUserId > 0;
 
   return (
     <section className="profile-popover" aria-label="Profile and workspace controls">
       <div className="profile-popover__identity">
         <span className="profile-popover__avatar">
-          {initials}
+          <UserAvatar className="user-avatar__image" imageUrl={actor.profileImageUrl} name={actor.name} size={44} />
           <i className={connected ? undefined : "profile-popover__status--offline"} aria-hidden="true" />
         </span>
         <span className="profile-popover__identity-copy">

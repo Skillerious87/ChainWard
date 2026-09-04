@@ -14,6 +14,7 @@ export interface RememberedConnection {
   apiKey: string;
   tornUserId: number;
   tornUserName: string;
+  tornUserImageUrl: string | null;
   factionId: number;
   factionName: string;
   factionTag: string;
@@ -23,6 +24,7 @@ export interface RememberedConnection {
 interface LocalRememberedRow {
   torn_user_id: number;
   torn_user_name: string;
+  torn_user_image_url: string | null;
   faction_id: number;
   faction_name: string;
   faction_tag: string;
@@ -78,14 +80,15 @@ function createLocalConnection(
   try {
     database.prepare(`
       INSERT INTO remembered_torn_connections (
-        token_hash, torn_user_id, torn_user_name, faction_id, faction_name, faction_tag,
+        token_hash, torn_user_id, torn_user_name, torn_user_image_url, faction_id, faction_name, faction_tag,
         encrypted_key, encryption_iv, key_fingerprint, key_last_four, access_type,
         selections_json, expires_at, last_seen_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       tokenHash,
       connection.player.id,
       connection.player.name,
+      connection.player.imageUrl,
       connection.faction.id,
       connection.faction.name,
       connection.faction.tag,
@@ -108,7 +111,7 @@ function readLocalConnection(tokenHash: string, scope: RememberedTokenScope): Re
   const database = openCredentialDatabase();
   try {
     const row = database.prepare(`
-      SELECT torn_user_id, torn_user_name, faction_id, faction_name, faction_tag,
+      SELECT torn_user_id, torn_user_name, torn_user_image_url, faction_id, faction_name, faction_tag,
              encrypted_key, encryption_iv, expires_at, last_seen_at
       FROM remembered_torn_connections WHERE token_hash = ?
     `).get(tokenHash) as unknown as LocalRememberedRow | undefined;
@@ -130,6 +133,7 @@ function readLocalConnection(tokenHash: string, scope: RememberedTokenScope): Re
       apiKey: decryptAndMigrateLocalCredential(database, tokenHash, row),
       tornUserId: row.torn_user_id,
       tornUserName: row.torn_user_name,
+      tornUserImageUrl: row.torn_user_image_url,
       factionId: row.faction_id,
       factionName: row.faction_name,
       factionTag: row.faction_tag,
@@ -165,8 +169,8 @@ async function createPostgresConnection(
   const [user, faction] = await Promise.all([
     db.user.upsert({
       where: { tornUserId: connection.player.id },
-      update: { name: connection.player.name, lastAuthenticatedAt: new Date() },
-      create: { tornUserId: connection.player.id, name: connection.player.name, lastAuthenticatedAt: new Date() },
+      update: { name: connection.player.name, avatarUrl: connection.player.imageUrl, lastAuthenticatedAt: new Date() },
+      create: { tornUserId: connection.player.id, name: connection.player.name, avatarUrl: connection.player.imageUrl, lastAuthenticatedAt: new Date() },
     }),
     db.faction.upsert({
       where: { tornFactionId: connection.faction.id },
@@ -234,6 +238,7 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
       apiKey: await decryptAndMigratePostgresCredential(credential),
       tornUserId: session.user.tornUserId,
       tornUserName: session.user.name,
+      tornUserImageUrl: session.user.avatarUrl,
       factionId: credential.faction.tornFactionId,
       factionName: credential.faction.name,
       factionTag: credential.faction.tag ?? "",

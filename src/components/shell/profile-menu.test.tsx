@@ -6,7 +6,7 @@ describe("ProfileMenu", () => {
   it("presents verified identity, grouped workspace controls, and density state", () => {
     const html = renderToStaticMarkup(
       <ProfileMenu
-        actor={{ name: "Skillerious", tornUserId: 3_212_954, isPlatformAdmin: true }}
+        actor={{ name: "Skillerious", tornUserId: 3_212_954, isPlatformAdmin: true, profileImageUrl: "https://profileimages.torn.com/skillerious.png" }}
         compact
         ownerAccess
         onClose={() => undefined}
@@ -23,5 +23,6 @@ describe("ProfileMenu", () => {
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain("Disconnect Torn API");
+    expect(html).toContain("https://profileimages.torn.com/skillerious.png");
   });
 });

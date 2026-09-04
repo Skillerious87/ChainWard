@@ -14,6 +14,7 @@ import {
   ongoingChainResponseSchema,
   tornErrorSchema,
   userBasicResponseSchema,
+  userProfileResponseSchema,
   type ChainReportResponse,
   type ChainsResponse,
   type FactionBasicResponse,
@@ -21,6 +22,7 @@ import {
   type KeyInfoResponse,
   type OngoingChainResponse,
   type UserBasicResponse,
+  type UserProfileResponse,
 } from "./schemas";
 
 export interface TornClientOptions {
@@ -115,6 +117,12 @@ export class TornClient {
 
   getMyProfile(): Promise<UserBasicResponse> {
     return this.request("/user/basic", userBasicResponseSchema, this.historyCacheMs);
+  }
+
+  getMyProfileDetails(): Promise<UserProfileResponse> {
+    return this.request("/user/profile", userProfileResponseSchema, this.historyCacheMs, {
+      striptags: "true",
+    });
   }
 
   getFactionBasic(factionId?: number, options: TornRequestOptions = {}): Promise<FactionBasicResponse> {

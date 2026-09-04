@@ -10,10 +10,11 @@ export interface PlatformActor {
   name: string;
   tornUserId: number;
   isPlatformAdmin: boolean;
+  profileImageUrl?: string | null;
 }
 
 export function unauthenticatedActor(): PlatformActor {
-  return { name: "Not connected", tornUserId: 0, isPlatformAdmin: false };
+  return { name: "Not connected", tornUserId: 0, isPlatformAdmin: false, profileImageUrl: null };
 }
 
 export function isPlatformOwner(actor: PlatformActor): boolean {

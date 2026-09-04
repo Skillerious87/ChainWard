@@ -30,6 +30,7 @@ export async function POST(request: Request) {
   }, { headers: { "cache-control": "no-store" } });
   response.cookies.set(CONNECTION_COOKIE, createConnectionSession(connection.apiKey, connection.player.id, connection.faction.id, {
     tornUserName: connection.player.name,
+    tornUserImageUrl: connection.player.imageUrl,
     factionName: connection.faction.name,
     factionTag: connection.faction.tag,
   }), cookieOptions(CONNECTION_MAX_AGE_SECONDS));
