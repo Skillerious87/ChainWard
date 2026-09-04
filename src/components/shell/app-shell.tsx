@@ -42,6 +42,7 @@ import {
   type ReactNode,
 } from "react";
 import { BrandMark } from "@/components/brand-mark";
+import { AdminWorkspaceNavigation, AdminWorkspaceNavigationProvider } from "@/components/admin/admin-workspace-navigation";
 import { UpgradeAccess } from "@/components/licensing/upgrade-access";
 import { useMemberActivityMonitor } from "@/components/members/use-member-activity-monitor";
 import { AboutDialog } from "@/components/shell/about-dialog";
@@ -163,6 +164,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const offlineMode = liveTelemetry.mode === "offline";
   const workspaceLocked = !workspaceAuthorized;
   const ownerAccess = currentUser.isPlatformAdmin && currentUser.tornUserId === PLATFORM_OWNER.tornUserId;
+  const adminRoute = ownerAccess && (pathname === "/admin" || pathname.startsWith("/admin/"));
   const visibleNavigation = navigation
     .filter((group) => group.label !== "Platform" || ownerAccess)
     .map((group) => ({ ...group, items: group.items.map((item) => {
@@ -554,6 +556,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
 
       {mobileOpen && <button className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />}
 
+      <AdminWorkspaceNavigationProvider active={adminRoute}>
       <div className="app-main">
         <header className="topbar">
           <div className="topbar__left">
@@ -622,13 +625,15 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           </div>
         </header>
 
-        <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status">
-          <span className="data-source-banner__label">{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>
-          <span className="data-source-banner__message" title={liveTelemetry.message}>{liveTelemetry.message}</span>
-        </div>
+        {adminRoute ? <AdminWorkspaceNavigation /> : (
+          <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status">
+            <span className="data-source-banner__label">{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>
+            <span className="data-source-banner__message" title={liveTelemetry.message}>{liveTelemetry.message}</span>
+          </div>
+        )}
         <RouteProgress />
         {/* The workspace scrolls inside this element rather than the document,
-            so the top bar and the provenance banner stay fixed and the
+            so the top bar and its route-specific strip stay fixed and the
             scrollbar spans only the content beneath them. */}
         <div className="app-scroll" ref={scrollRef}>
           <main className="page-content">
@@ -637,6 +642,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           </main>
         </div>
       </div>
+      </AdminWorkspaceNavigationProvider>
 
       <nav className="mobile-tabbar" aria-label="Mobile workspace navigation">
         {mobileNavigation.map((item) => {

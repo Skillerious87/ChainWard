@@ -33,7 +33,7 @@
 .route-loading-core {
   position: fixed;
   z-index: 70;
-  top: calc(var(--topbar-height) + 31px);
+  top: calc(var(--topbar-height) + var(--workspace-strip-height, 31px));
   right: 0;
   bottom: 0;
   left: var(--rail-width);
@@ -45,7 +45,7 @@
   animation: route-core-in 180ms ease-out forwards;
   isolation: isolate;
 }
-.route-loading-core::before { position: fixed; z-index: 0; top: calc(var(--topbar-height) + 31px); right: 0; bottom: 0; left: var(--rail-width); background: radial-gradient(circle at 50% 46%,rgba(var(--accent-rgb),.055),transparent 25%),rgba(7,10,12,.72); content: ""; }
+.route-loading-core::before { position: fixed; z-index: 0; top: calc(var(--topbar-height) + var(--workspace-strip-height, 31px)); right: 0; bottom: 0; left: var(--rail-width); background: radial-gradient(circle at 50% 46%,rgba(var(--accent-rgb),.055),transparent 25%),rgba(7,10,12,.72); content: ""; }
 .route-loading-core > .page-loading-core { position: relative; z-index: 1; }
 .route-loading-core[data-phase="finishing"] { animation: route-core-out 260ms ease-in forwards; }
 @keyframes route-core-in { to { opacity: 1; } }
@@ -120,14 +120,14 @@
    scrolling. */
 html:has(.app-shell),
 body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; overscroll-behavior: none; }
-.app-shell { height: 100dvh; overflow: hidden; }
+.app-shell { --workspace-strip-height: 31px; height: 100dvh; overflow: hidden; }
 .app-main {
   display: flex;
   height: 100dvh;
   flex-direction: column;
   overflow: hidden;
 }
-.topbar, .data-source-banner, .route-progress { flex: 0 0 auto; }
+.topbar, .data-source-banner, .workspace-view-nav, .route-progress { flex: 0 0 auto; }
 .topbar { position: relative; }
 .app-scroll {
   min-height: 0;
@@ -137,6 +137,94 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+
+/* Route-local navigation replaces the provenance strip in complex owner
+   workspaces. It remains a fixed row of the shell while only `.app-scroll`
+   moves, so there is no sticky-state jump or exposed gutter at the edges. */
+.app-shell:has(.workspace-view-nav) { --workspace-strip-height: 52px; }
+.app-shell:has(.workspace-view-nav) .view-loading__centre,
+.app-shell:has(.workspace-view-nav) .view-loading__centre::before {
+  top: calc(var(--topbar-height) + var(--workspace-strip-height));
+}
+.workspace-view-nav {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  width: 100%;
+  min-height: var(--workspace-strip-height);
+  align-items: stretch;
+  border-bottom: 1px solid #273129;
+  background:
+    radial-gradient(58% 170% at 50% 100%, rgba(var(--accent-rgb), .045), transparent 70%),
+    rgba(8, 12, 14, .985);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .018);
+}
+.workspace-view-nav__inner {
+  display: grid;
+  width: min(780px, 100%);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 auto;
+  padding-inline: 8px;
+}
+.workspace-view-nav__item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: var(--workspace-strip-height);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 5px 10px;
+  overflow: hidden;
+  border: 0;
+  outline-offset: -3px;
+  background: transparent;
+  color: #748079;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms ease, color 150ms ease;
+}
+.workspace-view-nav__item::after {
+  position: absolute;
+  right: 24%;
+  bottom: 0;
+  left: 24%;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(var(--accent-rgb), .38);
+  content: "";
+  opacity: 0;
+  transform: scaleX(.45);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.workspace-view-nav__item > span {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.workspace-view-nav__item small {
+  overflow: hidden;
+  color: inherit !important;
+  font-size: 11px !important;
+  font-weight: 650;
+  letter-spacing: .1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-view-nav__item:hover { background: rgba(255, 255, 255, .018); color: #aab5ae; }
+.workspace-view-nav__item--active {
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), .018), rgba(var(--accent-rgb), .075));
+  color: var(--accent);
+}
+.workspace-view-nav__item--active::after { opacity: 1; transform: scaleX(1); }
+.workspace-view-nav__item--active > span { border-color: rgba(var(--accent-rgb), .2); background: rgba(var(--accent-rgb), .07); }
+.workspace-view-nav__item:focus-visible { outline: 2px solid var(--accent); }
 /* Top bar -------------------------------------------------------------------
    Every control in the bar previously set its own height, radius, border, and
    hover treatment — 38, 42, 44, 46, and 48px sat side by side. They now share

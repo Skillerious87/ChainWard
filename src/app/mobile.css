@@ -1118,3 +1118,159 @@
   .data-source-banner { padding-block: 3px; }
   .dialog { max-height: 100dvh; border-radius: 12px 12px 0 0; }
 }
+
+/* Owner console ------------------------------------------------------------
+   The local view bar occupies the provenance row and uses the same compact,
+   icon-first grammar as native mobile navigation. The licence queue becomes
+   a vertical review deck instead of exposing a clipped desktop table. */
+@media (max-width: 760px) {
+  .app-shell:has(.workspace-view-nav) { --mobile-status-banner-height: 62px; --workspace-strip-height: 62px; }
+  .workspace-view-nav { min-height: var(--workspace-strip-height); }
+  .workspace-view-nav__inner { width: 100%; padding: 0; }
+  .workspace-view-nav__item {
+    min-height: var(--workspace-strip-height);
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px 2px 4px;
+    border-radius: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .workspace-view-nav__item > span { width: 28px; height: 28px; }
+  .workspace-view-nav__item small { max-width: 100%; font-size: 9.5px !important; line-height: 1.15 !important; }
+  .workspace-view-nav__item::after { right: 24%; left: 24%; }
+
+  .admin-view-panel { gap: 14px; }
+  .admin-system-grid { gap: 14px; }
+  .admin-page .admin-requests { min-height: 0; border-radius: 16px; }
+  .admin-request-heading { gap: 14px; padding: 16px; }
+  .admin-request-heading h2 { font-size: 18px; letter-spacing: -.35px; }
+  .admin-request-heading p { margin-top: 4px; font-size: 12px !important; }
+  .admin-request-tools { display: grid; width: 100%; gap: 10px; }
+  .admin-request-tools .segmented-control {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    padding: 4px;
+    border-radius: 12px;
+  }
+  .admin-request-tools .segmented-control button {
+    min-width: 0;
+    min-height: 42px;
+    justify-content: center;
+    padding-inline: 6px;
+    border-radius: 9px;
+    font-size: 12px;
+  }
+  .admin-request-tools .segmented-control .segmented-control__active {
+    background: #20282e;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .025);
+  }
+  .admin-request-tools .search-field { width: 100%; min-height: 48px; border-radius: 12px; }
+
+  .admin-requests > .table-scroll { overflow: visible; }
+  .admin-requests .access-request-table {
+    display: block;
+    width: 100% !important;
+    white-space: normal;
+  }
+  .admin-requests .access-request-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .admin-requests .access-request-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+  .admin-requests .access-request-table tbody:empty { display: none; }
+  .admin-requests .access-request-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "faction status"
+      "plan plan"
+      "member member"
+      "reference reference"
+      "actions actions";
+    gap: 0 12px;
+    padding: 15px;
+    overflow: hidden;
+    border: 1px solid #303a42;
+    border-radius: 15px;
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, .026), transparent 45%),
+      #10161a;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .02);
+  }
+  .admin-requests .access-request-table td {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    grid-template-columns: 82px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 11px 0;
+    border-bottom: 1px solid #242d33;
+    color: #b8c3c9;
+    white-space: normal;
+  }
+  .admin-requests .access-request-table td::before {
+    padding-top: 2px;
+    color: #707d85;
+    content: attr(data-label);
+    font-size: 9.5px;
+    font-weight: 720;
+    letter-spacing: .65px;
+    text-transform: uppercase;
+  }
+  .admin-requests .access-request-table td:nth-child(1) { grid-area: faction; padding-top: 0; border: 0; }
+  .admin-requests .access-request-table td:nth-child(2) { grid-area: plan; }
+  .admin-requests .access-request-table td:nth-child(3) { grid-area: member; }
+  .admin-requests .access-request-table td:nth-child(4) { grid-area: reference; }
+  .admin-requests .access-request-table td:nth-child(5) { grid-area: status; justify-items: end; padding-top: 1px; border: 0; }
+  .admin-requests .access-request-table td:nth-child(6) { grid-area: actions; display: block; padding: 12px 0 0; border: 0; }
+  .admin-requests .access-request-table td:nth-child(6):has(.access-row-actions:empty) { display: none; padding: 0; }
+  .admin-requests .access-request-table td:nth-child(1)::before,
+  .admin-requests .access-request-table td:nth-child(5)::before,
+  .admin-requests .access-request-table td:nth-child(6)::before { content: none; }
+  .admin-requests .access-request-table td:nth-child(1),
+  .admin-requests .access-request-table td:nth-child(5) { grid-template-columns: 1fr; }
+  .access-request-table__cell-body { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .admin-requests .access-request-table td:nth-child(1) strong { color: #edf1ef; font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
+  .admin-requests .access-request-table td:nth-child(5) .access-request-table__cell-body { align-items: flex-end; }
+  .admin-requests .access-request-table .cell-subtext { margin-top: 0; color: #7f8c94; font-size: 11px !important; line-height: 1.4; white-space: normal; }
+  .admin-requests .access-request-table .identifier-cell { max-width: 100%; }
+  .admin-requests .access-request-table .identifier-cell code { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .admin-requests .access-row-actions { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) 46px 46px; gap: 8px; }
+  .admin-requests .access-row-actions .button { min-width: 0; min-height: 46px; justify-content: center; border-radius: 11px; }
+  .admin-requests .access-row-actions .icon-button { width: 46px; height: 46px; border-radius: 11px; }
+  .admin-requests .queue-empty { min-height: 210px; padding: 32px 22px; }
+  .admin-requests .queue-empty > span { width: 52px; height: 52px; border-radius: 14px; }
+  .admin-requests .queue-empty strong { font-size: 15px; }
+  .admin-requests .queue-empty p { max-width: 34ch; font-size: 12px !important; }
+  .admin-requests .table-footer { gap: 8px; padding: 14px 16px; }
+  .admin-requests .table-footer > span { display: flex; align-items: flex-start; gap: 7px; }
+  .admin-requests .table-footer svg { flex: 0 0 auto; margin-top: 2px; }
+}
+
+@media (max-width: 430px) {
+  .workspace-view-nav__item small { font-size: 9px !important; }
+  .admin-requests .access-request-table tbody { padding: 10px; }
+  .admin-requests .access-request-table tr { padding: 14px; }
+  .admin-requests .access-request-table td { grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
+}
+
+@media (max-width: 760px) and (max-height: 520px) and (orientation: landscape) {
+  .app-shell:has(.workspace-view-nav) { --mobile-status-banner-height: 54px; --workspace-strip-height: 54px; }
+  .workspace-view-nav__item { flex-direction: row; gap: 5px; }
+  .workspace-view-nav__item > span { width: 24px; height: 24px; }
+}
