@@ -81,7 +81,7 @@ export default async function DashboardPage() {
     </section>
 
     <header className="overview-section-heading"><div><p className="eyebrow">Live operations</p><h2>What’s happening right now</h2></div><p>Verified operational data, refreshed directly from Torn.</p></header>
-    <ChainHero key={telemetry.checkedAt} telemetry={telemetry} />
+    <ChainHero />
     <OperationsBrief brief={brief} />
     <StatStrip telemetry={telemetry} report={report} history={history} />
     <div className="dashboard-grid">

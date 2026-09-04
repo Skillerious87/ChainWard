@@ -36,7 +36,13 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
     factionId: session.factionId,
     factionName: session.factionName,
     factionTag: session.factionTag,
-    client: new TornClient({
+    client: createTornClient(apiKey, offline),
+  };
+});
+
+/** Creates an isolated server client for trusted background workers. */
+export function createTornClient(apiKey: string, offline = false): TornClient {
+  return new TornClient({
     apiKey,
     dataMode: offline ? "offline" : "torn",
     baseUrl: process.env.TORN_API_BASE_URL,
@@ -47,9 +53,8 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
     chainCacheSeconds: Math.max(MIN_POLL_SECONDS, positiveInteger(process.env.TORN_CHAIN_CACHE_SECONDS, CHAIN_CACHE_SECONDS)),
     historyCacheSeconds: positiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 600),
     ...(offline ? { fetchImplementation: createOfflineFixtureFetch(apiKey) } : {}),
-    }),
-  };
-});
+  });
+}
 
 export const getConfiguredTornClient = cache(async (): Promise<TornClient | null> =>
   (await getConfiguredTornConnection())?.client ?? null

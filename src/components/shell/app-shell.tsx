@@ -46,6 +46,10 @@ import { AdminWorkspaceNavigation, AdminWorkspaceNavigationProvider } from "@/co
 import { UpgradeAccess } from "@/components/licensing/upgrade-access";
 import { useMemberActivityMonitor } from "@/components/members/use-member-activity-monitor";
 import { AboutDialog } from "@/components/shell/about-dialog";
+import {
+  LiveWorkspaceTelemetryProvider,
+  usePersistentChainCountdown,
+} from "@/components/shell/live-workspace-telemetry";
 import { ProfileMenu } from "@/components/shell/profile-menu";
 import { NavigationBeacon, publishNavigationState, RouteProgress } from "@/components/shell/route-progress";
 import { ServiceStateDrawer } from "@/components/shell/service-state-drawer";
@@ -139,6 +143,8 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const monitoredActivity = useMemberActivityMonitor(memberActivityAlert);
   const liveTelemetry = newestTelemetry(telemetry, telemetryOverride);
+  const { seconds: chainSeconds, deadlineAtSeconds, nowSeconds, applyReading } = usePersistentChainCountdown(liveTelemetry);
+  const latestTelemetryRef = useRef(liveTelemetry);
   const syncLabel = syncState === "syncing"
     ? "Syncing..."
     : syncState === "failed"
@@ -157,7 +163,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     checkedAt: liveTelemetry.checkedAt,
     href: "/unlock",
   } : null;
-  const systemNotifications = [...buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, memberActivity: monitoredActivity }), ...(renewalNotification ? [renewalNotification] : [])]
+  const systemNotifications = [...buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, chainRemainingSeconds: chainSeconds, memberActivity: monitoredActivity }), ...(renewalNotification ? [renewalNotification] : [])]
     .toSorted((left, right) => right.priority - left.priority);
   const notifications = systemNotifications.map((item) => ({ ...item, unread: !readNotificationIds.includes(item.id) }));
   const activeNotificationIdsKey = JSON.stringify(systemNotifications.map((item) => item.id).toSorted());
@@ -257,6 +263,18 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   }, [preferences]);
 
   useEffect(() => {
+    latestTelemetryRef.current = liveTelemetry;
+  }, [liveTelemetry]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const critical = liveTelemetry.chain?.state === "active" && chainSeconds <= 60;
+    if (critical) root.dataset.chainDanger = "critical";
+    else delete root.dataset.chainDanger;
+    return () => { delete root.dataset.chainDanger; };
+  }, [chainSeconds, liveTelemetry.chain?.state]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => setReadNotificationIds(loadReadNotificationIds(notificationScope)), 0);
     return () => window.clearTimeout(timer);
   }, [notificationScope]);
@@ -286,21 +304,23 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   }, [pathname]);
 
   const publishTelemetry = useCallback((next: WorkspaceTelemetry, transitMs = 0) => {
-    setTelemetryOverride(next);
-    setSyncState(null);
     window.dispatchEvent(workspaceTelemetryEvent(next, transitMs));
   }, []);
 
   useEffect(() => {
     function receiveTelemetry(event: Event): void {
-      const next = readWorkspaceTelemetryEvent(event).telemetry;
+      const update = readWorkspaceTelemetryEvent(event);
+      const next = update.telemetry;
       if (!isWorkspaceTelemetry(next)) return;
-      setTelemetryOverride(next);
+      if (!shouldAcceptTelemetry(latestTelemetryRef.current, next)) return;
+      latestTelemetryRef.current = next;
+      setTelemetryOverride((current) => newestTelemetry(next, current));
+      applyReading(next, update.transitMs);
       setSyncState(null);
     }
     window.addEventListener("chainward:telemetry", receiveTelemetry);
     return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
-  }, []);
+  }, [applyReading]);
 
   // Torn resets the timeout at hit 10 and on every hit thereafter, so a slow
   // workspace cadence can leave the countdown far behind the game.
@@ -313,7 +333,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     let pollInFlight = false;
     let lastPollAt = Date.now();
 
-    async function pollTelemetry(): Promise<void> {
+    async function pollTelemetry(forceFresh = chainRunning): Promise<void> {
       if (!navigator.onLine || document.visibilityState !== "visible" || pollInFlight) return;
       pollInFlight = true;
       lastPollAt = Date.now();
@@ -321,7 +341,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
         // Torn documents `timestamp` as the supported way to bypass its
         // 30-second service cache when fresh information is needed. The server
         // adds it only while a chain is active, and only to the chain request.
-        const endpoint = chainRunning ? "/api/telemetry/live-chain?fresh=1" : "/api/telemetry/live-chain";
+        const endpoint = forceFresh ? "/api/telemetry/live-chain?fresh=1" : "/api/telemetry/live-chain";
         const result = await requestWorkspaceTelemetry(endpoint);
         if (!result.ok || !isWorkspaceTelemetry(result.payload) || stopped) return;
         publishTelemetry(result.payload, result.transitMs);
@@ -341,9 +361,11 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     }
 
     const interval = window.setInterval(() => void pollTelemetry(), pollSeconds * 1_000);
-    // The server-rendered snapshot may already be inside Torn's service-cache
-    // window. Replace it immediately instead of waiting one full interval.
-    if (chainRunning) void pollTelemetry();
+    // The first reading must be uncached even when the server snapshot says the
+    // faction is idle: that snapshot can itself pre-date a newly started chain.
+    // Once the current state is known, active chains retain the five-second
+    // safety cadence and idle workspaces return to the saved interval.
+    void pollTelemetry(true);
     document.addEventListener("visibilitychange", refreshOnFocus);
     window.addEventListener("online", refreshOnFocus);
     return () => {
@@ -645,7 +667,14 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
         <div className="app-scroll" ref={scrollRef}>
           <main className="page-content">
             {renewalNotice?.renewalOpen && <Link className={`license-expiry-banner license-expiry-banner--${renewalNotice.phase}`} href="/unlock"><span><Clock3 size={18} /></span><p><strong>{access.renewalRequest ? "Renewal awaiting owner review" : renewalNotice.title}</strong><small>{access.renewalRequest ? `Current access remains open while ${access.renewalRequest.reference} is reviewed.` : renewalNotice.detail}</small></p><b>{access.renewalRequest ? "View request" : "Renew access"}<ArrowRight size={14} /></b></Link>}
-            {children}
+            <LiveWorkspaceTelemetryProvider value={{
+              telemetry: liveTelemetry,
+              seconds: chainSeconds,
+              deadlineAtSeconds,
+              nowSeconds,
+            }}>
+              {children}
+            </LiveWorkspaceTelemetryProvider>
           </main>
         </div>
       </div>
@@ -772,4 +801,16 @@ function newestTelemetry(server: WorkspaceTelemetry, override: WorkspaceTelemetr
   const serverTime = Date.parse(server.checkedAt);
   const overrideTime = Date.parse(override.checkedAt);
   return Number.isFinite(serverTime) && serverTime > overrideTime ? server : override;
+}
+
+function shouldAcceptTelemetry(current: WorkspaceTelemetry, incoming: WorkspaceTelemetry): boolean {
+  const currentTime = Date.parse(current.checkedAt);
+  const incomingTime = Date.parse(incoming.checkedAt);
+  if (Number.isFinite(currentTime) && Number.isFinite(incomingTime) && incomingTime < currentTime) return false;
+  if (incomingTime !== currentTime) return true;
+  const currentChain = current.chain;
+  const incomingChain = incoming.chain;
+  if (!currentChain || !incomingChain) return Boolean(incomingChain) || !currentChain;
+  if (currentChain.id !== incomingChain.id || currentChain.state !== incomingChain.state) return true;
+  return incomingChain.current >= currentChain.current;
 }

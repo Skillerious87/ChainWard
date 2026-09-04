@@ -11,7 +11,6 @@ import { TornUserName } from "@/components/ui/torn-user-link";
 import { findActiveSlot, findNextSlot, slotStatus } from "@/lib/chain-watch/chain-watch-schedule";
 import type { ChainWatchSlot, ChainWatchWorkspace as ChainWatchWorkspaceData } from "@/lib/chain-watch/chain-watch-store";
 import { notify } from "@/lib/client-actions";
-import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
 
 interface SlotDraft {
@@ -25,12 +24,10 @@ interface SlotDraft {
 const EMPTY_DRAFT: SlotDraft = { startAt: "", endAt: "", primaryTornUserId: "", backupTornUserId: "", note: "" };
 
 export function ChainWatchWorkspace({
-  telemetry,
   workspace,
   rosterResult,
   canManage,
 }: {
-  telemetry: WorkspaceTelemetry;
   workspace: ChainWatchWorkspaceData;
   rosterResult: TornDataResult<TornRosterMember[]>;
   canManage: boolean;
@@ -121,7 +118,7 @@ export function ChainWatchWorkspace({
         </> : undefined}
       />
 
-      <ChainHero telemetry={telemetry} />
+      <ChainHero />
 
       <section className={`chain-watch-duty panel${activeSlot ? " chain-watch-duty--covered" : " chain-watch-duty--gap"}`}>
         <span className="chain-watch-duty__mark">{activeSlot ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}</span>

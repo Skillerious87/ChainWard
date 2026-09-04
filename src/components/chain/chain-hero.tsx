@@ -2,18 +2,13 @@
 
 import { Activity, Clock3, Crosshair, Expand, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
-import { anchorFromReading, createAnchor, displaySeconds, project, reconcileChainReading, type CountdownAnchor } from "@/lib/torn/chain-countdown";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
-import { readWorkspaceTelemetryEvent, workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
-import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
-
-interface ChainHeroProps {
-  telemetry: WorkspaceTelemetry;
-  detailed?: boolean;
-}
+import { workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
+interface ChainHeroProps { detailed?: boolean; }
 
 /**
  * Torn awards a flat respect bonus at thirteen fixed chain lengths. Torn's
@@ -34,27 +29,13 @@ function milestoneWindow(target: number): number[] {
   return [...CHAIN_BONUS_MILESTONES].slice(Math.max(0, index - 1), index + 3);
 }
 
-export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
-  const [snapshotOverride, setSnapshotOverride] = useState<WorkspaceTelemetry | null>(null);
-  const snapshot = newestTelemetry(telemetry, snapshotOverride);
-  const { seconds, deadlineAtSeconds, nowSeconds, applyReading } = useChainCountdown(snapshot);
+export function ChainHero({ detailed = false }: ChainHeroProps) {
+  const { telemetry: snapshot, seconds, deadlineAtSeconds, nowSeconds } = useLiveWorkspaceTelemetry();
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const chain = snapshot.chain;
-
-  useEffect(() => {
-    function receiveTelemetry(event: Event): void {
-      const update = readWorkspaceTelemetryEvent(event);
-      const next = update.telemetry;
-      if (!isWorkspaceTelemetry(next)) return;
-      setSnapshotOverride(next);
-      applyReading(next, update.transitMs);
-    }
-    window.addEventListener("chainward:telemetry", receiveTelemetry);
-    return () => window.removeEventListener("chainward:telemetry", receiveTelemetry);
-  }, [applyReading]);
 
   // Hit 10 and each later hit restart the countdown, so the largest figure Torn
   // has reported is the real width of the window.
@@ -93,8 +74,6 @@ export function ChainHero({ telemetry, detailed = false }: ChainHeroProps) {
       }
       const payload = result.payload;
       const { transitMs } = result;
-      setSnapshotOverride(payload);
-      applyReading(payload, transitMs);
       window.dispatchEvent(workspaceTelemetryEvent(payload, transitMs));
       notify({
         title: payload.source === "live" ? "Torn telemetry checked" : "Telemetry unavailable",
@@ -357,146 +336,10 @@ function TimeoutRing({
   );
 }
 
-/** Remaining seconds Torn reported for whichever countdown is running. */
-function reportedRemainingMs(telemetry: WorkspaceTelemetry): number {
-  const chain = telemetry.chain;
-  if (!chain) return 0;
-  if (chain.state === "cooldown") return chain.cooldownSeconds * 1_000;
-  if (chain.state === "active") return chain.timeoutSeconds * 1_000;
-  return 0;
-}
-
-/**
- * The live chain countdown.
- *
- * Every reading becomes a remaining duration pinned to `performance.now()`, a
- * monotonic clock that cannot jump, run backwards, or be changed by the user.
- * Nothing here compares this machine's clock against the server's or Torn's,
- * which is precisely what made the timer leap on each refresh: the old model
- * projected a Torn-clock deadline against an unadjusted browser clock, and only
- * learned the offset between them after the first poll had landed.
- *
- * The anchor lives in a ref rather than state because only the projected value
- * is rendered; re-anchoring is bookkeeping, not a render input.
- */
-interface ServerClockAnchor {
-  wallMs: number;
-  atPerf: number;
-}
-
-interface CountdownView {
-  remainingMs: number;
-  deadlineAtSeconds: number;
-  nowSeconds: number;
-}
-
-function useChainCountdown(snapshot: WorkspaceTelemetry): {
-  seconds: number;
-  deadlineAtSeconds: number;
-  nowSeconds: number;
-  applyReading: (telemetry: WorkspaceTelemetry, transitMs: number) => void;
-} {
-  const chainKey = `${snapshot.chain?.id ?? 0}:${snapshot.chain?.state ?? "none"}`;
-  const initialReportedMs = reportedRemainingMs(snapshot);
-  const initialAgeMs = snapshot.dataAgeMs ?? 0;
-  const initialServerMs = telemetryServerTimeMs(snapshot);
-  // Keep server and hydration markup identical. The runtime ref below already
-  // accounts for time spent loading and corrects the label on the first tick.
-  const initialRemainingMs = anchorFromReading(initialReportedMs, initialAgeMs, 0, 0).remainingMs;
-  const [view, setView] = useState<CountdownView>(() => ({
-    remainingMs: initialRemainingMs,
-    deadlineAtSeconds: Math.floor((initialServerMs + initialRemainingMs) / 1_000),
-    nowSeconds: Math.floor(initialServerMs / 1_000),
-  }));
-  const stateRef = useRef<{
-    anchor: CountdownAnchor;
-    clock: ServerClockAnchor;
-    key: string;
-    current: number;
-  }>({
-    // `performance.now()` starts near zero for this navigation. Anchoring the
-    // server snapshot at zero makes the first effect subtract page-load transit
-    // exactly once, without calling an impure clock during render.
-    anchor: createAnchor(initialRemainingMs, 0),
-    clock: { wallMs: initialServerMs, atPerf: 0 },
-    key: chainKey,
-    current: snapshot.chain?.current ?? 0,
-  });
-
-  const applyReading = useCallback((telemetry: WorkspaceTelemetry, transitMs: number) => {
-    const nowPerf = performance.now();
-    const incoming = anchorFromReading(reportedRemainingMs(telemetry), telemetry.dataAgeMs ?? 0, transitMs, nowPerf);
-    const key = `${telemetry.chain?.id ?? 0}:${telemetry.chain?.state ?? "none"}`;
-    const current = telemetry.chain?.current ?? 0;
-    const previous = stateRef.current;
-    const reconciled = reconcileChainReading(previous, { anchor: incoming, key, current }, nowPerf);
-
-    const parsedServerMs = telemetryServerTimeMs(telemetry);
-    const clock = Number.isFinite(parsedServerMs)
-      ? { wallMs: parsedServerMs + Math.max(0, transitMs), atPerf: nowPerf }
-      : previous.clock;
-    stateRef.current = { ...reconciled, clock };
-    setView(projectCountdownView(stateRef.current, nowPerf));
-  }, [setView]);
-
-  useEffect(() => {
-    // Events normally apply readings before the React prop catches up. This is
-    // a safety net for a state transition supplied only through a new prop.
-    if (chainKey !== stateRef.current.key) applyReading(snapshot, 0);
-  }, [applyReading, chainKey, snapshot]);
-
-  useEffect(() => {
-    function tick(): void {
-      const nowPerf = performance.now();
-      setView(projectCountdownView(stateRef.current, nowPerf));
-    }
-    // Four times a second: the label reads whole seconds while the ring sweeps
-    // continuously. A throttled tab simply resumes from the monotonic clock.
-    const interval = window.setInterval(tick, 250);
-    document.addEventListener("visibilitychange", tick);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", tick);
-    };
-  }, [setView]);
-
-  return {
-    seconds: displaySeconds(view.remainingMs),
-    deadlineAtSeconds: view.deadlineAtSeconds,
-    nowSeconds: view.nowSeconds,
-    applyReading,
-  };
-}
-
-function telemetryServerTimeMs(telemetry: WorkspaceTelemetry): number {
-  const parsed = Date.parse(telemetry.checkedAt);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function projectCountdownView(
-  state: { anchor: CountdownAnchor; clock: ServerClockAnchor },
-  nowPerf: number,
-): CountdownView {
-  const remainingMs = project(state.anchor, nowPerf);
-  const serverNowMs = state.clock.wallMs + Math.max(0, nowPerf - state.clock.atPerf);
-  return {
-    remainingMs,
-    deadlineAtSeconds: Math.floor((serverNowMs + remainingMs) / 1_000),
-    nowSeconds: Math.floor(serverNowMs / 1_000),
-  };
-}
-
 function formatCheckedTime(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "time unavailable";
   return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(timestamp);
-}
-
-function newestTelemetry(server: WorkspaceTelemetry, override: WorkspaceTelemetry | null): WorkspaceTelemetry {
-  if (!override) return server;
-  const serverTime = Date.parse(server.checkedAt);
-  const overrideTime = Date.parse(override.checkedAt);
-  return Number.isFinite(serverTime) && serverTime > overrideTime ? server : override;
 }
 
 function formatTime(seconds: number): string {

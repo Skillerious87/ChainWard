@@ -93,45 +93,46 @@ enum SyncStatus {
 }
 
 model User {
-  id                    String               @id @default(uuid()) @db.Uuid
-  tornUserId            Int                  @unique
-  name                  String
-  avatarUrl             String?
-  isPlatformAdmin       Boolean              @default(false)
-  lastAuthenticatedAt   DateTime?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  memberships           FactionMembership[]
-  sessions              Session[]
-  submittedRequests     AccessRequest[]       @relation("AccessRequestSubmitter")
-  reviewedRequests      AccessRequest[]       @relation("AccessRequestReviewer")
-  approvedLicenses      FactionLicense[]      @relation("LicenseApprover")
-  processedPayouts      MemberPayout[]        @relation("PayoutProcessor")
-  auditEvents           AuditLog[]            @relation("AuditActor")
+  id                  String                @id @default(uuid()) @db.Uuid
+  tornUserId          Int                   @unique
+  name                String
+  avatarUrl           String?
+  isPlatformAdmin     Boolean               @default(false)
+  lastAuthenticatedAt DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  memberships         FactionMembership[]
+  sessions            Session[]
+  submittedRequests   AccessRequest[]       @relation("AccessRequestSubmitter")
+  reviewedRequests    AccessRequest[]       @relation("AccessRequestReviewer")
+  approvedLicenses    FactionLicense[]      @relation("LicenseApprover")
+  processedPayouts    MemberPayout[]        @relation("PayoutProcessor")
+  auditEvents         AuditLog[]            @relation("AuditActor")
+  pushSubscriptions   WebPushSubscription[]
 }
 
 model Session {
-  id          String   @id @default(uuid()) @db.Uuid
-  tokenHash   String   @unique
-  userId      String   @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt   DateTime
-  lastSeenAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   @@index([userId, expiresAt])
 }
 
 model Faction {
-  id                  String                     @id @default(uuid()) @db.Uuid
-  tornFactionId       Int                        @unique
+  id                  String                 @id @default(uuid()) @db.Uuid
+  tornFactionId       Int                    @unique
   name                String
   tag                 String?
-  accentColor         String                     @default("#8BE04E")
-  timezone            String                     @default("UTC")
-  isDevelopmentTenant Boolean                    @default(false)
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @updatedAt
+  accentColor         String                 @default("#8BE04E")
+  timezone            String                 @default("UTC")
+  isDevelopmentTenant Boolean                @default(false)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
   memberships         FactionMembership[]
   apiCredentials      FactionApiCredential[]
   licenses            FactionLicense[]
@@ -145,18 +146,19 @@ model Faction {
   settings            FactionSetting[]
   chainWatchSettings  ChainWatchSettings?
   chainWatchSlots     ChainWatchSlot[]
+  pushSubscriptions   WebPushSubscription[]
 }
 
 model FactionMembership {
-  id          String           @id @default(uuid()) @db.Uuid
-  factionId   String           @db.Uuid
-  faction     Faction          @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  userId      String           @db.Uuid
-  user        User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  role        FactionRole      @default(VIEWER)
-  status      MembershipStatus @default(ACTIVE)
-  joinedAt    DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id        String           @id @default(uuid()) @db.Uuid
+  factionId String           @db.Uuid
+  faction   Faction          @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  userId    String           @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role      FactionRole      @default(VIEWER)
+  status    MembershipStatus @default(ACTIVE)
+  joinedAt  DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
   @@unique([factionId, userId])
   @@index([userId, status])
@@ -185,20 +187,20 @@ model FactionApiCredential {
 }
 
 model FactionLicense {
-  id             String        @id @default(uuid()) @db.Uuid
-  factionId      String        @db.Uuid
-  faction        Faction       @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  status         LicenseStatus @default(PENDING)
-  term           LicenseTerm
-  reference      String        @unique
-  issuedAt       DateTime?
-  expiresAt      DateTime?
-  approvedById   String?       @db.Uuid
-  approvedBy     User?         @relation("LicenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  paymentNotes   String?
-  internalNotes  String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id            String        @id @default(uuid()) @db.Uuid
+  factionId     String        @db.Uuid
+  faction       Faction       @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  status        LicenseStatus @default(PENDING)
+  term          LicenseTerm
+  reference     String        @unique
+  issuedAt      DateTime?
+  expiresAt     DateTime?
+  approvedById  String?       @db.Uuid
+  approvedBy    User?         @relation("LicenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  paymentNotes  String?
+  internalNotes String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@index([factionId, status, expiresAt])
 }
@@ -224,26 +226,26 @@ model AccessRequest {
 }
 
 model Chain {
-  id                    String                    @id @default(uuid()) @db.Uuid
-  factionId             String                    @db.Uuid
-  faction               Faction                   @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  tornChainId           Int
-  status                ChainStatus
-  currentHits           Int
-  maximumHits           Int?
-  respect               Decimal?                  @db.Decimal(16, 4)
-  timeoutSeconds        Int?
-  startedAt             DateTime
-  endedAt               DateTime?
-  lastSyncedAt          DateTime
-  sourcePayload         Json
-  assignedSchemeId      String?                   @db.Uuid
-  assignedScheme        RewardScheme?             @relation("AssignedScheme", fields: [assignedSchemeId], references: [id], onDelete: SetNull)
-  contributions         ChainMemberContribution[]
-  rewardSnapshots       ChainRewardSnapshot[]
-  syncLogs              SyncLog[]
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  id               String                    @id @default(uuid()) @db.Uuid
+  factionId        String                    @db.Uuid
+  faction          Faction                   @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  tornChainId      Int
+  status           ChainStatus
+  currentHits      Int
+  maximumHits      Int?
+  respect          Decimal?                  @db.Decimal(16, 4)
+  timeoutSeconds   Int?
+  startedAt        DateTime
+  endedAt          DateTime?
+  lastSyncedAt     DateTime
+  sourcePayload    Json
+  assignedSchemeId String?                   @db.Uuid
+  assignedScheme   RewardScheme?             @relation("AssignedScheme", fields: [assignedSchemeId], references: [id], onDelete: SetNull)
+  contributions    ChainMemberContribution[]
+  rewardSnapshots  ChainRewardSnapshot[]
+  syncLogs         SyncLog[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
 
   @@unique([factionId, tornChainId])
   @@index([factionId, status, startedAt])
@@ -251,58 +253,58 @@ model Chain {
 }
 
 model ChainMemberContribution {
-  id               String                @id @default(uuid()) @db.Uuid
-  chainId          String                @db.Uuid
-  chain            Chain                 @relation(fields: [chainId], references: [id], onDelete: Restrict)
-  tornUserId       Int
-  memberName       String
-  hits             Int
-  respectTotal     Decimal?              @db.Decimal(16, 4)
-  respectAverage   Decimal?              @db.Decimal(16, 4)
-  attackBreakdown  Json
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  payoutEntries    MemberPayout[]
+  id              String         @id @default(uuid()) @db.Uuid
+  chainId         String         @db.Uuid
+  chain           Chain          @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  tornUserId      Int
+  memberName      String
+  hits            Int
+  respectTotal    Decimal?       @db.Decimal(16, 4)
+  respectAverage  Decimal?       @db.Decimal(16, 4)
+  attackBreakdown Json
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  payoutEntries   MemberPayout[]
 
   @@unique([chainId, tornUserId])
   @@index([tornUserId, chainId])
 }
 
 model RewardDefinition {
-  id               String             @id @default(uuid()) @db.Uuid
-  factionId        String             @db.Uuid
-  faction          Faction            @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  name             String
-  displayUnit      String
-  kind             RewardKind         @default(CUSTOM)
-  tornItemId       Int?
-  decimals         Int                @default(0)
-  prefix           String?
-  suffix           String?
-  isArchived       Boolean            @default(false)
-  tierRewards      RewardTierReward[]
-  payouts          MemberPayout[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id          String             @id @default(uuid()) @db.Uuid
+  factionId   String             @db.Uuid
+  faction     Faction            @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  name        String
+  displayUnit String
+  kind        RewardKind         @default(CUSTOM)
+  tornItemId  Int?
+  decimals    Int                @default(0)
+  prefix      String?
+  suffix      String?
+  isArchived  Boolean            @default(false)
+  tierRewards RewardTierReward[]
+  payouts     MemberPayout[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@unique([factionId, name])
   @@index([factionId, isArchived])
 }
 
 model RewardScheme {
-  id                  String                @id @default(uuid()) @db.Uuid
-  factionId           String                @db.Uuid
-  faction             Faction               @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  name                String
-  description         String?
-  version             Int                   @default(1)
-  status              RewardSchemeStatus    @default(ACTIVE)
-  isDefault           Boolean               @default(false)
-  tiers               RewardTier[]
-  assignedChains      Chain[]               @relation("AssignedScheme")
-  rewardSnapshots     ChainRewardSnapshot[]
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  id              String                @id @default(uuid()) @db.Uuid
+  factionId       String                @db.Uuid
+  faction         Faction               @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  name            String
+  description     String?
+  version         Int                   @default(1)
+  status          RewardSchemeStatus    @default(ACTIVE)
+  isDefault       Boolean               @default(false)
+  tiers           RewardTier[]
+  assignedChains  Chain[]               @relation("AssignedScheme")
+  rewardSnapshots ChainRewardSnapshot[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   @@unique([factionId, name, version])
   @@index([factionId, status, isDefault])
@@ -356,25 +358,25 @@ model ChainRewardSnapshot {
 }
 
 model MemberPayout {
-  id                  String                   @id @default(uuid()) @db.Uuid
-  factionId           String                   @db.Uuid
-  faction             Faction                  @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  snapshotId          String                   @db.Uuid
-  snapshot            ChainRewardSnapshot      @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
-  contributionId      String                   @db.Uuid
-  contribution        ChainMemberContribution  @relation(fields: [contributionId], references: [id], onDelete: Restrict)
-  rewardDefinitionId  String                   @db.Uuid
-  rewardDefinition    RewardDefinition         @relation(fields: [rewardDefinitionId], references: [id], onDelete: Restrict)
-  tornUserId          Int
-  memberName          String
-  amount              Decimal                  @db.Decimal(18, 4)
-  status              PayoutStatus             @default(PENDING)
-  processedById       String?                  @db.Uuid
-  processedBy         User?                    @relation("PayoutProcessor", fields: [processedById], references: [id], onDelete: SetNull)
-  processedAt         DateTime?
-  note                String?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+  id                 String                  @id @default(uuid()) @db.Uuid
+  factionId          String                  @db.Uuid
+  faction            Faction                 @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  snapshotId         String                  @db.Uuid
+  snapshot           ChainRewardSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  contributionId     String                  @db.Uuid
+  contribution       ChainMemberContribution @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  rewardDefinitionId String                  @db.Uuid
+  rewardDefinition   RewardDefinition        @relation(fields: [rewardDefinitionId], references: [id], onDelete: Restrict)
+  tornUserId         Int
+  memberName         String
+  amount             Decimal                 @db.Decimal(18, 4)
+  status             PayoutStatus            @default(PENDING)
+  processedById      String?                 @db.Uuid
+  processedBy        User?                   @relation("PayoutProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+  processedAt        DateTime?
+  note               String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 
   @@unique([snapshotId, contributionId, rewardDefinitionId])
   @@index([factionId, status, createdAt])
@@ -382,17 +384,17 @@ model MemberPayout {
 }
 
 model AuditLog {
-  id             String   @id @default(uuid()) @db.Uuid
-  factionId      String?  @db.Uuid
-  faction        Faction? @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  actorId        String?  @db.Uuid
-  actor          User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
-  action         String
-  entityType     String
-  entityId       String?
-  metadata       Json?
-  ipAddressHash  String?
-  createdAt      DateTime @default(now())
+  id            String   @id @default(uuid()) @db.Uuid
+  factionId     String?  @db.Uuid
+  faction       Faction? @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  actorId       String?  @db.Uuid
+  actor         User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action        String
+  entityType    String
+  entityId      String?
+  metadata      Json?
+  ipAddressHash String?
+  createdAt     DateTime @default(now())
 
   @@index([factionId, createdAt])
   @@index([action, createdAt])
@@ -418,13 +420,13 @@ model SyncLog {
 }
 
 model FactionSetting {
-  id         String   @id @default(uuid()) @db.Uuid
-  factionId  String   @db.Uuid
-  faction    Faction  @relation(fields: [factionId], references: [id], onDelete: Restrict)
-  key        String
-  value      Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid()) @db.Uuid
+  factionId String   @db.Uuid
+  faction   Faction  @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([factionId, key])
 }
@@ -450,8 +452,10 @@ model ChainWatchSettings {
   updatedAt     DateTime @updatedAt
 }
 
-/** A planned coverage window: who is responsible for keeping the chain alive
- *  between `startAt` and `endAt`, with an optional backup for redundancy. */
+/**
+ * A planned coverage window: who is responsible for keeping the chain alive
+ * between `startAt` and `endAt`, with an optional backup for redundancy.
+ */
 model ChainWatchSlot {
   id                String   @id @default(uuid()) @db.Uuid
   factionId         String   @db.Uuid
@@ -468,4 +472,49 @@ model ChainWatchSlot {
   updatedAt         DateTime @updatedAt
 
   @@index([factionId, startAt])
+}
+
+/**
+ * One encrypted browser PushSubscription per device/browser profile. Push
+ * endpoints are bearer capabilities, so the full endpoint and key material
+ * are encrypted at rest; only a keyed hash is used for lookup.
+ */
+model WebPushSubscription {
+  id                    String            @id @default(uuid()) @db.Uuid
+  userId                String            @db.Uuid
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  factionId             String            @db.Uuid
+  faction               Faction           @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  endpointHash          String            @unique
+  encryptedSubscription Bytes
+  encryptionIv          Bytes
+  platform              String
+  timezone              String
+  preferences           Json
+  enabled               Boolean           @default(true)
+  failureCount          Int               @default(0)
+  lastSeenAt            DateTime          @default(now())
+  lastMemberCheckAt     DateTime?
+  lastErrorAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  deliveries            WebPushDelivery[]
+
+  @@index([factionId, enabled])
+  @@index([userId, enabled])
+}
+
+/**
+ * Durable event keys keep cron retries, overlapping workers, and repeated
+ * Torn snapshots from producing duplicate device notifications.
+ */
+model WebPushDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  subscriptionId String              @db.Uuid
+  subscription   WebPushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  eventKey       String
+  sentAt         DateTime            @default(now())
+
+  @@unique([subscriptionId, eventKey])
+  @@index([sentAt])
 }

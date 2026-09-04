@@ -26,5 +26,5 @@ export default async function ChainWatchPage() {
   ]);
   const canManage = isPlatformOwner(actor) || Boolean(assignment && assignment.status === "ACTIVE" && hasPermission(assignment.role, "chain:manage"));
 
-  return <ChainWatchWorkspace telemetry={telemetry} workspace={workspace} rosterResult={roster} canManage={canManage} />;
+  return <ChainWatchWorkspace workspace={workspace} rosterResult={roster} canManage={canManage} />;
 }

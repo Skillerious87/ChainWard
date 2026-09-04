@@ -84,6 +84,16 @@ export function createAnchor(remainingMs: number, atPerf: number): CountdownAnch
 }
 
 /**
+ * Pins an unstarted server duration to the moment its persistent client owner
+ * hydrates. This must never inherit the browser document's navigation origin:
+ * a page component mounted two minutes after navigation would otherwise lose
+ * those two minutes immediately even though its snapshot had just arrived.
+ */
+export function rebaseAnchor(anchor: CountdownAnchor, atPerf: number): CountdownAnchor {
+  return createAnchor(anchor.remainingMs, atPerf);
+}
+
+/**
  * Builds an anchor from a server reading.
  *
  * @param reportedRemainingMs Seconds remaining as Torn reported them, in ms.

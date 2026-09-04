@@ -7,6 +7,7 @@ import {
   FIRST_RESETTING_HIT,
   NOISE_TOLERANCE_MS,
   project,
+  rebaseAnchor,
   reconcileAnchor,
   reconcileChainReading,
   RESET_THRESHOLD_MS,
@@ -31,6 +32,15 @@ describe("anchoring a countdown to a server reading", () => {
 });
 
 describe("projecting with a monotonic clock", () => {
+  it("starts a newly hydrated duration at component mount, not document navigation", () => {
+    // Reproduces the route-navigation bug: the document monotonic clock was
+    // already two minutes old when a fresh five-minute timer view mounted.
+    const serverDuration = createAnchor(300_000, 0);
+    const mounted = rebaseAnchor(serverDuration, 120_000);
+
+    expect(project(mounted, 120_250)).toBe(299_750);
+  });
+
   it("counts down as the monotonic clock advances", () => {
     const anchor = createAnchor(300_000, 5_000);
     expect(project(anchor, 5_000)).toBe(300_000);

@@ -15,11 +15,12 @@ export interface OperationalNotification {
 interface OperationalNotificationInput {
   telemetry: WorkspaceTelemetry;
   chainWarningSeconds: number;
+  chainRemainingSeconds?: number;
   memberActivity: MemberActivityMonitorSnapshot | null;
 }
 
 /** Turns raw workspace conditions into a small, ordered action queue. */
-export function buildOperationalNotifications({ telemetry, chainWarningSeconds, memberActivity }: OperationalNotificationInput): OperationalNotification[] {
+export function buildOperationalNotifications({ telemetry, chainWarningSeconds, chainRemainingSeconds: projectedChainRemaining, memberActivity }: OperationalNotificationInput): OperationalNotification[] {
   const notifications: OperationalNotification[] = [];
 
   if (telemetry.source === "unavailable") {
@@ -27,7 +28,7 @@ export function buildOperationalNotifications({ telemetry, chainWarningSeconds, 
   }
 
   const chain = telemetry.chain;
-  const remaining = chainRemainingSeconds(telemetry);
+  const remaining = projectedChainRemaining ?? chainRemainingSeconds(telemetry);
   if (chain?.state === "active" && remaining <= chainWarningSeconds) {
     const critical = remaining <= 60;
     notifications.push({

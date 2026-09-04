@@ -297,7 +297,7 @@
 .timeout-ring--critical { --ring-colour: var(--danger); --ring-from: rgba(242, 109, 109, .38); --ring-glow: 242, 109, 109; }
 .timeout-ring--expired { --ring-colour: #6c7780; --ring-from: rgba(108, 119, 128, .32); --ring-glow: 108, 119, 128; }
 .timeout-ring--critical { border-color: rgba(242, 109, 109, .28); }
-.timeout-ring--critical .timeout-ring__badge { animation: timeout-ring-pulse 1.2s ease-in-out infinite; }
+.timeout-ring--critical .timeout-ring__badge { animation: timeout-ring-pulse 2.8s ease-in-out infinite; }
 .timeout-ring--critical .timeout-ring__readout strong { color: #ffe8e8; }
 @keyframes timeout-ring-pulse { 50% { opacity: .5; } }
 

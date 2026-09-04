@@ -13,9 +13,14 @@ import { notify } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import {
   getBrowserNotificationPermission,
+  hasActivePushSubscription,
   requestBrowserNotificationPermission,
   saveMemberNotificationPreferences,
-  showWindowsNotification,
+  subscribeDeviceNotifications,
+  syncDeviceNotificationPreferences,
+  testDevicePushNotification,
+  unsubscribeDeviceNotifications,
+  deviceInstallGuidance,
   useMemberNotificationPreferences,
   type BrowserNotificationPermission,
   type MemberNotificationIntervalMinutes,
@@ -33,7 +38,7 @@ export interface LicenceTestingContext {
 const baseViews: { id: SettingsView; label: string; description: string; icon: LucideIcon }[] = [
   { id: "connection", label: "Torn connection", description: "Identity and API status", icon: KeyRound },
   { id: "operations", label: "Live operations", description: "Refresh and chain alerts", icon: Activity },
-  { id: "notifications", label: "Member alerts", description: "Windows notifications and monitoring", icon: BellRing },
+  { id: "notifications", label: "Device alerts", description: "Android, iPhone, and browser push", icon: BellRing },
   { id: "appearance", label: "Appearance", description: "Density, contrast, and colour", icon: Palette },
   { id: "storage", label: "Storage & backups", description: "Local database and restore", icon: Database },
   { id: "postgresql", label: "PostgreSQL", description: "Shared database setup", icon: ServerCog },
@@ -65,6 +70,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   const notificationPreferences = useMemberNotificationPreferences();
   const [activeView, setActiveView] = useState<SettingsView>("connection");
   const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermission>("unsupported");
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [installGuidance, setInstallGuidance] = useState<"ios-install" | "unsupported" | null>(null);
   const [notificationWorking, setNotificationWorking] = useState(false);
   const [licenceWorking, setLicenceWorking] = useState(false);
   const views = licenceTesting ? [...baseViews, developerView] : baseViews;
@@ -80,9 +87,19 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   const ActiveIcon = active.icon;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setNotificationPermission(getBrowserNotificationPermission()), 0);
+    const timer = window.setTimeout(() => {
+      setNotificationPermission(getBrowserNotificationPermission());
+      setInstallGuidance(deviceInstallGuidance());
+      void hasActivePushSubscription().then(setPushSubscribed);
+    }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!notificationPreferences.enabled || notificationPreferences.chainWarningSeconds === preferences.chainWarningSeconds) return;
+    const next = saveMemberNotificationPreferences({ chainWarningSeconds: preferences.chainWarningSeconds });
+    void syncDeviceNotificationPreferences(next).catch(() => undefined);
+  }, [notificationPreferences.chainWarningSeconds, notificationPreferences.enabled, preferences.chainWarningSeconds]);
 
   function chooseAccent(color: AccentOption): void {
     saveAppearancePreferences({ accent: color });
@@ -216,8 +233,9 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   }
 
   async function enableMemberNotifications(): Promise<void> {
-    if (!canMonitorMembers) {
-      notify({ title: "Member monitoring is read-only", description: "An Administrator or platform owner must enable activity monitoring.", tone: "warning" });
+    if (deviceInstallGuidance() === "ios-install") {
+      setInstallGuidance("ios-install");
+      notify({ title: "Add Chainward to your Home Screen", description: "On iPhone or iPad, open Share, choose Add to Home Screen, then enable alerts from the installed app.", tone: "info" });
       return;
     }
     setNotificationWorking(true);
@@ -228,23 +246,19 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         saveMemberNotificationPreferences({ enabled: false });
         notify({
           title: permission === "denied" ? "Notifications are blocked" : "Notifications are unavailable",
-          description: permission === "denied" ? "Allow notifications for this site in your browser or Windows site settings, then try again." : "Use HTTPS (or localhost) in a browser that supports desktop notifications.",
+          description: permission === "denied" ? "Allow notifications for Chainward in your device or browser settings, then try again." : "Use the HTTPS app in a browser that supports Web Push.",
           tone: "warning",
         });
         return;
       }
-      saveMemberNotificationPreferences({ enabled: true });
-      const shown = await showWindowsNotification("Chainward member monitoring is ready", {
-        body: "Critical inactivity, watch-list, and expired-holiday signals can now reach Windows while Chainward is open.",
-        icon: "/icons/android-chrome-192x192.png",
-        badge: "/icons/favicon-32x32.png",
-        tag: "chainward-notification-test",
-        data: { url: "/members" },
-      });
+      const next = saveMemberNotificationPreferences({ enabled: true, chainWarningSeconds: preferences.chainWarningSeconds });
+      await subscribeDeviceNotifications(next);
+      setPushSubscribed(true);
+      await testDevicePushNotification();
       notify({
-        title: shown ? "Windows notifications enabled" : "Monitoring enabled, but the test was not shown",
-        description: shown ? "Member monitoring is active with the alert rules below." : "Permission was granted, but Windows did not display the confirmation. Use Send test to try again.",
-        tone: shown ? "success" : "warning",
+        title: "Device notifications enabled",
+        description: "This device is subscribed to chain alerts and any member alerts you are authorised to receive.",
+        tone: "success",
       });
     } catch (error) {
       saveMemberNotificationPreferences({ enabled: false });
@@ -262,14 +276,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   async function testMemberNotification(): Promise<void> {
     setNotificationWorking(true);
     try {
-      const shown = await showWindowsNotification("Chainward notification test", {
-        body: "Your browser and Windows notification path are working.",
-        icon: "/icons/android-chrome-192x192.png",
-        badge: "/icons/favicon-32x32.png",
-        tag: "chainward-notification-test",
-        data: { url: "/settings" },
-      });
-      notify({ title: shown ? "Test notification sent" : "Test notification was not sent", description: shown ? "Check the Windows notification area if it did not appear immediately." : "Confirm this site still has notification permission.", tone: shown ? "success" : "warning" });
+      await testDevicePushNotification();
+      notify({ title: "Test push sent", description: "The server handed an encrypted notification to this device's push service.", tone: "success" });
     } catch (error) {
       notify({
         title: "Test notification failed",
@@ -282,9 +290,24 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
     }
   }
 
-  function disableMemberNotifications(): void {
-    saveMemberNotificationPreferences({ enabled: false });
-    notify({ title: "Member notifications paused", description: "Chainward will not poll the member monitor or send Windows alerts in this browser.", tone: "info" });
+  async function disableMemberNotifications(): Promise<void> {
+    setNotificationWorking(true);
+    try {
+      await unsubscribeDeviceNotifications();
+      saveMemberNotificationPreferences({ enabled: false });
+      setPushSubscribed(false);
+      notify({ title: "Device notifications paused", description: "This browser is no longer subscribed to background Chainward alerts.", tone: "info" });
+    } finally {
+      setNotificationWorking(false);
+    }
+  }
+
+  function updateNotificationPreferences(patch: Parameters<typeof saveMemberNotificationPreferences>[0]): void {
+    const next = saveMemberNotificationPreferences(patch);
+    if (!next.enabled || !pushSubscribed) return;
+    void syncDeviceNotificationPreferences(next).catch((error: unknown) => {
+      notify({ title: "Alert preference not synced", description: error instanceof Error ? error.message : "Try again while online.", tone: "warning" });
+    });
   }
 
   // The page header and the "Workspace settings 1 of 6" panel title were both
@@ -324,21 +347,23 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         </section>}
 
         {activeView === "notifications" && <section className="settings-view-content">
-          <div className="settings-status-hero"><span>{canMonitorMembers && notificationPreferences.enabled && notificationPermission === "granted" ? <BellRing size={22} /> : <BellOff size={22} />}</span><div><p className="eyebrow">Smart member monitor</p><h3>{canMonitorMembers ? notificationStatusTitle(notificationPermission, notificationPreferences.enabled) : "Member-management permission required"}</h3><p>{canMonitorMembers ? notificationStatusDetail(notificationPermission, notificationPreferences.enabled) : "You can review these options, but only an Administrator or platform owner can run the member monitor."}</p></div><em className={`database-health database-health--${canMonitorMembers && notificationPreferences.enabled && notificationPermission === "granted" ? "ready" : "attention"}`}><i />{!canMonitorMembers ? "Read only" : notificationPreferences.enabled && notificationPermission === "granted" ? "Monitoring" : notificationPermission === "denied" ? "Blocked" : "Paused"}</em></div>
+          <div className="settings-status-hero"><span>{pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? <BellRing size={22} /> : <BellOff size={22} />}</span><div><p className="eyebrow">Background device alerts</p><h3>{notificationStatusTitle(notificationPermission, notificationPreferences.enabled && pushSubscribed)}</h3><p>{notificationStatusDetail(notificationPermission, notificationPreferences.enabled && pushSubscribed)}</p></div><em className={`database-health database-health--${pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? "ready" : "attention"}`}><i />{pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? "Subscribed" : notificationPermission === "denied" ? "Blocked" : "Paused"}</em></div>
           <div className="notification-permission-actions">
-            {(!notificationPreferences.enabled || notificationPermission !== "granted") && <button className="button button--primary" disabled={!canMonitorMembers || notificationWorking || notificationPermission === "denied"} onClick={() => void enableMemberNotifications()}>{notificationWorking ? <Spinner size={15} label="Enabling notifications" /> : <BellRing size={15} />} Enable Windows notifications</button>}
-            {notificationPreferences.enabled && notificationPermission === "granted" && <><button className="button button--secondary" disabled={notificationWorking} onClick={() => void testMemberNotification()}>{notificationWorking ? <Spinner size={15} label="Sending test notification" tone="muted" /> : <BellRing size={15} />} Send test</button><button className="button button--quiet" onClick={disableMemberNotifications}><BellOff size={15} /> Pause monitoring</button></>}
+            {(!pushSubscribed || !notificationPreferences.enabled || notificationPermission !== "granted") && <button className="button button--primary" disabled={notificationWorking || notificationPermission === "denied" || installGuidance === "unsupported"} onClick={() => void enableMemberNotifications()}>{notificationWorking ? <Spinner size={15} label="Enabling notifications" /> : <BellRing size={15} />} Enable device notifications</button>}
+            {pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" && <><button className="button button--secondary" disabled={notificationWorking} onClick={() => void testMemberNotification()}>{notificationWorking ? <Spinner size={15} label="Sending test notification" tone="muted" /> : <BellRing size={15} />} Send test push</button><button className="button button--quiet" disabled={notificationWorking} onClick={() => void disableMemberNotifications()}><BellOff size={15} /> Pause alerts</button></>}
           </div>
+          {installGuidance === "ios-install" && <div className="settings-alert"><BellRing size={17} /><div><strong>Install Chainward on iPhone or iPad first</strong><p>In Safari, tap Share, choose Add to Home Screen, open the installed Chainward app, then return here. Apple enables Web Push for Home Screen web apps.</p></div></div>}
+          {installGuidance === "unsupported" && <div className="settings-alert settings-alert--warning"><AlertTriangle size={17} /><div><strong>Web Push is unavailable here</strong><p>Use Chainward over HTTPS in a current Android browser, desktop browser, or an installed iPhone/iPad Home Screen app.</p></div></div>}
           {!canMonitorMembers && <div className="settings-alert"><ShieldCheck size={17} /><div><strong>Server-enforced activity access</strong><p>The monitor endpoint rechecks the active licence, faction assignment, current roster membership, and members:manage permission on every request.</p></div></div>}
           {notificationPermission === "denied" && <div className="settings-alert settings-alert--warning"><AlertTriangle size={17} /><div><strong>Browser permission is blocked</strong><p>Open this site&apos;s permissions in your browser, change Notifications to Allow, then reload Settings. Chainward cannot override a denied browser permission.</p></div></div>}
           <div className="settings-option-grid settings-option-grid--notifications">
-            <label><span><AlertTriangle size={15} /> Minimum alert level</span><small>Choose whether Windows receives the full review queue or critical escalations only.</small><select value={notificationPreferences.minimumLevel} onChange={(event) => saveMemberNotificationPreferences({ minimumLevel: event.target.value === "critical" ? "critical" : "attention" })}><option value="attention">Review and critical</option><option value="critical">Critical only</option></select></label>
-            <label><span><RefreshCw size={15} /> Monitor interval</span><small>Checks the roster while Chainward remains open, including a background tab.</small><select value={notificationPreferences.intervalMinutes} onChange={(event) => saveMemberNotificationPreferences({ intervalMinutes: Number(event.target.value) as MemberNotificationIntervalMinutes })}><option value="5">Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option><option value="60">Every hour</option></select></label>
-            <label><span><Clock3 size={15} /> Unresolved reminder</span><small>Repeat an unchanged alert after this period, without stacking duplicate notifications.</small><select value={notificationPreferences.reminderHours} onChange={(event) => saveMemberNotificationPreferences({ reminderHours: Number(event.target.value) as MemberNotificationReminderHours })}><option value="0">Never repeat</option><option value="4">Every 4 hours</option><option value="12">Every 12 hours</option><option value="24">Every 24 hours</option></select></label>
+            <label><span><AlertTriangle size={15} /> Minimum member level</span><small>Choose whether authorised member managers receive the review queue or critical escalations only.</small><select disabled={!canMonitorMembers} value={notificationPreferences.minimumLevel} onChange={(event) => updateNotificationPreferences({ minimumLevel: event.target.value === "critical" ? "critical" : "attention" })}><option value="attention">Review and critical</option><option value="critical">Critical only</option></select></label>
+            <label><span><RefreshCw size={15} /> Member monitor interval</span><small>The server checks the roster on this cadence, even when the app is closed.</small><select disabled={!canMonitorMembers} value={notificationPreferences.intervalMinutes} onChange={(event) => updateNotificationPreferences({ intervalMinutes: Number(event.target.value) as MemberNotificationIntervalMinutes })}><option value="5">Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option><option value="60">Every hour</option></select></label>
+            <label><span><Clock3 size={15} /> Unresolved reminder</span><small>Repeat an unchanged member alert after this period, without stacking duplicates.</small><select disabled={!canMonitorMembers} value={notificationPreferences.reminderHours} onChange={(event) => updateNotificationPreferences({ reminderHours: Number(event.target.value) as MemberNotificationReminderHours })}><option value="0">Never repeat</option><option value="4">Every 4 hours</option><option value="12">Every 12 hours</option><option value="24">Every 24 hours</option></select></label>
           </div>
-          <div className="preference-list"><PreferenceToggle icon={Eye} title="Include watch-list signals" description="Notify when a deliberately watched member is in the attention queue." checked={notificationPreferences.includeWatchList} onChange={(value) => saveMemberNotificationPreferences({ includeWatchList: value })} /><PreferenceToggle icon={AlertTriangle} title="Include expired holidays" description="Notify when a holiday exemption has ended and needs owner review." checked={notificationPreferences.includeExpiredHolidays} onChange={(value) => saveMemberNotificationPreferences({ includeExpiredHolidays: value })} /><PreferenceToggle icon={BellRing} title="Keep critical alerts visible" description="Ask supported Windows browsers to keep critical notifications on screen until dismissed." checked={notificationPreferences.keepCriticalVisible} onChange={(value) => saveMemberNotificationPreferences({ keepCriticalVisible: value })} /><PreferenceToggle icon={Clock3} title="Quiet hours" description="Hold new Windows alerts during the local-time window below; the next check can deliver them." checked={notificationPreferences.quietHoursEnabled} onChange={(value) => saveMemberNotificationPreferences({ quietHoursEnabled: value })} /></div>
-          <div className="quiet-hours-grid"><label><span>Quiet from</span><input type="time" value={notificationPreferences.quietStart} disabled={!notificationPreferences.quietHoursEnabled} onChange={(event) => saveMemberNotificationPreferences({ quietStart: event.target.value })} /></label><label><span>Resume at</span><input type="time" value={notificationPreferences.quietEnd} disabled={!notificationPreferences.quietHoursEnabled} onChange={(event) => saveMemberNotificationPreferences({ quietEnd: event.target.value })} /></label></div>
-          <div className="settings-explanation"><span><ShieldCheck size={20} /></span><div><strong>Permission-first and deduplicated</strong><p>Chainward asks only after you press Enable, sends no member data to a third-party notification service, and replaces duplicate alerts. HTTPS is required after deployment. Monitoring continues in a background tab, but the browser must remain running with Chainward open.</p></div></div>
+          <div className="preference-list"><PreferenceToggle icon={Activity} title="Chain danger alerts" description={`Notify this device inside your ${Math.floor(preferences.chainWarningSeconds / 60)} minute chain-warning window; the final minute is always critical.`} checked={notificationPreferences.includeChainAlerts} onChange={(value) => updateNotificationPreferences({ includeChainAlerts: value })} /><PreferenceToggle disabled={!canMonitorMembers} icon={Eye} title="Include watch-list signals" description="Notify authorised managers when a deliberately watched member enters the attention queue." checked={notificationPreferences.includeWatchList} onChange={(value) => updateNotificationPreferences({ includeWatchList: value })} /><PreferenceToggle disabled={!canMonitorMembers} icon={AlertTriangle} title="Include expired holidays" description="Notify authorised managers when a holiday exemption has ended." checked={notificationPreferences.includeExpiredHolidays} onChange={(value) => updateNotificationPreferences({ includeExpiredHolidays: value })} /><PreferenceToggle icon={BellRing} title="Keep critical alerts visible" description="Ask supported devices to keep critical notifications visible until dismissed." checked={notificationPreferences.keepCriticalVisible} onChange={(value) => updateNotificationPreferences({ keepCriticalVisible: value })} /><PreferenceToggle icon={Clock3} title="Quiet hours" description="Hold normal alerts in this local-time window; final-minute chain alerts still break through." checked={notificationPreferences.quietHoursEnabled} onChange={(value) => updateNotificationPreferences({ quietHoursEnabled: value })} /></div>
+          <div className="quiet-hours-grid"><label><span>Quiet from</span><input type="time" value={notificationPreferences.quietStart} disabled={!notificationPreferences.quietHoursEnabled} onChange={(event) => updateNotificationPreferences({ quietStart: event.target.value })} /></label><label><span>Resume at</span><input type="time" value={notificationPreferences.quietEnd} disabled={!notificationPreferences.quietHoursEnabled} onChange={(event) => updateNotificationPreferences({ quietEnd: event.target.value })} /></label></div>
+          <div className="settings-explanation"><span><ShieldCheck size={20} /></span><div><strong>Permission-first, encrypted, and deduplicated</strong><p>Chainward asks only after you press Enable. The server stores each browser push capability encrypted, sends minimal alert text through the browser&apos;s push service, and records event keys to prevent duplicates. The app can be closed; the browser or installed web app must still be allowed to run notifications.</p></div></div>
         </section>}
 
         {activeView === "appearance" && <section className="settings-view-content">
@@ -425,24 +450,24 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   </div>;
 }
 
-function PreferenceToggle({ icon: Icon, title, description, checked, onChange }: { icon: typeof Palette; title: string; description: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="settings-preference"><span><Icon size={16} /></span><p><strong>{title}</strong><small>{description}</small></p><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
+function PreferenceToggle({ icon: Icon, title, description, checked, disabled = false, onChange }: { icon: typeof Palette; title: string; description: string; checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
+  return <label className="settings-preference"><span><Icon size={16} /></span><p><strong>{title}</strong><small>{description}</small></p><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
 }
 
 function notificationStatusTitle(permission: BrowserNotificationPermission, enabled: boolean): string {
   if (permission === "unsupported") return "Secure browser notifications required";
   if (permission === "denied") return "Notifications blocked by the browser";
-  if (permission === "granted" && enabled) return "Windows member alerts are active";
+  if (permission === "granted" && enabled) return "Background device alerts are active";
   if (permission === "granted") return "Notification permission is ready";
   return "Enable permission when you are ready";
 }
 
 function notificationStatusDetail(permission: BrowserNotificationPermission, enabled: boolean): string {
-  if (permission === "unsupported") return "Open Chainward on HTTPS or localhost in a browser with desktop notification support.";
+  if (permission === "unsupported") return "Open Chainward over HTTPS in a browser or installed web app with Web Push support.";
   if (permission === "denied") return "The browser will not show the permission prompt again until its site setting is changed.";
-  if (permission === "granted" && enabled) return "Chainward checks for meaningful member-state changes and sends deduplicated native alerts.";
-  if (permission === "granted") return "Permission is granted, but member monitoring is paused in this browser.";
-  return "Chainward will ask this browser to allow native notifications after a deliberate click.";
+  if (permission === "granted" && enabled) return "Encrypted push alerts can reach this device for chain danger and authorised member activity changes.";
+  if (permission === "granted") return "Permission is granted, but this browser is not currently subscribed.";
+  return "Chainward will ask this device for notification permission only after a deliberate click.";
 }
 
 async function responseError(response: Response): Promise<string> { const payload: unknown = await response.json().catch(() => null); return isErrorPayload(payload) ? payload.error : "The server could not create a backup."; }

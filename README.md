@@ -73,21 +73,30 @@ active-chain timeout warning. Background refresh continues while Chainward
 remains open and online; active chains use an uncached 5-second check, and
 manual refresh also requests a fresh Torn chain snapshot.
 
-## Member notifications
+## Device notifications
 
-Faction Administrators and the platform owner can enable native notifications
-under **Settings → Member alerts**. Permission is requested only after the user
-presses **Enable Windows notifications**. The monitor supports critical-only or
-full review alerts, watch-list and expired-holiday controls, quiet hours,
-deduplicated reminders, and a five-to-sixty-minute check interval.
+Users can enable standards-based Web Push under **Settings → Device alerts**.
+Permission is requested only after the user presses **Enable device
+notifications**. Android and desktop browsers can subscribe directly. On iOS
+and iPadOS 16.4 or later, install Chainward with Safari's **Add to Home Screen**
+first and enable notifications from that installed web app.
 
-Hosted deployments must use HTTPS for notification permission and service
-workers. Localhost is treated as a secure development context by supported
-browsers. Monitoring continues when the Chainward tab is in the background,
-but the browser must remain running with the site open; this is deliberately a
-same-origin browser monitor, not a third-party push service that can wake a
-closed browser. Every monitor request rechecks the active licence and the
-operator's `members:manage` permission. Each current roster member also has a
+The once-per-minute authenticated worker sends chain-warning and final-minute
+critical alerts to the current scheduled primary/backup watcher, or to all
+subscribed operators when no watch slot is active. Authorised faction managers
+can also receive critical-only or full member-review alerts, with watch-list,
+expired-holiday, quiet-hour, deduplication, reminder, and interval controls.
+The service worker can show these alerts while Chainward is closed, provided
+the browser or installed web app is still permitted to run notifications.
+
+Hosted deployments require HTTPS, PostgreSQL, and a scheduler
+for `/api/notifications/dispatch`; `vercel.json` configures a one-minute Vercel
+cron. `CRON_SECRET` is strongly recommended; a durable one-run-per-minute
+database reservation bounds safe operation when it is absent. Push endpoints
+and browser key material are encrypted at rest. Delivery
+event keys are stored separately to suppress duplicates across cron retries.
+Every member dispatch rechecks stored faction roles before including member
+activity. Each current roster member also has a
 source-labelled personnel report at `/members/{tornUserId}`. Authorised member
 managers can add append-only faction or leadership reports and assign/revoke
 recognition badges; Torn roster facts remain visually separate from these
@@ -123,8 +132,8 @@ Before exposing Chainward to other users:
 
 1. Configure shared PostgreSQL with `DATABASE_URL`, run `npm run db:push`, and
    do not use the local SQLite backend across multiple instances.
-2. Generate separate random values of at least 32 bytes for `SESSION_SECRET`
-   and `API_KEY_ENCRYPTION_SECRET`.
+2. Generate separate random values of at least 32 bytes for `SESSION_SECRET`,
+   `API_KEY_ENCRYPTION_SECRET`, and `CRON_SECRET`.
 3. Set `CHAINWARD_PUBLIC_ORIGIN` to the canonical HTTPS origin and list every
    accepted browser origin in `CHAINWARD_ALLOWED_ORIGINS`. Vercel can derive
    the canonical origin from its system environment when the explicit value is

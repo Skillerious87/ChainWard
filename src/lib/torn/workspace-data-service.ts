@@ -11,7 +11,7 @@ export const getFactionRoster = cache(async (): Promise<TornDataResult<TornRoste
     const client = await getConfiguredTornClient();
     if (!client) return unavailable([], "Connect a Torn API key to retrieve the faction roster.");
     const response = await client.getFactionMembers();
-    return available(response.members.map(mapMember), client.dataMode === "offline" ? "Roster loaded from the offline test fixture." : "Roster retrieved from Torn API v2.");
+    return available(response.members.map(mapFactionMember), client.dataMode === "offline" ? "Roster loaded from the offline test fixture." : "Roster retrieved from Torn API v2.");
   } catch (error: unknown) {
     return unavailable([], safeError(error));
   }
@@ -77,7 +77,7 @@ export const getCurrentChainReportView = cache(async (): Promise<TornDataResult<
   }
 });
 
-function mapMember(member: FactionMembersResponse["members"][number]): TornRosterMember {
+export function mapFactionMember(member: FactionMembersResponse["members"][number]): TornRosterMember {
   return {
     tornId: member.id,
     name: member.name,
