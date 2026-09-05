@@ -48,6 +48,12 @@
 .chain-watch-duty__buffer svg { flex: 0 0 auto; color: var(--accent); }
 .chain-watch-duty__buffer strong { color: #e2e8e5; font-size: 13px; font-variant-numeric: tabular-nums; }
 
+/* Coverage gaps ---------------------------------------------------------------- */
+.chain-watch-gaps { display: flex; flex-direction: column; gap: 10px; padding: 16px 20px; border-color: rgba(245, 185, 76, .26); background: linear-gradient(100deg, rgba(245, 185, 76, .045), transparent 58%), var(--surface); }
+.chain-watch-gaps__header { display: flex; align-items: center; gap: 8px; color: var(--warning); font-size: 11.5px; font-weight: 650; }
+.chain-watch-gaps__list { display: flex; flex-direction: column; gap: 6px; }
+.chain-watch-gaps__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255, 255, 255, .015); color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+
 /* Coverage list --------------------------------------------------------------- */
 .chain-watch-list { display: flex; flex-direction: column; }
 .chain-watch-list__header {

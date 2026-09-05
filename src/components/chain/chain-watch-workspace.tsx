@@ -1,6 +1,6 @@
 "use client";
 
-import { AlarmClock, CalendarClock, CalendarPlus, Clock3, Pencil, Settings2, ShieldAlert, ShieldCheck, Trash2, UserRoundCheck, Users } from "lucide-react";
+import { AlarmClock, CalendarClock, CalendarPlus, Clock3, Pencil, Settings2, ShieldAlert, ShieldCheck, Trash2, TriangleAlert, UserRoundCheck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createChainWatchSlotAction, deleteChainWatchSlotAction, updateChainWatchSettingsAction, updateChainWatchSlotAction } from "@/app/(platform)/chain-watch/actions";
 import { ChainHero } from "@/components/chain/chain-hero";
@@ -8,10 +8,15 @@ import { Dialog } from "@/components/ui/dialog";
 import { MemberAvatar } from "@/components/ui/member-avatar";
 import { PageHeader } from "@/components/ui/page-header";
 import { TornUserName } from "@/components/ui/torn-user-link";
+import { findChainWatchConflicts, type ChainWatchConflict } from "@/lib/chain-watch/chain-watch-conflicts";
+import { findChainWatchGaps } from "@/lib/chain-watch/chain-watch-gaps";
 import { findActiveSlot, findNextSlot, slotStatus } from "@/lib/chain-watch/chain-watch-schedule";
 import type { ChainWatchSlot, ChainWatchWorkspace as ChainWatchWorkspaceData } from "@/lib/chain-watch/chain-watch-store";
 import { notify } from "@/lib/client-actions";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
+
+/** How far ahead the coverage-gap panel looks -- long enough to plan around, short enough to stay actionable. */
+const GAP_LOOKAHEAD_MS = 72 * 60 * 60 * 1_000;
 
 interface SlotDraft {
   startAt: string;
@@ -58,9 +63,10 @@ export function ChainWatchWorkspace({
   );
   const activeSlot = useMemo(() => findActiveSlot(workspace.slots, now), [workspace.slots, now]);
   const nextSlot = useMemo(() => findNextSlot(workspace.slots, now), [workspace.slots, now]);
+  const gaps = useMemo(() => findChainWatchGaps(workspace.slots, now, GAP_LOOKAHEAD_MS), [workspace.slots, now]);
 
-  function openCreate() {
-    setDraft(EMPTY_DRAFT);
+  function openCreate(prefill?: { startAt: string; endAt: string }) {
+    setDraft(prefill ? { ...EMPTY_DRAFT, startAt: toLocalInputValue(prefill.startAt), endAt: toLocalInputValue(prefill.endAt) } : EMPTY_DRAFT);
     setSlotDialog({ mode: "create" });
   }
 
@@ -104,7 +110,18 @@ export function ChainWatchWorkspace({
   }
 
   const draftEndValid = draft.startAt && draft.endAt && fromLocalInputValue(draft.endAt) > fromLocalInputValue(draft.startAt);
-  const slotFormValid = Boolean(draft.startAt && draft.endAt && draft.primaryTornUserId && draftEndValid && draft.primaryTornUserId !== draft.backupTornUserId);
+  const draftConflicts = useMemo(() => {
+    if (!draft.startAt || !draft.endAt || !draftEndValid || !draft.primaryTornUserId) return [];
+    return findChainWatchConflicts(workspace.slots, {
+      startAt: fromLocalInputValue(draft.startAt),
+      endAt: fromLocalInputValue(draft.endAt),
+      primaryTornUserId: Number(draft.primaryTornUserId),
+      backupTornUserId: draft.backupTornUserId ? Number(draft.backupTornUserId) : null,
+      excludeSlotId: slotDialog?.mode === "edit" ? slotDialog.slotId : undefined,
+    });
+  }, [draft, draftEndValid, workspace.slots, slotDialog]);
+  const [firstDraftConflict] = draftConflicts;
+  const slotFormValid = Boolean(draft.startAt && draft.endAt && draft.primaryTornUserId && draftEndValid && draft.primaryTornUserId !== draft.backupTornUserId && draftConflicts.length === 0);
 
   return (
     <div className="page-stack chain-watch-page">
@@ -114,7 +131,7 @@ export function ChainWatchWorkspace({
         description={`Plan who keeps the chain alive and when. Times are shown in Torn City Time (UTC)${canManage ? "." : " — ask an administrator for edit access."}`}
         actions={canManage ? <>
           <button className="button button--secondary" type="button" onClick={() => { setRoleNameDraft(workspace.roleName); setBufferDraft(workspace.bufferSeconds); setSettingsOpen(true); }}><Settings2 size={15} /> Customize</button>
-          <button className="button button--primary" type="button" onClick={openCreate}><CalendarPlus size={15} /> Add slot</button>
+          <button className="button button--primary" type="button" onClick={() => openCreate()}><CalendarPlus size={15} /> Add slot</button>
         </> : undefined}
       />
 
@@ -140,6 +157,20 @@ export function ChainWatchWorkspace({
         </div>
         <div className="chain-watch-duty__buffer"><AlarmClock size={15} /><span>Call for a hit under</span><strong>{formatSeconds(workspace.bufferSeconds)}</strong></div>
       </section>
+
+      {gaps.length > 0 && (
+        <section className="chain-watch-gaps panel" aria-label="Upcoming coverage gaps">
+          <header className="chain-watch-gaps__header"><TriangleAlert size={15} /><span>{gaps.length === 1 ? "1 uncovered window" : `${gaps.length} uncovered windows`} in the next {Math.round(GAP_LOOKAHEAD_MS / 3_600_000)}h</span></header>
+          <div className="chain-watch-gaps__list">
+            {gaps.map((gap) => (
+              <div className="chain-watch-gaps__row" key={`${gap.startAt}-${gap.endAt}`}>
+                <span>{formatTime(gap.startAt)} → {formatTime(gap.endAt)}</span>
+                {canManage && <button className="button button--secondary" type="button" onClick={() => openCreate(gap)}>Cover this gap</button>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="chain-watch-list panel">
         <header className="chain-watch-list__header">
@@ -206,6 +237,7 @@ export function ChainWatchWorkspace({
             <label><span>Ends</span><input type="datetime-local" value={draft.endAt} onChange={(event) => setDraft((current) => ({ ...current, endAt: event.target.value }))} /></label>
           </div>
           {draft.startAt && draft.endAt && !draftEndValid && <p className="chain-watch-slot-form__error">The end time must be after the start time.</p>}
+          {firstDraftConflict && <p className="chain-watch-slot-form__error">{describeSlotConflict(firstDraftConflict, workspace.slots)}</p>}
           <label><span>Primary — {workspace.roleName}</span>
             <select value={draft.primaryTornUserId} onChange={(event) => setDraft((current) => ({ ...current, primaryTornUserId: event.target.value }))}>
               <option value="">Select a member</option>
@@ -277,6 +309,15 @@ function SlotRow({
 
 function formatTime(iso: string): string {
   return `${new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(new Date(iso))} TCT`;
+}
+
+/** `findChainWatchConflicts` already did the real work; this only names who and when for the inline form error. */
+function describeSlotConflict(conflict: ChainWatchConflict, slots: readonly ChainWatchSlot[]): string {
+  const existing = slots.find((slot) => slot.id === conflict.slotId);
+  if (!existing) return "This assignment overlaps another scheduled slot for the same member.";
+  const name = (conflict.existingRole === "primary" ? existing.primaryMemberName : existing.backupMemberName) ?? "This member";
+  const role = conflict.existingRole === "backup" ? " as backup" : "";
+  return `${name} is already scheduled${role} from ${formatTime(existing.startAt)} to ${formatTime(existing.endAt)}.`;
 }
 
 function formatSeconds(seconds: number): string {

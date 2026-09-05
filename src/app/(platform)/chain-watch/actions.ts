@@ -5,9 +5,11 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
+import { findChainWatchConflicts, type ChainWatchConflict } from "@/lib/chain-watch/chain-watch-conflicts";
 import {
   createChainWatchSlot,
   deleteChainWatchSlot,
+  getChainWatchWorkspace,
   updateChainWatchSlot,
   setChainWatchSettings,
   type ChainWatchSlot,
@@ -57,6 +59,9 @@ export async function createChainWatchSlotAction(input: unknown): Promise<ChainW
     const { actor, faction } = await requireFactionPermission("chain:manage");
     const parsed = slotSchema.parse(input);
     const resolved = await resolveSlotMembers(parsed);
+    const workspace = await getChainWatchWorkspace(faction.id);
+    const [conflict] = findChainWatchConflicts(workspace.slots, resolved);
+    if (conflict) throw new Error(describeConflict(conflict, workspace.slots));
     const slot = await createChainWatchSlot(faction.id, resolved, actor.tornUserId);
     revalidatePath("/chain-watch");
     return { ok: true, message: `Coverage slot added for ${resolved.primaryMemberName}.`, slot };
@@ -71,6 +76,9 @@ export async function updateChainWatchSlotAction(input: unknown): Promise<ChainW
     const parsed = slotSchema.parse(input);
     const { faction } = await requireFactionPermission("chain:manage");
     const resolved = await resolveSlotMembers(parsed);
+    const workspace = await getChainWatchWorkspace(faction.id);
+    const [conflict] = findChainWatchConflicts(workspace.slots, { ...resolved, excludeSlotId: slotId });
+    if (conflict) throw new Error(describeConflict(conflict, workspace.slots));
     const slot = await updateChainWatchSlot(faction.id, slotId, resolved);
     revalidatePath("/chain-watch");
     return { ok: true, message: "Coverage slot updated.", slot };
@@ -113,6 +121,19 @@ async function resolveSlotMembers(input: z.infer<typeof slotSchema>) {
     backupMemberName: backup?.name ?? null,
     note: input.note?.trim() || null,
   };
+}
+
+/** `findChainWatchConflicts` already did the real work; this only turns its first hit into a message naming who and when. */
+function describeConflict(conflict: ChainWatchConflict, slots: readonly ChainWatchSlot[]): string {
+  const existing = slots.find((slot) => slot.id === conflict.slotId);
+  if (!existing) return "This assignment overlaps another scheduled slot for the same member.";
+  const name = (conflict.existingRole === "primary" ? existing.primaryMemberName : existing.backupMemberName) ?? "This member";
+  const role = conflict.existingRole === "backup" ? " as backup" : "";
+  return `${name} is already scheduled${role} from ${formatConflictTime(existing.startAt)} to ${formatConflictTime(existing.endAt)} TCT.`;
+}
+
+function formatConflictTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(new Date(iso));
 }
 
 function safeMessage(error: unknown): string {
