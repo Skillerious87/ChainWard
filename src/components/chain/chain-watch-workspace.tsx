@@ -1,8 +1,9 @@
 "use client";
 
-import { AlarmClock, CalendarClock, CalendarPlus, Clock3, Pause, Pencil, Play, Repeat, Settings2, ShieldAlert, ShieldCheck, Trash2, TriangleAlert, UserRoundCheck, Users } from "lucide-react";
+import { AlarmClock, ArrowLeftRight, CalendarClock, CalendarPlus, CheckSquare, Clock3, Copy, Pause, Pencil, Play, Repeat, Settings2, ShieldAlert, ShieldCheck, Trash2, TriangleAlert, UserRoundCheck, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createChainWatchSlotAction, deleteChainWatchSlotAction, updateChainWatchSettingsAction, updateChainWatchSlotAction } from "@/app/(platform)/chain-watch/actions";
+import { bulkDeleteChainWatchSlotsAction, duplicateChainWatchRangeAction, swapChainWatchSlotMembersAction } from "@/app/(platform)/chain-watch/bulk-actions";
 import { createChainWatchRotationAction, deleteChainWatchRotationAction, pauseChainWatchRotationAction, updateChainWatchRotationAction } from "@/app/(platform)/chain-watch/rotation-actions";
 import { ChainHero } from "@/components/chain/chain-hero";
 import { ChainWatchRotationDialog } from "@/components/chain/chain-watch-rotation-dialog";
@@ -18,8 +19,20 @@ import type { ChainWatchSlot, ChainWatchWorkspace as ChainWatchWorkspaceData } f
 import { notify } from "@/lib/client-actions";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
 /** How far ahead the coverage-gap panel looks -- long enough to plan around, short enough to stay actionable. */
 const GAP_LOOKAHEAD_MS = 72 * 60 * 60 * 1_000;
+
+function startOfUtcDay(ms: number): number {
+  return Math.floor(ms / DAY_MS) * DAY_MS;
+}
+
+/** Monday-first, matching the rotation weekday picker. */
+function startOfUtcWeek(ms: number): number {
+  const dayStart = startOfUtcDay(ms);
+  const isoWeekday = (new Date(dayStart).getUTCDay() + 6) % 7;
+  return dayStart - isoWeekday * DAY_MS;
+}
 
 interface SlotDraft {
   startAt: string;
@@ -60,6 +73,12 @@ export function ChainWatchWorkspace({
   const [editingRotationId, setEditingRotationId] = useState<string | null>(null);
   const [deleteRotationTarget, setDeleteRotationTarget] = useState<ChainWatchRotation | null>(null);
   const editingRotation = editingRotationId ? rotations.find((rotation) => rotation.id === editingRotationId) ?? null : null;
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [swapTarget, setSwapTarget] = useState<ChainWatchSlot | null>(null);
+  const [swapWithId, setSwapWithId] = useState("");
 
   const sortedRoster = useMemo(() => [...rosterResult.data].toSorted((left, right) => left.name.localeCompare(right.name)), [rosterResult.data]);
 
@@ -135,7 +154,6 @@ export function ChainWatchWorkspace({
       : await createChainWatchRotationAction(input);
     notify({ title: result.ok ? "Rotation saved" : "Rotation not saved", description: result.message, tone: result.ok ? "success" : "danger" });
     if (!result.ok) throw new Error(result.message);
-    setRotationDialogOpen(false);
   }
 
   async function confirmDeleteRotation() {
@@ -148,6 +166,43 @@ export function ChainWatchWorkspace({
   async function togglePauseRotation(rotation: ChainWatchRotation) {
     const result = await pauseChainWatchRotationAction({ rotationId: rotation.id, isPaused: !rotation.isPaused });
     notify({ title: result.ok ? "Rotation updated" : "Could not update rotation", description: result.message, tone: result.ok ? "success" : "danger" });
+  }
+
+  async function duplicateForward(offsetDays: 1 | 7) {
+    const rangeStartMs = offsetDays === 1 ? startOfUtcDay(now) : startOfUtcWeek(now);
+    const rangeEndMs = rangeStartMs + offsetDays * DAY_MS;
+    const result = await duplicateChainWatchRangeAction({
+      rangeStartAt: new Date(rangeStartMs).toISOString(),
+      rangeEndAt: new Date(rangeEndMs).toISOString(),
+      offsetDays,
+    });
+    notify({ title: result.ok ? "Duplicated forward" : "Not duplicated", description: result.message, tone: result.ok ? "success" : "danger" });
+  }
+
+  function toggleSelected(slotId: string) {
+    setSelectedSlotIds((current) => {
+      const next = new Set(current);
+      if (next.has(slotId)) next.delete(slotId);
+      else next.add(slotId);
+      return next;
+    });
+  }
+
+  async function confirmBulkDelete() {
+    const result = await bulkDeleteChainWatchSlotsAction({ slotIds: [...selectedSlotIds] });
+    notify({ title: result.ok ? "Slots removed" : "Not removed", description: result.message, tone: result.ok ? "success" : "danger" });
+    if (!result.ok) throw new Error(result.message);
+    setSelectedSlotIds(new Set());
+    setSelectMode(false);
+  }
+
+  async function confirmSwap() {
+    if (!swapTarget || !swapWithId) return;
+    const result = await swapChainWatchSlotMembersAction({ slotIdA: swapTarget.id, slotIdB: swapWithId });
+    notify({ title: result.ok ? "Swapped" : "Not swapped", description: result.message, tone: result.ok ? "success" : "danger" });
+    if (!result.ok) throw new Error(result.message);
+    setSwapTarget(null);
+    setSwapWithId("");
   }
 
   const manuallyAdjustedFutureCount = useMemo(() => {
@@ -226,12 +281,46 @@ export function ChainWatchWorkspace({
           <p>{workspace.slots.length ? workspace.message : "Verified faction members only."}</p>
         </header>
 
+        {canManage && (
+          <div className="chain-watch-list__toolbar">
+            <button className="button button--secondary" type="button" onClick={() => duplicateForward(1)}><Copy size={14} /> Duplicate today forward</button>
+            <button className="button button--secondary" type="button" onClick={() => duplicateForward(7)}><Copy size={14} /> Duplicate this week forward</button>
+            <button
+              className="button button--secondary"
+              type="button"
+              onClick={() => { setSelectMode((current) => !current); setSelectedSlotIds(new Set()); }}
+            >
+              {selectMode ? <X size={14} /> : <CheckSquare size={14} />} {selectMode ? "Cancel select" : "Select"}
+            </button>
+          </div>
+        )}
+
         {!workspace.databaseAvailable && <div className="chain-watch-alert chain-watch-alert--danger"><ShieldAlert size={16} /><span>{workspace.message}</span></div>}
         {!rosterResult.available && <div className="chain-watch-alert"><Clock3 size={16} /><span>Roster verification unavailable — scheduling is disabled until Torn confirms current membership.</span></div>}
 
+        {selectMode && selectedSlotIds.size > 0 && (
+          <div className="chain-watch-bulk-bar">
+            <span>{selectedSlotIds.size} selected</span>
+            <button className="button button--danger" type="button" onClick={() => setBulkDeleteConfirmOpen(true)}><Trash2 size={14} /> Delete selected</button>
+          </div>
+        )}
+
         <div className="chain-watch-slots" role="list">
           {upcomingSlots.map((slot) => (
-            <SlotRow key={slot.id} slot={slot} status={slotStatus(slot, now)} roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onOpenRotation={openEditRotation} onDelete={() => setDeleteTarget(slot)} />
+            <SlotRow
+              key={slot.id}
+              slot={slot}
+              status={slotStatus(slot, now)}
+              roleName={workspace.roleName}
+              canManage={canManage}
+              onEdit={() => openEdit(slot)}
+              onOpenRotation={openEditRotation}
+              onDelete={() => setDeleteTarget(slot)}
+              selectMode={selectMode}
+              selected={selectedSlotIds.has(slot.id)}
+              onToggleSelected={() => toggleSelected(slot.id)}
+              onSwap={() => setSwapTarget(slot)}
+            />
           ))}
           {upcomingSlots.length === 0 && (
             <div className="chain-watch-empty">
@@ -350,6 +439,40 @@ export function ChainWatchWorkspace({
       >
         <div className="chain-watch-alert chain-watch-alert--danger"><Trash2 size={16} /><span>This cannot be undone. A new rotation can be created again at any time.</span></div>
       </Dialog>
+
+      <Dialog
+        open={Boolean(swapTarget)}
+        className="dialog--chain-watch-slot"
+        title="Swap with another slot"
+        description={swapTarget ? `Swaps who is primary between ${swapTarget.primaryMemberName}'s slot and the one you pick. Backups stay with their own slot.` : undefined}
+        confirmLabel="Swap"
+        confirmDisabled={!swapWithId}
+        onConfirm={confirmSwap}
+        onClose={() => { setSwapTarget(null); setSwapWithId(""); }}
+      >
+        <div className="chain-watch-slot-form">
+          <label><span>Swap {swapTarget?.primaryMemberName} with…</span>
+            <select value={swapWithId} onChange={(event) => setSwapWithId(event.target.value)}>
+              <option value="">Select a slot</option>
+              {upcomingSlots.filter((slot) => slot.id !== swapTarget?.id).map((slot) => (
+                <option key={slot.id} value={slot.id}>{slot.primaryMemberName} · {formatTime(slot.startAt)} → {formatTime(slot.endAt)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={bulkDeleteConfirmOpen}
+        className="dialog--chain-watch-delete"
+        title={`Remove ${selectedSlotIds.size} selected slot${selectedSlotIds.size === 1 ? "" : "s"}?`}
+        confirmLabel="Remove selected"
+        destructive
+        onConfirm={confirmBulkDelete}
+        onClose={() => setBulkDeleteConfirmOpen(false)}
+      >
+        <div className="chain-watch-alert chain-watch-alert--danger"><Trash2 size={16} /><span>This cannot be undone. Members can be scheduled again at any time.</span></div>
+      </Dialog>
     </div>
   );
 }
@@ -362,6 +485,10 @@ function SlotRow({
   onEdit,
   onOpenRotation,
   onDelete,
+  selectMode = false,
+  selected = false,
+  onToggleSelected,
+  onSwap,
 }: {
   slot: ChainWatchSlot;
   status: "active" | "upcoming" | "past";
@@ -370,10 +497,19 @@ function SlotRow({
   onEdit: () => void;
   onOpenRotation: (rotationId: string) => void;
   onDelete: () => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
+  onSwap?: () => void;
 }) {
   const rotationId = slot.rotationId;
   return (
-    <article className={`chain-watch-slot chain-watch-slot--${status}`} role="listitem">
+    <article className={`chain-watch-slot chain-watch-slot--${status}${selectMode ? " chain-watch-slot--selectable" : ""}`} role="listitem">
+      {selectMode && (
+        <label className="chain-watch-slot__select">
+          <input type="checkbox" checked={selected} onChange={onToggleSelected} aria-label={`Select ${slot.primaryMemberName}'s slot`} />
+        </label>
+      )}
       <div className="chain-watch-slot__time">
         <strong>{formatTime(slot.startAt)}</strong>
         <span>→ {formatTime(slot.endAt)}</span>
@@ -387,8 +523,9 @@ function SlotRow({
         {slot.note && <p className="chain-watch-slot__note">{slot.note}</p>}
       </div>
       <span className={`chain-watch-status chain-watch-status--${status}`}><i />{status === "active" ? "On now" : status === "upcoming" ? "Upcoming" : "Done"}</span>
-      {canManage && (
+      {canManage && !selectMode && (
         <div className="chain-watch-slot__actions">
+          {onSwap && <button className="icon-button" type="button" onClick={onSwap} aria-label="Swap with another slot" title="Swap with another slot"><ArrowLeftRight size={15} /></button>}
           <button className="icon-button" type="button" onClick={onEdit} aria-label="Edit slot" title="Edit slot"><Pencil size={15} /></button>
           <button className="icon-button icon-button--danger" type="button" onClick={onDelete} aria-label="Remove slot" title="Remove slot"><Trash2 size={15} /></button>
         </div>

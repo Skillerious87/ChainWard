@@ -76,6 +76,22 @@ export async function deleteChainWatchSlot(factionId: number, slotId: string): P
   return deleteLocalSlot(factionId, slotId);
 }
 
+export async function createChainWatchSlotsBatch(factionId: number, inputs: ChainWatchSlotInput[], createdByTornId: number): Promise<ChainWatchSlot[]> {
+  if (inputs.length === 0) return [];
+  return process.env.DATABASE_URL?.trim() ? createPostgresSlotsBatch(factionId, inputs, createdByTornId) : createLocalSlotsBatch(factionId, inputs, createdByTornId);
+}
+
+/** Returns how many of the requested slots actually existed and were removed. */
+export async function deleteChainWatchSlotsBatch(factionId: number, slotIds: string[]): Promise<number> {
+  if (slotIds.length === 0) return 0;
+  return process.env.DATABASE_URL?.trim() ? deletePostgresSlotsBatch(factionId, slotIds) : deleteLocalSlotsBatch(factionId, slotIds);
+}
+
+/** Swaps only the primary member between two slots, atomically. */
+export async function swapChainWatchSlotPrimaries(factionId: number, slotIdA: string, slotIdB: string): Promise<{ slotA: ChainWatchSlot; slotB: ChainWatchSlot }> {
+  return process.env.DATABASE_URL?.trim() ? swapPostgresSlotPrimaries(factionId, slotIdA, slotIdB) : swapLocalSlotPrimaries(factionId, slotIdA, slotIdB);
+}
+
 // Local (SQLite) -------------------------------------------------------------
 
 function getLocalWorkspace(factionId: number): ChainWatchWorkspace {
@@ -163,6 +179,74 @@ function deleteLocalSlot(factionId: number, slotId: string): void {
   }
 }
 
+function createLocalSlotsBatch(factionId: number, inputs: ChainWatchSlotInput[], createdByTornId: number): ChainWatchSlot[] {
+  const database = openLocalDatabase();
+  if (!database) throw new Error("Create local storage before scheduling chain watch coverage.");
+  const now = new Date().toISOString();
+  try {
+    database.exec("BEGIN IMMEDIATE");
+    const insert = database.prepare(`
+      INSERT INTO chain_watch_slots (id, faction_id, start_at, end_at, primary_torn_user_id, primary_member_name, backup_torn_user_id, backup_member_name, note, created_by_torn_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const created = inputs.map((input) => {
+      const id = randomUUID();
+      insert.run(id, factionId, input.startAt, input.endAt, input.primaryTornUserId, input.primaryMemberName, input.backupTornUserId, input.backupMemberName, input.note, createdByTornId, now, now);
+      return { id, ...input, rotationId: null, rotationSequence: null, createdByTornId, createdAt: now, updatedAt: now };
+    });
+    database.exec("COMMIT");
+    return created;
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch { /* Transaction did not begin. */ }
+    throw error;
+  } finally {
+    database.close();
+  }
+}
+
+function deleteLocalSlotsBatch(factionId: number, slotIds: string[]): number {
+  const database = openLocalDatabase();
+  if (!database) throw new Error("The local chain watch schedule is unavailable.");
+  try {
+    database.exec("BEGIN IMMEDIATE");
+    const remove = database.prepare("DELETE FROM chain_watch_slots WHERE id = ? AND faction_id = ?");
+    let removed = 0;
+    for (const slotId of slotIds) removed += Number(remove.run(slotId, factionId).changes);
+    database.exec("COMMIT");
+    return removed;
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch { /* Transaction did not begin. */ }
+    throw error;
+  } finally {
+    database.close();
+  }
+}
+
+function swapLocalSlotPrimaries(factionId: number, slotIdA: string, slotIdB: string): { slotA: ChainWatchSlot; slotB: ChainWatchSlot } {
+  const database = openLocalDatabase();
+  if (!database) throw new Error("The local chain watch schedule is unavailable.");
+  const now = new Date().toISOString();
+  try {
+    database.exec("BEGIN IMMEDIATE");
+    const rowA = database.prepare("SELECT * FROM chain_watch_slots WHERE id = ? AND faction_id = ?").get(slotIdA, factionId) as unknown as LocalSlotRow | undefined;
+    const rowB = database.prepare("SELECT * FROM chain_watch_slots WHERE id = ? AND faction_id = ?").get(slotIdB, factionId) as unknown as LocalSlotRow | undefined;
+    if (!rowA || !rowB) throw new Error("Both slots must still exist to swap them.");
+    const update = database.prepare("UPDATE chain_watch_slots SET primary_torn_user_id = ?, primary_member_name = ?, updated_at = ? WHERE id = ?");
+    update.run(rowB.primary_torn_user_id, rowB.primary_member_name, now, slotIdA);
+    update.run(rowA.primary_torn_user_id, rowA.primary_member_name, now, slotIdB);
+    database.exec("COMMIT");
+    return {
+      slotA: mapLocalSlot({ ...rowA, primary_torn_user_id: rowB.primary_torn_user_id, primary_member_name: rowB.primary_member_name, updated_at: now }),
+      slotB: mapLocalSlot({ ...rowB, primary_torn_user_id: rowA.primary_torn_user_id, primary_member_name: rowA.primary_member_name, updated_at: now }),
+    };
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch { /* Transaction did not begin. */ }
+    throw error;
+  } finally {
+    database.close();
+  }
+}
+
 // Postgres ---------------------------------------------------------------
 
 async function getPostgresWorkspace(factionId: number): Promise<ChainWatchWorkspace> {
@@ -243,6 +327,54 @@ async function deletePostgresSlot(factionId: number, slotId: string): Promise<vo
   const existing = await db.chainWatchSlot.findUnique({ where: { id: slotId } });
   if (!existing || existing.factionId !== faction.id) throw new Error("This coverage slot no longer exists.");
   await db.chainWatchSlot.delete({ where: { id: slotId } });
+}
+
+async function createPostgresSlotsBatch(factionId: number, inputs: ChainWatchSlotInput[], createdByTornId: number): Promise<ChainWatchSlot[]> {
+  const { db } = await import("@/lib/db");
+  const faction = await db.faction.findUnique({ where: { tornFactionId: factionId } });
+  if (!faction) throw new Error("The connected faction could not be found.");
+  return db.$transaction(async (transaction) => {
+    const created: ChainWatchSlot[] = [];
+    for (const input of inputs) {
+      const slot = await transaction.chainWatchSlot.create({
+        data: {
+          factionId: faction.id,
+          startAt: new Date(input.startAt),
+          endAt: new Date(input.endAt),
+          primaryTornUserId: input.primaryTornUserId,
+          primaryMemberName: input.primaryMemberName,
+          backupTornUserId: input.backupTornUserId,
+          backupMemberName: input.backupMemberName,
+          note: input.note,
+          createdByTornId,
+        },
+      });
+      created.push(mapPostgresSlot(slot));
+    }
+    return created;
+  });
+}
+
+async function deletePostgresSlotsBatch(factionId: number, slotIds: string[]): Promise<number> {
+  const { db } = await import("@/lib/db");
+  const faction = await db.faction.findUnique({ where: { tornFactionId: factionId } });
+  if (!faction) throw new Error("The connected faction could not be found.");
+  const result = await db.chainWatchSlot.deleteMany({ where: { id: { in: slotIds }, factionId: faction.id } });
+  return result.count;
+}
+
+async function swapPostgresSlotPrimaries(factionId: number, slotIdA: string, slotIdB: string): Promise<{ slotA: ChainWatchSlot; slotB: ChainWatchSlot }> {
+  const { db } = await import("@/lib/db");
+  const faction = await db.faction.findUnique({ where: { tornFactionId: factionId } });
+  if (!faction) throw new Error("The connected faction could not be found.");
+  return db.$transaction(async (transaction) => {
+    const rowA = await transaction.chainWatchSlot.findUnique({ where: { id: slotIdA } });
+    const rowB = await transaction.chainWatchSlot.findUnique({ where: { id: slotIdB } });
+    if (!rowA || !rowB || rowA.factionId !== faction.id || rowB.factionId !== faction.id) throw new Error("Both slots must still exist to swap them.");
+    const slotA = await transaction.chainWatchSlot.update({ where: { id: slotIdA }, data: { primaryTornUserId: rowB.primaryTornUserId, primaryMemberName: rowB.primaryMemberName } });
+    const slotB = await transaction.chainWatchSlot.update({ where: { id: slotIdB }, data: { primaryTornUserId: rowA.primaryTornUserId, primaryMemberName: rowA.primaryMemberName } });
+    return { slotA: mapPostgresSlot(slotA), slotB: mapPostgresSlot(slotB) };
+  });
 }
 
 function mapPostgresSlot(slot: { id: string; startAt: Date; endAt: Date; primaryTornUserId: number; primaryMemberName: string; backupTornUserId: number | null; backupMemberName: string | null; note: string | null; rotationId: string | null; rotationSequence: number | null; createdByTornId: number; createdAt: Date; updatedAt: Date }): ChainWatchSlot {

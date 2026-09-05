@@ -73,6 +73,11 @@
 .chain-watch-alert--danger { border-color: rgba(242, 109, 109, .26); background: rgba(242, 109, 109, .05); color: var(--danger); }
 .chain-watch-alert svg { flex: 0 0 auto; }
 
+.chain-watch-list__toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 20px 0; }
+.chain-watch-list__toolbar .button { padding: 0 12px; font-size: 11.5px; }
+
+.chain-watch-bulk-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 20px 0; padding: 10px 14px; border: 1px solid rgba(var(--accent-rgb), .26); border-radius: 9px; background: rgba(var(--accent-rgb), .06); color: var(--text-secondary); font-size: 12px; }
+
 .chain-watch-slots { display: flex; flex-direction: column; padding: 6px 14px; }
 
 .chain-watch-slot {
@@ -84,6 +89,9 @@
   border-bottom: 1px solid var(--admin-line, var(--border));
   transition: background 150ms ease;
 }
+.chain-watch-slot--selectable { grid-template-columns: 20px 106px minmax(0, 1fr) auto auto; }
+.chain-watch-slot__select { display: flex; align-items: center; }
+.chain-watch-slot__select input { width: 17px; height: 17px; }
 .chain-watch-slot:last-child { border-bottom: 0; }
 .chain-watch-slot:hover { background: rgba(255, 255, 255, .016); }
 .chain-watch-slot--active { box-shadow: inset 2px 0 var(--success); background: linear-gradient(90deg, rgba(103, 211, 145, .05), transparent 42%); }
