@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
 import { hasPermission } from "@/lib/auth/authorization";
-import { getCurrentActor } from "@/lib/auth/current-actor";
+import { getCurrentActorWithProfileImage } from "@/lib/auth/current-actor";
 import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { getDatabaseStatus } from "@/lib/data/database-status";
@@ -42,7 +42,7 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
   const telemetryPromise = getWorkspaceTelemetry();
   const databasePromise = getDatabaseStatus();
   const accessPromise = getFactionAccessSummary(connection.factionId);
-  const actor = await getCurrentActor();
+  const actor = await getCurrentActorWithProfileImage();
   if (!actor.tornUserId || connection.tornUserId !== actor.tornUserId) redirect("/connect");
   const owner = isPlatformOwner(actor);
   const assignmentPromise = owner

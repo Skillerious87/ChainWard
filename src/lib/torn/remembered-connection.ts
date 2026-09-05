@@ -70,15 +70,10 @@ export async function revokeRememberedConnection(token: string | undefined): Pro
 }
 
 /**
- * Backfills a profile image discovered after the remembered connection was
- * first created (for example, a session that predates the image being
- * captured, or an account that added a Torn avatar after connecting). Without
- * this, a session with no stored image re-fetches the full profile from Torn
- * on every single page load for the rest of its 30-day life instead of just
- * once. Best-effort: a failure here should never break the request that
- * discovered the image.
+ * Saves a refreshed profile image, including a confirmed removal on Torn.
+ * Callers retain the live image even when this best-effort persistence fails.
  */
-export async function updateRememberedConnectionImage(token: string, imageUrl: string): Promise<void> {
+export async function updateRememberedConnectionImage(token: string, imageUrl: string | null): Promise<void> {
   const tokenHash = hashToken(token);
   if (process.env.DATABASE_URL?.trim()) await updatePostgresConnectionImage(tokenHash, imageUrl);
   else updateLocalConnectionImage(tokenHash, imageUrl);
@@ -172,7 +167,7 @@ function revokeLocalConnection(tokenHash: string): void {
   }
 }
 
-function updateLocalConnectionImage(tokenHash: string, imageUrl: string): void {
+function updateLocalConnectionImage(tokenHash: string, imageUrl: string | null): void {
   const database = openCredentialDatabase();
   try {
     database.prepare("UPDATE remembered_torn_connections SET torn_user_image_url = ? WHERE token_hash = ?").run(imageUrl, tokenHash);
@@ -284,7 +279,7 @@ async function revokePostgresConnection(tokenHash: string): Promise<void> {
   ]);
 }
 
-async function updatePostgresConnectionImage(tokenHash: string, imageUrl: string): Promise<void> {
+async function updatePostgresConnectionImage(tokenHash: string, imageUrl: string | null): Promise<void> {
   const { db } = await import("@/lib/db");
   const session = await db.session.findUnique({ where: { tokenHash } });
   if (!session) return;

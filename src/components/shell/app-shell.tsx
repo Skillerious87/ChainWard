@@ -271,9 +271,8 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     applyAppearancePreferences(preferences);
   }, [preferences]);
 
-  // Registered unconditionally (not just for members who opt into push
-  // alerts) so the worker's fetch handler can cache the signed-in member's
-  // Torn profile image on-device, regardless of notification preferences.
+  // Update existing workers for every member, including removal of the legacy
+  // avatar cache, regardless of their notification preferences.
   useEffect(() => {
     void ensureNotificationWorker();
   }, []);

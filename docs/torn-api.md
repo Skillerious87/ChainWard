@@ -132,6 +132,14 @@ keys must include both user selections so the authenticated shell can use the
 nullable profile image returned by Torn. The UI should guide users
 toward the narrowest custom key that works and never encourage full access.
 
+Profile images are refreshed for temporary and remembered sessions through the
+Torn client's shared profile cache, rather than fixed for the session's lifetime.
+The saved URL remains a fallback when the API is unavailable; verified changes
+and removals are persisted for remembered sessions. The browser loads the
+returned Torn CDN URL directly, preserving animated GIFs. The notification
+worker does not cache these opaque image responses, since it cannot distinguish
+a valid image from an upstream error page.
+
 ## Limits and cache behavior
 
 Torn currently documents a maximum of 100 individual requests per minute per

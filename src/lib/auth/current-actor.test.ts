@@ -4,7 +4,7 @@ const { getConfiguredTornConnection } = vi.hoisted(() => ({ getConfiguredTornCon
 
 vi.mock("@/lib/torn/server-client", () => ({ getConfiguredTornConnection }));
 
-import { getCurrentActor } from "./current-actor";
+import { getCurrentActor, getCurrentActorWithProfileImage } from "./current-actor";
 
 describe("current actor", () => {
   beforeEach(() => {
@@ -34,7 +34,36 @@ describe("current actor", () => {
     expect(getMyProfileDetails).not.toHaveBeenCalled();
   });
 
-  it("keeps the trusted identity and refreshes sessions without a stored image", async () => {
+  it("refreshes the avatar only for the rendered shell, leaving authorization independent", async () => {
+    const refreshProfileImage = vi.fn().mockResolvedValue("https://profileimages.torn.com/current.gif");
+    getConfiguredTornConnection.mockResolvedValue({
+      tornUserId: 123456,
+      tornUserName: "Verified member",
+      tornUserImageUrl: "https://profileimages.torn.com/old.gif",
+      refreshProfileImage,
+    });
+
+    await expect(getCurrentActor()).resolves.toMatchObject({ tornUserId: 123456 });
+    expect(refreshProfileImage).not.toHaveBeenCalled();
+    await expect(getCurrentActorWithProfileImage()).resolves.toMatchObject({
+      tornUserId: 123456,
+      profileImageUrl: "https://profileimages.torn.com/current.gif",
+    });
+    expect(refreshProfileImage).toHaveBeenCalledOnce();
+  });
+
+  it("uses the default after a confirmed image removal even when the actor has a saved URL", async () => {
+    getConfiguredTornConnection.mockResolvedValue({
+      tornUserId: 123456,
+      tornUserName: "Verified member",
+      tornUserImageUrl: "https://profileimages.torn.com/old.gif",
+      refreshProfileImage: vi.fn().mockResolvedValue(null),
+    });
+
+    await expect(getCurrentActorWithProfileImage()).resolves.toMatchObject({ profileImageUrl: null });
+  });
+
+  it("keeps the trusted identity when the connection resolved no profile image", async () => {
     const getMyProfile = vi.fn();
     const getMyProfileDetails = vi.fn().mockResolvedValue({
       profile: { id: 123_456, name: "Verified member", image: null },
@@ -55,7 +84,7 @@ describe("current actor", () => {
       profileImageUrl: null,
     });
     expect(getMyProfile).not.toHaveBeenCalled();
-    expect(getMyProfileDetails).toHaveBeenCalledOnce();
+    expect(getMyProfileDetails).not.toHaveBeenCalled();
   });
 
   it("recovers a legacy session identity and image from the full profile", async () => {

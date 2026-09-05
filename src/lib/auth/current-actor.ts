@@ -11,7 +11,9 @@ export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
     if (!connection) return unauthenticatedActor();
 
     const storedProfileImageUrl = normalizeTornProfileImageUrl(connection.tornUserImageUrl);
-    if (connection.tornUserName && storedProfileImageUrl) {
+    // Permission and telemetry checks only need the server-trusted identity.
+    // The shell refreshes its display image separately below.
+    if (connection.tornUserName) {
       return {
         name: connection.tornUserName,
         tornUserId: connection.tornUserId,
@@ -22,17 +24,6 @@ export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
 
     const detailedProfile = await connection.client.getMyProfileDetails().catch(() => null);
     const profileMatchesConnection = detailedProfile?.profile.id === connection.tornUserId;
-    if (connection.tornUserName) {
-      return {
-        name: connection.tornUserName,
-        tornUserId: connection.tornUserId,
-        isPlatformAdmin: connection.tornUserId === PLATFORM_OWNER.tornUserId,
-        profileImageUrl: profileMatchesConnection
-          ? normalizeTornProfileImageUrl(detailedProfile.profile.image)
-          : null,
-      };
-    }
-
     if (profileMatchesConnection) {
       return {
         name: detailedProfile.profile.name,
@@ -56,4 +47,14 @@ export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
   } catch {
     return unauthenticatedActor();
   }
+});
+
+/** Refresh display-only profile data without delaying API authorization. */
+export const getCurrentActorWithProfileImage = cache(async (): Promise<PlatformActor> => {
+  const actor = await getCurrentActor();
+  if (!actor.tornUserId) return actor;
+  const connection = await getConfiguredTornConnection();
+  if (!connection || connection.tornUserId !== actor.tornUserId) return actor;
+  const profileImageUrl = await connection.refreshProfileImage().catch(() => actor.profileImageUrl ?? null);
+  return { ...actor, profileImageUrl };
 });

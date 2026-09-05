@@ -17,6 +17,7 @@ export interface ConfiguredTornConnection {
   factionId: number;
   factionName: string | null;
   factionTag: string | null;
+  refreshProfileImage: () => Promise<string | null>;
 }
 
 /**
@@ -35,38 +36,41 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
   const offline = isOfflineFixtureKey(apiKey);
   const client = createTornClient(apiKey, offline);
 
-  const tornUserImageUrl = remembered && rememberedToken
-    ? await resolveAndBackfillProfileImage(client, rememberedToken, session)
-    : session.tornUserImageUrl;
+  let profileImagePromise: Promise<string | null> | undefined;
 
   return {
     tornUserId: session.tornUserId,
     tornUserName: session.tornUserName,
-    tornUserImageUrl,
+    tornUserImageUrl: session.tornUserImageUrl,
     factionId: session.factionId,
     factionName: session.factionName,
     factionTag: session.factionTag,
     client,
+    // Only the rendered shell needs this request. Telemetry and permission
+    // checks must remain independent of avatar API availability.
+    refreshProfileImage: () => profileImagePromise ??= resolveProfileImage(client, session, remembered ? rememberedToken : undefined),
   };
 });
 
 /**
- * A remembered (30-day) connection's image is captured once, at initial
- * connect time. Without a backfill, an account that had no Torn avatar yet
- * when it first connected -- or connected before this field existed -- would
- * silently re-fetch the full profile from Torn on every single page load for
- * the rest of its 30-day life instead of just until an avatar is found.
+ * Refresh images for both session types through the Torn client's shared,
+ * bounded profile cache. A URL saved at login can later be replaced or removed
+ * on Torn; trusting it for the entire session leaves the avatar stuck.
+ * Keep the saved image when Torn is unavailable and persist successful changes
+ * before the request ends so hosted runtimes cannot abandon the write.
  */
-async function resolveAndBackfillProfileImage(
+async function resolveProfileImage(
   client: TornClient,
-  rememberedToken: string,
   session: { tornUserId: number; tornUserImageUrl: string | null },
+  rememberedToken?: string,
 ): Promise<string | null> {
-  if (session.tornUserImageUrl) return session.tornUserImageUrl;
+  const storedImageUrl = normalizeTornProfileImageUrl(session.tornUserImageUrl);
   const details = await client.getMyProfileDetails().catch(() => null);
-  if (details?.profile.id !== session.tornUserId) return null;
+  if (details?.profile.id !== session.tornUserId) return storedImageUrl;
   const imageUrl = normalizeTornProfileImageUrl(details.profile.image);
-  if (imageUrl) void updateRememberedConnectionImage(rememberedToken, imageUrl).catch(() => {});
+  if (rememberedToken && imageUrl !== session.tornUserImageUrl) {
+    await updateRememberedConnectionImage(rememberedToken, imageUrl).catch(() => {});
+  }
   return imageUrl;
 }
 

@@ -70,6 +70,9 @@ describe.sequential("remembered Torn connections", () => {
     await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({
       tornUserImageUrl: "https://profileimages.torn.com/skillerious.png",
     });
+
+    await updateRememberedConnectionImage(stored.token, null);
+    await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({ tornUserImageUrl: null });
   });
 
   it("rejects malformed browser tokens without opening a session", async () => {
