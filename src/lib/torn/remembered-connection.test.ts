@@ -7,6 +7,7 @@ import {
   createRememberedConnection,
   readRememberedConnection,
   revokeRememberedConnection,
+  updateRememberedConnectionImage,
 } from "./remembered-connection";
 import { credentialDatabasePath } from "./credential-database";
 
@@ -60,6 +61,17 @@ describe.sequential("remembered Torn connections", () => {
     await expect(readRememberedConnection(stored.token)).resolves.toBeNull();
   });
 
+  it("backfills a profile image discovered after the connection was created", async () => {
+    const stored = await createRememberedConnection("A1B2C3D4E5F6G7H8", connectionFixture({ imageUrl: null }));
+    await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({ tornUserImageUrl: null });
+
+    await updateRememberedConnectionImage(stored.token, "https://profileimages.torn.com/skillerious.png");
+
+    await expect(readRememberedConnection(stored.token)).resolves.toMatchObject({
+      tornUserImageUrl: "https://profileimages.torn.com/skillerious.png",
+    });
+  });
+
   it("rejects malformed browser tokens without opening a session", async () => {
     await expect(readRememberedConnection("short-token")).resolves.toBeNull();
   });
@@ -72,9 +84,10 @@ describe.sequential("remembered Torn connections", () => {
   });
 });
 
-function connectionFixture(): ValidatedTornConnection {
+function connectionFixture(overrides: { imageUrl?: string | null } = {}): ValidatedTornConnection {
+  const imageUrl = overrides.imageUrl !== undefined ? overrides.imageUrl : "https://profileimages.torn.com/skillerious.png";
   return {
-    player: { id: 3_212_954, name: "Skillerious", imageUrl: "https://profileimages.torn.com/skillerious.png" },
+    player: { id: 3_212_954, name: "Skillerious", imageUrl },
     faction: { id: 51_393, name: "Prive Cartel", tag: "PRIVE" },
     key: { accessType: "Limited Access", hasFactionPermission: true, selections: ["basic", "chain", "chains", "chainreport", "members"] },
     capabilities: {

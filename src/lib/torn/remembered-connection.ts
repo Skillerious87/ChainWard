@@ -69,6 +69,21 @@ export async function revokeRememberedConnection(token: string | undefined): Pro
   else revokeLocalConnection(hashToken(token));
 }
 
+/**
+ * Backfills a profile image discovered after the remembered connection was
+ * first created (for example, a session that predates the image being
+ * captured, or an account that added a Torn avatar after connecting). Without
+ * this, a session with no stored image re-fetches the full profile from Torn
+ * on every single page load for the rest of its 30-day life instead of just
+ * once. Best-effort: a failure here should never break the request that
+ * discovered the image.
+ */
+export async function updateRememberedConnectionImage(token: string, imageUrl: string): Promise<void> {
+  const tokenHash = hashToken(token);
+  if (process.env.DATABASE_URL?.trim()) await updatePostgresConnectionImage(tokenHash, imageUrl);
+  else updateLocalConnectionImage(tokenHash, imageUrl);
+}
+
 function createLocalConnection(
   tokenHash: string,
   expiresAt: number,
@@ -152,6 +167,15 @@ function revokeLocalConnection(tokenHash: string): void {
   try {
     const row = database.prepare("SELECT torn_user_id FROM remembered_torn_connections WHERE token_hash = ?").get(tokenHash) as unknown as { torn_user_id: number } | undefined;
     if (row) database.prepare("DELETE FROM remembered_torn_connections WHERE torn_user_id = ?").run(row.torn_user_id);
+  } finally {
+    database.close();
+  }
+}
+
+function updateLocalConnectionImage(tokenHash: string, imageUrl: string): void {
+  const database = openCredentialDatabase();
+  try {
+    database.prepare("UPDATE remembered_torn_connections SET torn_user_image_url = ? WHERE token_hash = ?").run(imageUrl, tokenHash);
   } finally {
     database.close();
   }
@@ -258,6 +282,13 @@ async function revokePostgresConnection(tokenHash: string): Promise<void> {
     db.session.deleteMany({ where: { userId: session.userId } }),
     db.factionApiCredential.deleteMany({ where: { ownerTornUserId: session.user.tornUserId } }),
   ]);
+}
+
+async function updatePostgresConnectionImage(tokenHash: string, imageUrl: string): Promise<void> {
+  const { db } = await import("@/lib/db");
+  const session = await db.session.findUnique({ where: { tokenHash } });
+  if (!session) return;
+  await db.user.update({ where: { id: session.userId }, data: { avatarUrl: imageUrl } });
 }
 
 function hashToken(token: string): string {

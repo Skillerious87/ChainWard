@@ -6,7 +6,8 @@ import { CONNECTION_COOKIE, readConnectionSession } from "./connection-session";
 import { TornClient } from "./client";
 import { createOfflineFixtureFetch, isOfflineFixtureKey } from "./offline-fixture";
 import { CHAIN_CACHE_SECONDS, MIN_POLL_SECONDS } from "./polling-policy";
-import { readRememberedConnection, REMEMBERED_CONNECTION_COOKIE } from "./remembered-connection";
+import { normalizeTornProfileImageUrl } from "./profile-image";
+import { readRememberedConnection, updateRememberedConnectionImage, REMEMBERED_CONNECTION_COOKIE } from "./remembered-connection";
 
 export interface ConfiguredTornConnection {
   client: TornClient;
@@ -26,21 +27,48 @@ export interface ConfiguredTornConnection {
  */
 export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTornConnection | null> => {
   const cookieStore = await cookies();
-  const remembered = await readRememberedConnection(cookieStore.get(REMEMBERED_CONNECTION_COOKIE)?.value);
+  const rememberedToken = cookieStore.get(REMEMBERED_CONNECTION_COOKIE)?.value;
+  const remembered = await readRememberedConnection(rememberedToken);
   const session = remembered ?? readConnectionSession(cookieStore.get(CONNECTION_COOKIE)?.value);
   const apiKey = session?.apiKey;
   if (!apiKey) return null;
   const offline = isOfflineFixtureKey(apiKey);
+  const client = createTornClient(apiKey, offline);
+
+  const tornUserImageUrl = remembered && rememberedToken
+    ? await resolveAndBackfillProfileImage(client, rememberedToken, session)
+    : session.tornUserImageUrl;
+
   return {
     tornUserId: session.tornUserId,
     tornUserName: session.tornUserName,
-    tornUserImageUrl: session.tornUserImageUrl,
+    tornUserImageUrl,
     factionId: session.factionId,
     factionName: session.factionName,
     factionTag: session.factionTag,
-    client: createTornClient(apiKey, offline),
+    client,
   };
 });
+
+/**
+ * A remembered (30-day) connection's image is captured once, at initial
+ * connect time. Without a backfill, an account that had no Torn avatar yet
+ * when it first connected -- or connected before this field existed -- would
+ * silently re-fetch the full profile from Torn on every single page load for
+ * the rest of its 30-day life instead of just until an avatar is found.
+ */
+async function resolveAndBackfillProfileImage(
+  client: TornClient,
+  rememberedToken: string,
+  session: { tornUserId: number; tornUserImageUrl: string | null },
+): Promise<string | null> {
+  if (session.tornUserImageUrl) return session.tornUserImageUrl;
+  const details = await client.getMyProfileDetails().catch(() => null);
+  if (details?.profile.id !== session.tornUserId) return null;
+  const imageUrl = normalizeTornProfileImageUrl(details.profile.image);
+  if (imageUrl) void updateRememberedConnectionImage(rememberedToken, imageUrl).catch(() => {});
+  return imageUrl;
+}
 
 /** Creates an isolated server client for trusted background workers. */
 export function createTornClient(apiKey: string, offline = false): TornClient {
