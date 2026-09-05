@@ -12,7 +12,7 @@ import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 const assignmentSchema = z.object({
   factionId: z.number().int().positive(),
   tornUserId: z.number().int().positive(),
-  role: z.enum(["ADMINISTRATOR", "CHAIN_MANAGER", "VIEWER"]),
+  role: z.enum(["ADMINISTRATOR", "CHAIN_MANAGER", "OC_MANAGER", "VIEWER"]),
   status: z.enum(["ACTIVE", "SUSPENDED"]),
 });
 

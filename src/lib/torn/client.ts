@@ -5,6 +5,7 @@ import type { ZodType } from "zod";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { TornApiError } from "./errors";
 import { CHAIN_CACHE_SECONDS } from "./polling-policy";
+import { battleStatsResponseSchema, crimesResponseSchema } from "@/lib/organized-crimes/types";
 import {
   chainReportResponseSchema,
   chainsResponseSchema,
@@ -117,6 +118,19 @@ export class TornClient {
 
   getMyProfile(): Promise<UserBasicResponse> {
     return this.request("/user/basic", userBasicResponseSchema, this.historyCacheMs);
+  }
+
+  getMyBattleStats() {
+    return this.requestWithMeta("/user/battlestats", battleStatsResponseSchema, 60_000);
+  }
+
+  getOrganizedCrimes(category: "available" | "completed", offset = 0) {
+    return this.requestWithMeta("/faction/crimes", crimesResponseSchema, category === "available" ? 60_000 : 600_000,
+      { cat: category, limit: "100", offset: String(offset), sort: "DESC" });
+  }
+
+  getOcIdentity() {
+    return this.request("/key/info", keyInfoResponseSchema, 60_000);
   }
 
   getMyProfileDetails(): Promise<UserProfileResponse> {

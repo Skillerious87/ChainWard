@@ -73,7 +73,7 @@ describe("role policy", () => {
   });
 
   it("publishes exactly the permissions each assignable role is granted", () => {
-    expect(roleDefinitions.map((definition) => definition.role)).toEqual(["ADMINISTRATOR", "CHAIN_MANAGER", "VIEWER"]);
+    expect(roleDefinitions.map((definition) => definition.role)).toEqual(["ADMINISTRATOR", "CHAIN_MANAGER", "OC_MANAGER", "VIEWER"]);
     for (const definition of roleDefinitions) {
       for (const { permission } of permissionCatalogue) {
         const advertised = definition.permissions.some((descriptor) => descriptor.permission === permission);

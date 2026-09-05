@@ -11,6 +11,7 @@ enum FactionRole {
   OWNER
   ADMINISTRATOR
   CHAIN_MANAGER
+  OC_MANAGER
   VIEWER
 }
 

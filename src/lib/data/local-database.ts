@@ -140,7 +140,7 @@ function initializeSchema(database: DatabaseSync): void {
       faction_id INTEGER NOT NULL,
       torn_user_id INTEGER NOT NULL,
       member_name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('ADMINISTRATOR', 'CHAIN_MANAGER', 'VIEWER')),
+      role TEXT NOT NULL CHECK (role IN ('ADMINISTRATOR', 'CHAIN_MANAGER', 'OC_MANAGER', 'VIEWER')),
       status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REMOVED')) DEFAULT 'ACTIVE',
       assigned_by_torn_id INTEGER NOT NULL,
       updated_at TEXT NOT NULL,
@@ -293,9 +293,33 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS chain_watch_rotations_faction ON chain_watch_rotations(faction_id, is_paused);
   `);
   ensureColumn(database, "chain_settlements", "paid_by_name", "TEXT");
+  ensureOcManagerRole(database);
   ensureColumn(database, "chain_watch_slots", "rotation_id", "TEXT");
   ensureColumn(database, "chain_watch_slots", "rotation_sequence", "INTEGER");
   database.exec("CREATE UNIQUE INDEX IF NOT EXISTS chain_watch_slots_rotation_unique ON chain_watch_slots(rotation_id, start_at)");
+}
+
+function ensureOcManagerRole(database: DatabaseSync): void {
+  const schema = database.prepare("SELECT sql FROM sqlite_master WHERE name = 'faction_access_assignments'").get() as { sql: string };
+  if (schema.sql.includes("'OC_MANAGER'")) return;
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    // Recheck under the write lock when another process may have migrated first.
+    const current = database.prepare("SELECT sql FROM sqlite_master WHERE name = 'faction_access_assignments'").get() as { sql: string };
+    if (!current.sql.includes("'OC_MANAGER'")) {
+      database.exec(`CREATE TABLE faction_access_assignments_oc (
+        faction_id INTEGER NOT NULL, torn_user_id INTEGER NOT NULL, member_name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('ADMINISTRATOR', 'CHAIN_MANAGER', 'OC_MANAGER', 'VIEWER')),
+        status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REMOVED')) DEFAULT 'ACTIVE',
+        assigned_by_torn_id INTEGER NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (faction_id, torn_user_id)
+      );
+      INSERT INTO faction_access_assignments_oc SELECT * FROM faction_access_assignments;
+      DROP TABLE faction_access_assignments;
+      ALTER TABLE faction_access_assignments_oc RENAME TO faction_access_assignments;
+      CREATE INDEX faction_access_status ON faction_access_assignments(faction_id, status, updated_at);`);
+    }
+    database.exec("COMMIT");
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
 }
 
 function ensureColumn(database: DatabaseSync, table: string, column: string, declaration: string): void {

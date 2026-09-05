@@ -7,6 +7,8 @@ import {
   CalendarRange,
   CircleDollarSign,
   ClipboardList,
+  Crosshair,
+  Gauge,
   History,
   KeyRound,
   LayoutDashboard,
@@ -15,6 +17,7 @@ import {
   ScrollText,
   Settings2,
   ShieldCheck,
+  Swords,
   Trophy,
   UsersRound,
   type LucideIcon,
@@ -92,6 +95,21 @@ const accessOperations: WorkspaceSectionDefinition = {
     { id: "assignments", label: "Access", icon: KeyRound },
     { id: "roles", label: "Roles", icon: ShieldCheck },
     { id: "audit", label: "Audit", icon: ScrollText },
+  ],
+};
+
+const organizedCrimes: WorkspaceSectionDefinition = {
+  key: "organized-crimes",
+  label: "Organized crimes views",
+  tabPrefix: "organized-crimes",
+  mode: "local",
+  defaultView: "overview",
+  items: [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "review", label: "Battle stats", icon: Gauge },
+    { id: "suggestions", label: "Suggestions", icon: Crosshair },
+    { id: "contributions", label: "Contributions", icon: ShieldCheck },
+    { id: "my-stats", label: "My stats", icon: Swords },
   ],
 };
 
@@ -238,6 +256,7 @@ function useWorkspaceSectionContext(): WorkspaceSectionContextValue {
 
 function definitionForPath(pathname: string): WorkspaceSectionDefinition | null {
   if (pathname === "/members") return memberOperations;
+  if (pathname === "/organized-crimes") return organizedCrimes;
   if (pathname === "/faction") return accessOperations;
   if (pathname === "/rewards" || pathname === "/payouts" || pathname.startsWith("/payouts/")) return rewardOperations;
   if (pathname === "/dashboard" || pathname === "/live-chain" || pathname === "/chain-watch" || pathname === "/chains" || pathname.startsWith("/chains/") || pathname === "/analytics") return chainOperations;

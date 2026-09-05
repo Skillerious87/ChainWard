@@ -23,6 +23,7 @@ const OPERATIONAL_ROUTES = [
   "/live-chain",
   "/members",
   "/members/9000002",
+  "/organized-crimes",
   "/chains",
   "/analytics",
   "/rewards",

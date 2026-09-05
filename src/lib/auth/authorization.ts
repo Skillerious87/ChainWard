@@ -2,6 +2,7 @@ export type FactionRole =
   | "OWNER"
   | "ADMINISTRATOR"
   | "CHAIN_MANAGER"
+  | "OC_MANAGER"
   | "VIEWER";
 
 /** The roles an operator can actually be assigned. OWNER is never assignable. */
@@ -9,6 +10,7 @@ export type ManagedRole = Exclude<FactionRole, "OWNER">;
 
 export type Permission =
   | "faction:view"
+  | "oc:review"
   | "chain:manage"
   | "payout:manage"
   | "rewards:manage"
@@ -30,7 +32,8 @@ export interface PermissionDescriptor {
  * server checks means a role can never advertise a capability it does not have.
  */
 export const permissionCatalogue: readonly PermissionDescriptor[] = [
-  { permission: "faction:view", label: "View workspace", detail: "Read every operational screen for the connected faction." },
+  { permission: "faction:view", label: "View workspace", detail: "Read general operational screens for the connected faction." },
+  { permission: "oc:review", label: "Organized crimes", detail: "Review shared private battle stats and OC role recommendations." },
   { permission: "chain:manage", label: "Chains", detail: "Operate live chains and record chain outcomes." },
   { permission: "payout:manage", label: "Payouts", detail: "Acknowledge payouts and close settled chains." },
   { permission: "rewards:manage", label: "Rewards", detail: "Create and version reward schemes." },
@@ -43,6 +46,7 @@ export const permissionCatalogue: readonly PermissionDescriptor[] = [
 
 const rolePermissions: Readonly<Record<FactionRole, ReadonlySet<Permission>>> = {
   OWNER: new Set([
+    "oc:review",
     "faction:view",
     "chain:manage",
     "payout:manage",
@@ -60,6 +64,7 @@ const rolePermissions: Readonly<Record<FactionRole, ReadonlySet<Permission>>> = 
   // changes who the workspace authenticates as — all three stay with the
   // verified owner.
   ADMINISTRATOR: new Set([
+    "oc:review",
     "faction:view",
     "chain:manage",
     "payout:manage",
@@ -68,6 +73,7 @@ const rolePermissions: Readonly<Record<FactionRole, ReadonlySet<Permission>>> = 
     "faction:backup",
   ]),
   CHAIN_MANAGER: new Set(["faction:view", "chain:manage", "payout:manage"]),
+  OC_MANAGER: new Set(["faction:view", "oc:review"]),
   VIEWER: new Set(["faction:view"]),
 };
 
@@ -81,6 +87,7 @@ export interface RoleDefinition {
 export const roleDefinitions: readonly RoleDefinition[] = [
   { role: "ADMINISTRATOR", label: "Administrator", description: "Runs faction operations and can export a configuration backup. User access remains owner-only.", permissions: descriptorsFor("ADMINISTRATOR") },
   { role: "CHAIN_MANAGER", label: "Chain manager", description: "Operates live chains and acknowledges payouts.", permissions: descriptorsFor("CHAIN_MANAGER") },
+  { role: "OC_MANAGER", label: "OC leader", description: "Reviews shared battle stats and suggests organized crime roles.", permissions: descriptorsFor("OC_MANAGER") },
   { role: "VIEWER", label: "Viewer", description: "Reads faction operations without changing anything.", permissions: descriptorsFor("VIEWER") },
 ];
 

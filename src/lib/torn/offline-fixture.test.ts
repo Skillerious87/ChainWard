@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { crimeSchema } from "@/lib/organized-crimes/types";
 import { TornClient } from "./client";
 import { createOfflineFixtureFetch, offlineConnection, offlineTestModeEnabled } from "./offline-fixture";
 
@@ -26,7 +27,7 @@ describe("offline Torn fixture", () => {
       sleep: async () => undefined,
     });
 
-    const [profile, profileDetails, faction, chain, history, members, report] = await Promise.all([
+    const [profile, profileDetails, faction, chain, history, members, report, battleStats, activeCrimes, completedCrimes] = await Promise.all([
       client.getMyProfile(),
       client.getMyProfileDetails(),
       client.getFactionBasic(),
@@ -34,6 +35,9 @@ describe("offline Torn fixture", () => {
       client.getCompletedChains(),
       client.getFactionMembers(),
       client.getChainReport(7_000_003),
+      client.getMyBattleStats(),
+      client.getOrganizedCrimes("available"),
+      client.getOrganizedCrimes("completed"),
     ]);
 
     expect(profile.profile.id).toBe(connection.player.id);
@@ -43,5 +47,12 @@ describe("offline Torn fixture", () => {
     expect(history.chains).toHaveLength(3);
     expect(members.members.some((member) => member.id === connection.player.id)).toBe(true);
     expect(report.chainreport.faction_id).toBe(connection.faction.id);
+    expect(battleStats.value.battlestats.total).toBeGreaterThan(0);
+    const parsedActive = activeCrimes.value.crimes.map((crime) => crimeSchema.parse(crime));
+    const parsedCompleted = completedCrimes.value.crimes.map((crime) => crimeSchema.parse(crime));
+    expect(parsedActive.every((crime) => crime.status === "Recruiting" || crime.status === "Planning")).toBe(true);
+    expect(parsedActive.some((crime) => crime.slots.some((slot) => slot.user === null && slot.checkpoint_pass_rate !== null))).toBe(true);
+    expect(parsedCompleted.every((crime) => crime.status === "Successful" || crime.status === "Failure")).toBe(true);
+    expect(await client.getOrganizedCrimes("available", 100).then((page) => page.value.crimes)).toHaveLength(0);
   });
 });

@@ -32,7 +32,7 @@ export function offlineConnection(identity: OfflineIdentity): ValidatedTornConne
     key: {
       accessType: "Offline test fixture",
       hasFactionPermission: true,
-      selections: ["basic", "chain", "chains", "chainreport", "members"],
+      selections: ["basic", "chain", "chains", "chainreport", "members", "crimes", "battlestats"],
     },
     capabilities: {
       identity: "verified",
@@ -60,12 +60,20 @@ export function createOfflineFixtureFetch(apiKey: string): typeof fetch {
 
     if (path.endsWith("/key/info")) return json({
       info: {
-        selections: { faction: ["basic", "chain", "chains", "chainreport", "members"], user: ["basic", "profile"], key: ["info"] },
+        selections: { faction: ["basic", "chain", "chains", "chainreport", "members", "crimes"], user: ["basic", "profile", "battlestats"], key: ["info"] },
         access: { level: 2, type: "Limited Access", faction: true, company: false },
         user: { id: actor.id, faction_id: OFFLINE_FACTION.id, company_id: null },
       },
     });
     if (path.endsWith("/user/basic")) return json({ profile: profileFor(actor.id, actor.name) });
+    if (path.endsWith("/user/battlestats")) return json({ battlestats: battleStats(actor.id) });
+    if (/\/faction(?:\/\d+)?\/crimes$/.test(path)) {
+      const category = requestUrl.searchParams.get("cat") === "completed" ? "completed" : "available";
+      const offset = Number.parseInt(requestUrl.searchParams.get("offset") ?? "0", 10) || 0;
+      // A single page holds every fixture crime; a non-zero offset is the end.
+      const crimes = offset > 0 ? [] : category === "completed" ? completedCrimes(now) : activeCrimes(actor.id, now);
+      return json({ crimes, _metadata: { links: { next: null } } });
+    }
     if (path.endsWith("/user/profile")) return json({ profile: { id: actor.id, name: actor.name, image: null } });
     if (/\/faction(?:\/\d+)?\/basic$/.test(path)) return json({
       basic: {
@@ -162,6 +170,85 @@ function chainReport(chainId: number, now: number) {
     })),
     non_attackers: [],
   };
+}
+
+function battleStats(id: number) {
+  const seed = id % 1_000;
+  const multiplier = id === OFFLINE_IDENTITIES.owner.id ? 5 : id === OFFLINE_IDENTITIES.member.id ? 3 : 1;
+  const strength = (400_000_000 + seed * 1_100_000) * multiplier;
+  const defense = (380_000_000 + seed * 970_000) * multiplier;
+  const speed = (350_000_000 + seed * 1_050_000) * multiplier;
+  const dexterity = (360_000_000 + seed * 1_010_000) * multiplier;
+  return {
+    strength: { value: strength },
+    defense: { value: defense },
+    speed: { value: speed },
+    dexterity: { value: dexterity },
+    total: strength + defense + speed + dexterity,
+  };
+}
+
+/** Torn returns the requesting key owner's checkpoint pass rate on empty slots. */
+function ownEmptySlotCpr(actorId: number): { a: number; b: number; c: number } {
+  if (actorId === OFFLINE_IDENTITIES.owner.id) return { a: 92, b: 85, c: 78 };
+  if (actorId === OFFLINE_IDENTITIES.member.id) return { a: 74, b: 61, c: 88 };
+  return { a: 55, b: 40, c: 66 };
+}
+
+function crimeSlot(
+  position: string,
+  positionId: string,
+  label: string,
+  user: { id: number; joined_at: number } | null,
+  checkpointPassRate: number | null,
+  item: { id: number; is_available: boolean; is_reusable: boolean } | null,
+) {
+  return { position, position_info: { id: positionId, label }, user, checkpoint_pass_rate: checkpointPassRate, item_requirement: item };
+}
+
+function activeCrimes(actorId: number, now: number) {
+  const cpr = ownEmptySlotCpr(actorId);
+  return [
+    {
+      id: 8_000_001, name: "Stage Robbery", difficulty: 7, status: "Recruiting",
+      created_at: now - 7_200, expired_at: now + 86_400 * 3, executed_at: null, ready_at: null,
+      slots: [
+        crimeSlot("Robber", "1", "Robber #1", null, cpr.a, null),
+        crimeSlot("Robber", "2", "Robber #2", null, cpr.b, { id: 568, is_available: true, is_reusable: false }),
+        crimeSlot("Lookout", "1", "Lookout", { id: OFFLINE_IDENTITIES.owner.id, joined_at: now - 3_600 }, null, null),
+      ],
+    },
+    {
+      id: 8_000_002, name: "Bank Job", difficulty: 9, status: "Planning",
+      created_at: now - 172_800, expired_at: now + 86_400 * 5, executed_at: null, ready_at: now + 3_600,
+      slots: [
+        crimeSlot("Driver", "1", "Getaway Driver", null, cpr.c, { id: 60, is_available: false, is_reusable: true }),
+        crimeSlot("Hacker", "1", "Hacker", { id: OFFLINE_IDENTITIES.member.id, joined_at: now - 7_200 }, null, null),
+        crimeSlot("Muscle", "1", "Muscle", { id: 9_000_002, joined_at: now - 7_100 }, null, null),
+      ],
+    },
+  ];
+}
+
+function completedCrimes(now: number) {
+  return [
+    {
+      id: 8_000_050, name: "Stage Robbery", difficulty: 7, status: "Successful",
+      created_at: now - 86_400 * 4, expired_at: now - 86_400 * 3, executed_at: now - 86_400 * 2, ready_at: now - 86_400 * 2,
+      slots: [
+        crimeSlot("Robber", "1", "Robber #1", { id: OFFLINE_IDENTITIES.owner.id, joined_at: now - 86_400 * 3 }, 90, null),
+        crimeSlot("Robber", "2", "Robber #2", { id: 9_000_002, joined_at: now - 86_400 * 3 }, 66, null),
+        crimeSlot("Lookout", "1", "Lookout", { id: OFFLINE_IDENTITIES.member.id, joined_at: now - 86_400 * 3 }, 81, null),
+      ],
+    },
+    {
+      id: 8_000_051, name: "Pawn Shop Heist", difficulty: 5, status: "Failure",
+      created_at: now - 86_400 * 6, expired_at: now - 86_400 * 5, executed_at: now - 86_400 * 4, ready_at: now - 86_400 * 4,
+      slots: [
+        crimeSlot("Thief", "1", "Thief", { id: OFFLINE_IDENTITIES.member.id, joined_at: now - 86_400 * 5 }, 47, null),
+      ],
+    },
+  ];
 }
 
 function json(body: unknown, status = 200): Response {

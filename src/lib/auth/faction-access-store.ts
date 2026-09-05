@@ -7,7 +7,7 @@ import { credentialDatabasePath, openCredentialDatabase } from "@/lib/torn/crede
 import type { ValidatedTornConnection } from "@/lib/torn/connection-service";
 import { PLATFORM_OWNER } from "./platform-owner";
 
-export type ManagedFactionRole = "ADMINISTRATOR" | "CHAIN_MANAGER" | "VIEWER";
+export type ManagedFactionRole = "ADMINISTRATOR" | "CHAIN_MANAGER" | "OC_MANAGER" | "VIEWER";
 export type ManagedAccessStatus = "ACTIVE" | "SUSPENDED";
 
 export interface FactionAccessAssignment {
@@ -433,7 +433,7 @@ async function registerPostgresAccessRequest(connection: ValidatedTornConnection
   });
 }
 
-function isManagedRole(value: unknown): value is ManagedFactionRole { return value === "ADMINISTRATOR" || value === "CHAIN_MANAGER" || value === "VIEWER"; }
+function isManagedRole(value: unknown): value is ManagedFactionRole { return value === "ADMINISTRATOR" || value === "CHAIN_MANAGER" || value === "OC_MANAGER" || value === "VIEWER"; }
 function isAuditAction(value: unknown): value is FactionAccessAuditEvent["action"] { return value === "GRANTED" || value === "UPDATED" || value === "SUSPENDED" || value === "REVOKED"; }
 function isAuditStatus(value: unknown): value is FactionAccessAuditEvent["status"] { return value === "ACTIVE" || value === "SUSPENDED" || value === "REMOVED"; }
 function empty(databaseConfigured: boolean, databaseAvailable: boolean, message: string): FactionAccessWorkspace { return { databaseConfigured, databaseAvailable, requests: [], assignments: [], audit: [], message }; }

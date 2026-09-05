@@ -15,6 +15,7 @@ import "./chain-watch-timeline.css";
 import "./history.css";
 import "./unlock.css";
 import "./members.css";
+import "./organized-crimes.css";
 import "./mobile.css";
 import "./member-awards.css";
 
