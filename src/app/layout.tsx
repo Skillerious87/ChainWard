@@ -15,9 +15,11 @@ import "./chain-watch-timeline.css";
 import "./history.css";
 import "./unlock.css";
 import "./members.css";
-import "./organized-crimes.css";
 import "./mobile.css";
 import "./member-awards.css";
+// Loaded after mobile.css so the feature's own responsive rules take precedence
+// over the shared table/section base styles.
+import "./organized-crimes.css";
 
 const siteDescription = "A third-party Torn faction chain tracker, reward engine, and payout operations platform.";
 const publicOrigin = deploymentOrigin();

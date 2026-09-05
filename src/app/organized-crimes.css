@@ -11,6 +11,16 @@
 .oc-stack { display: flex; flex-direction: column; gap: 16px; }
 .oc-hide-xs { display: inline; }
 
+/* `.panel` in this app carries no inner padding — the `.section-heading` strip
+   has its own and the body below is expected to add its own. This wrapper is
+   that body. */
+.oc-panel__body { padding: 18px 22px 20px; }
+.oc-panel__body--tight { padding: 14px 22px 18px; }
+.oc-panel__body > :first-child { margin-top: 0; }
+.oc-panel__body .table-scroll { border: 1px solid var(--border); border-radius: 10px; }
+.oc-panel__body .table-scroll .data-table thead th:first-child { border-top-left-radius: 10px; }
+.oc-panel__body .table-scroll .data-table thead th:last-child { border-top-right-radius: 10px; }
+
 /* --- Hero ---------------------------------------------------------------- */
 .oc-hero {
   display: grid;
@@ -195,8 +205,10 @@
 .oc-toggle input:checked + .oc-toggle__track > span { transform: translateX(17px); background: var(--accent); }
 .oc-toggle input:focus-visible + .oc-toggle__track { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 2px; }
 .oc-toggle__text { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-.oc-toggle__text strong { color: #e7ecea; font-size: 12.5px; font-weight: 620; }
+.oc-toggle__text strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #e7ecea; font-size: 12.5px; font-weight: 620; }
 .oc-toggle__text small { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.oc-toggle__spin { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 10.5px; font-weight: 600; }
+.oc-toggle--busy { border-color: rgba(var(--accent-rgb), .4); background: rgba(var(--accent-rgb), .05); }
 
 /* --- Empty / locked ---------------------------------- */
 .oc-empty { display: flex; align-items: flex-start; gap: 13px; padding: 24px 22px; color: var(--text-secondary); }
@@ -215,6 +227,9 @@
 @media (max-width: 760px) {
   .oc-stack { gap: 12px; }
   .oc-hide-xs { display: none; }
+  .oc-panel__body { padding: 14px 14px 16px; }
+  .oc-panel__body--tight { padding: 12px 14px 14px; }
+  .oc-panel__body .table-scroll { border: 0; }
 
   .oc-hero { grid-template-columns: 1fr; gap: 12px; padding: 16px; }
   .oc-hero__icon { display: none; }
@@ -231,35 +246,36 @@
   .oc-sort-row::-webkit-scrollbar { display: none; }
   .oc-sort-row button { flex: 0 0 auto; min-height: 34px; }
 
-  /* Battle-stat + contributions tables -> stacked cards */
-  .oc-review__scroll, .oc-contrib__table { border: 0; }
-  .oc-review__table, .oc-contrib__table { display: block; width: 100%; }
-  .oc-review__table thead, .oc-contrib__table thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
-  .oc-review__table tbody, .oc-contrib__table tbody { display: flex; flex-direction: column; gap: 10px; }
-  .oc-review__table tr, .oc-contrib__table tr {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+  /* Battle-stat + contributions tables -> stacked cards.
+     Selectors are `.oc-page`-prefixed so they outrank mobile.css's generic
+     `.table-scroll > .data-table { width: max-content }` (0,2,0). */
+  .oc-page .table-scroll:has(.oc-review__table),
+  .oc-page .table-scroll:has(.oc-contrib__table) { overflow: visible; border: 0; }
+  .oc-page .oc-review__table, .oc-page .oc-contrib__table { display: block; width: 100%; min-width: 0; }
+  .oc-page .oc-review__table thead, .oc-page .oc-contrib__table thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
+  .oc-page .oc-review__table tbody, .oc-page .oc-contrib__table tbody { display: flex; flex-direction: column; gap: 10px; }
+  .oc-page .oc-review__table tr, .oc-page .oc-contrib__table tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px;
     padding: 14px; border: 1px solid var(--border-strong); border-radius: 13px;
     background: linear-gradient(150deg, rgba(255, 255, 255, .022), transparent 45%), #10161a;
   }
-  .oc-review__table tbody tr:hover, .oc-contrib__table tbody tr:hover { box-shadow: none; }
-  .oc-review__table td, .oc-contrib__table td {
-    display: flex; flex-direction: column; gap: 3px; height: auto; min-height: 0;
+  .oc-page .oc-review__table tbody tr:hover, .oc-page .oc-contrib__table tbody tr:hover { box-shadow: none; }
+  .oc-page .oc-review__table td, .oc-page .oc-contrib__table td {
+    display: flex; flex-direction: column; gap: 3px; height: auto; min-height: 0; min-width: 0;
     padding: 0; border: 0; white-space: normal; text-align: left !important;
   }
-  .oc-review__table td::before, .oc-contrib__table td::before {
+  .oc-page .oc-review__table td::before, .oc-page .oc-contrib__table td::before {
     content: attr(data-label); color: var(--text-muted);
     font-size: 9px; font-weight: 720; letter-spacing: .6px; text-transform: uppercase;
   }
-  .oc-review__table td.oc-num { align-items: flex-start; }
-  /* Member spans full width; rank sits as a small chip beside it */
-  .oc-review__table td[data-label="Member"], .oc-contrib__table td[data-label="Member"] { grid-column: 1 / -1; }
-  .oc-review__table td[data-label="Rank"] { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 7px; }
-  .oc-review__table td[data-label="Rank"]::before { content: "Rank"; }
-  .oc-review__table td[data-label="Current OC"] { grid-column: 1 / -1; }
-  .oc-contrib__table td[data-label="Actions"] { grid-column: 1 / -1; }
-  .oc-contrib__table td[data-label="Actions"] .button { width: 100%; min-height: 42px; justify-content: center; }
-  .oc-statcell { min-width: 0; }
-  .oc-statcell__bar { width: 100%; max-width: 160px; }
+  .oc-page .oc-review__table td[data-label="Member"], .oc-page .oc-contrib__table td[data-label="Member"] { grid-column: 1 / -1; }
+  .oc-page .oc-review__table td[data-label="Rank"] { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 7px; }
+  .oc-page .oc-review__table td[data-label="Rank"]::before { content: "Rank"; }
+  .oc-page .oc-review__table td[data-label="Current OC"] { grid-column: 1 / -1; }
+  .oc-page .oc-contrib__table td[data-label="Actions"] { grid-column: 1 / -1; }
+  .oc-page .oc-contrib__table td[data-label="Actions"] .button { width: 100%; min-height: 42px; justify-content: center; }
+  .oc-page .oc-statcell { min-width: 0; }
+  .oc-page .oc-statcell__bar { width: 100%; max-width: none; }
 
   .oc-suggestion li {
     grid-template-columns: 22px minmax(0, 1fr) auto;
