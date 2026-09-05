@@ -127,15 +127,15 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <button type="button" disabled={loading} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
           </div>
           <small id="api-key-guidance">
-            <span><ShieldCheck size={13} /> Limited Access is enough — never your password.</span>
+            <span><ShieldCheck size={13} /> Limited Access is enough</span>
             <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create a key <ExternalLink size={12} /></a>
           </small>
         </div>
 
-        <label className="remember-connection">
+        <label className="login-remember">
+          <span className="login-remember__text"><strong>Keep me signed in</strong><small>Remember this browser for 30 days</small></span>
           <input name="remember" type="checkbox" defaultChecked disabled={loading} />
-          <span className="remember-connection__track" aria-hidden="true"><span /></span>
-          <span className="remember-connection__text"><strong>Keep me signed in</strong><small>Remember this browser for 30 days</small></span>
+          <span className="login-remember__track" aria-hidden="true"><span /></span>
         </label>
 
         {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}

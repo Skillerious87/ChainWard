@@ -6,11 +6,14 @@
 .login-page {
   position: relative;
   display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* A definite height (not just min-height) so the card's `max-height: 100%`
+     resolves and the page itself never scrolls — overflow is taken up inside
+     the card body or the privacy panel instead. */
+  height: 100vh;
+  height: 100dvh;
   align-items: center;
   justify-content: center;
-  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
   overflow: hidden;
   background: #05080a;
   isolation: isolate;
@@ -77,12 +80,15 @@
   z-index: 1;
   display: flex;
   width: 100%;
-  max-width: 408px;
+  max-width: 412px;
+  max-height: 100%;
+  min-height: 0;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
   animation: login-rise 520ms cubic-bezier(.2, .75, .25, 1) both;
 }
+.login-brand, .login-legal { flex: 0 0 auto; }
 
 .login-brand { display: inline-flex; }
 .login-brand .brand__wordmark { color: #eef3f0; font-size: 20px; }
@@ -93,7 +99,12 @@
 /* --- Card --------------------------------------------------------- */
 .login-card {
   position: relative;
+  display: flex;
   width: 100%;
+  min-height: 0;
+  max-height: 100%;
+  flex: 0 1 auto;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .07);
   border-radius: 20px;
@@ -116,12 +127,19 @@
 
 .login-card .connect-form {
   position: relative;
-  padding: 30px 26px 24px;
+  min-height: 0;
+  padding: 28px 26px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .14) transparent;
 }
+.login-card .connect-form::-webkit-scrollbar { width: 6px; }
+.login-card .connect-form::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255, 255, 255, .14); }
 .login-card .connect-stage--entry { min-height: 0; }
 
 /* --- Heading -------------------------------------------------- */
@@ -198,39 +216,58 @@
 .login-card .api-key-field > small > a:hover { color: var(--accent); }
 
 /* --- Keep-me-signed-in switch --------------------------- */
-.login-card .remember-connection {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  margin-top: 18px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.login-card .remember-connection input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.remember-connection__track {
+.login-remember {
   position: relative;
-  width: 42px; height: 24px;
-  border: 1px solid #3a463f;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid #2a332e;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .018);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.login-remember:hover { border-color: #35413a; background: rgba(255, 255, 255, .03); }
+.login-remember:has(input:checked) { border-color: rgba(var(--accent-rgb), .3); background: rgba(var(--accent-rgb), .045); }
+
+.login-remember__text { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 2px; }
+.login-remember__text strong { color: #d3dbd6; font-size: 12.5px; font-weight: 640; }
+.login-remember__text small { color: #6a776f !important; font-size: 10.5px !important; line-height: 1.4 !important; }
+
+.login-remember input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.login-remember__track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px; height: 27px;
+  border: 1px solid #343e38;
   border-radius: 999px;
-  background: #0a0f11;
-  transition: background .16s ease, border-color .16s ease;
+  background: #0a0e10;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .55);
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
-.remember-connection__track > span {
+.login-remember__track > span {
   position: absolute; top: 2px; left: 2px;
-  width: 18px; height: 18px;
+  width: 21px; height: 21px;
   border-radius: 50%;
-  background: #7c8a81;
-  transition: transform .16s ease, background .16s ease;
+  background: linear-gradient(180deg, #f4f7f5, #ccd4ce);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5), 0 0 0 1px rgba(0, 0, 0, .12);
+  transition: transform .24s cubic-bezier(.34, 1.4, .5, 1), box-shadow .2s ease;
 }
-.login-card .remember-connection input:checked + .remember-connection__track { background: rgba(var(--accent-rgb), .22); border-color: rgba(var(--accent-rgb), .55); }
-.login-card .remember-connection input:checked + .remember-connection__track > span { transform: translateX(18px); background: var(--accent); }
-.login-card .remember-connection input:focus-visible + .remember-connection__track { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 2px; }
-.remember-connection__text { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
-.remember-connection__text strong { color: #c9d2cc; font-size: 12px; font-weight: 620; }
-.remember-connection__text small { color: #6a776f !important; font-size: 10.5px !important; line-height: 1.4 !important; }
+.login-remember input:checked + .login-remember__track {
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-color: var(--accent-strong);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .22), 0 0 16px -3px rgba(var(--accent-rgb), .55);
+}
+.login-remember input:checked + .login-remember__track > span {
+  transform: translateX(19px);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .45), 0 0 0 1px rgba(0, 0, 0, .1), 0 0 10px rgba(var(--accent-rgb), .4);
+}
+.login-remember:active .login-remember__track > span { transform: scale(.92); }
+.login-remember:active input:checked + .login-remember__track > span { transform: translateX(19px) scale(.92); }
+.login-remember input:focus-visible + .login-remember__track { outline: 2px solid rgba(var(--accent-rgb), .6); outline-offset: 3px; }
+.connect-form--validating .login-remember { border-color: #3a493f; opacity: .7; }
 
 /* --- Submit -------------------------------------------- */
 .login-card .connect-submit {
@@ -294,14 +331,18 @@
 .offline-test-entry[open] summary svg:last-child { transform: rotate(180deg); }
 
 .connect-details > div {
-  max-height: 300px;
+  max-height: clamp(150px, 34vh, 300px);
   margin-top: 8px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid #262f2a;
   border-radius: 10px;
   background: rgba(145, 230, 83, .02);
   scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .14) transparent;
 }
+.connect-details > div::-webkit-scrollbar { width: 6px; }
+.connect-details > div::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255, 255, 255, .14); }
 .connect-details > div > p { padding: 11px 12px; border-bottom: 1px solid #232c27; color: #77867d; font-size: 10px; line-height: 1.5; }
 .connect-details__selections { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 10px 12px 0; list-style: none; }
 .connect-details__selections li {
@@ -338,9 +379,8 @@
 .offline-test-entry button strong { font-size: 10.5px; }
 .offline-test-entry button small { color: #626f67 !important; font-size: 9.5px !important; }
 
-/* Allow the page to scroll if a disclosure is opened on a short viewport. */
-.login-page:has(.connect-details[open]),
-.login-page:has(.offline-test-entry[open]) { align-items: flex-start; overflow-y: auto; }
+/* The page never scrolls — the card body and the disclosure panel each take
+   over any overflow internally instead. */
 
 @keyframes login-rise {
   from { opacity: 0; transform: translateY(14px) scale(.985); }
@@ -353,7 +393,7 @@
   .login-card .connect-form { padding: 24px 24px 20px; }
   .login-card .connect-form__heading h2 { font-size: 22px; }
   .login-card .api-key-field { margin-top: 20px; }
-  .login-card .remember-connection { margin-top: 14px; }
+  .login-remember { margin-top: 14px; padding: 10px 12px; }
   .login-card .connect-submit { min-height: 48px; margin-top: 16px; }
 }
 
