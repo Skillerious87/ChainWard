@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, CircleSlash, Crosshair, Gauge, Info, Lock, RefreshCw, ShieldCheck, Swords, Trash2, TriangleAlert, UploadCloud, Users } from "lucide-react";
+import { CheckCircle2, ChevronDown, CircleSlash, Construction, Crosshair, Gauge, Info, Lock, RefreshCw, ShieldCheck, Swords, Trash2, TriangleAlert, UploadCloud, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -115,6 +115,11 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
           </button>
         }
       />
+
+      <aside className="oc-devbanner" role="note">
+        <Construction size={16} />
+        <p><strong>Heavy development.</strong> Organized Crimes is still being built — data, layout and behaviour will change, and numbers may be incomplete.</p>
+      </aside>
 
       {/* Every view is always mounted; only `hidden` toggles. The section
           switcher flips `view` in a post-hydration effect, so conditionally

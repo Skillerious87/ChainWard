@@ -177,7 +177,7 @@ async function run() {
     check("/connect lists the verified key selections", connect.html.includes("chainreport") && connect.html.includes("user/profile"));
     check("/connect discloses persistent member records and their audience", connect.html.includes("member reports") && connect.html.includes("leadership-only") && connect.html.includes("30 days"));
     check("/connect declares a responsive viewport", /<meta name="viewport" content="[^"]*width=device-width/.test(connect.html));
-    check("/connect keeps the key entry inside the primary login flow", connect.html.indexOf("login-intro") < connect.html.indexOf("login-card") && connect.html.indexOf("login-card") < connect.html.indexOf("login-footer"), "the intro, key entry, and footer must retain their reading order");
+    check("/connect keeps the key entry inside the primary login flow", connect.html.indexOf("login-brand") < connect.html.indexOf("login-card") && connect.html.indexOf("login-card") < connect.html.indexOf("login-legal") && connect.html.includes("torn-api-key"), "the brand, key entry, and legal line must retain their reading order");
     const notificationWorker = await fetch(`${ORIGIN}/chainward-notifications.js`);
     const notificationWorkerSource = await notificationWorker.text();
     check("notification worker is served from the application origin", notificationWorker.ok && notificationWorkerSource.includes("notificationclick"), `status ${notificationWorker.status}`);

@@ -11,6 +11,24 @@
 .oc-stack { display: flex; flex-direction: column; gap: 16px; }
 .oc-hide-xs { display: inline; }
 
+/* In-development notice — pinned above the workspace so it is unmissable. */
+.oc-devbanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: -4px 0 4px;
+  padding: 11px 14px;
+  border: 1px solid rgba(245, 185, 76, .32);
+  border-left: 3px solid var(--warning);
+  border-radius: 10px;
+  background: linear-gradient(100deg, rgba(245, 185, 76, .09), rgba(245, 185, 76, .04) 60%);
+  color: var(--warning);
+}
+.oc-devbanner svg { flex: 0 0 auto; margin-top: 1px; }
+.oc-devbanner p { margin: 0; font-size: 12px !important; line-height: 1.5; color: #e8cf9e; }
+.oc-devbanner strong { color: var(--warning); font-weight: 680; }
+@media (max-width: 760px) { .oc-devbanner { padding: 10px 12px; } .oc-devbanner p { font-size: 11.5px !important; } }
+
 /* `.panel` in this app carries no inner padding — the `.section-heading` strip
    has its own and the body below is expected to add its own. This wrapper is
    that body. */

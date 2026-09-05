@@ -10,7 +10,6 @@ import {
   ExternalLink,
   KeyRound,
   Laptop,
-  LockKeyhole,
   ShieldCheck,
   UserRoundCog,
 } from "lucide-react";
@@ -114,42 +113,53 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       <WorkspaceLoadingOverlay visible={opening} />
       <span className="connect-form__activity" aria-hidden="true" />
       <div className="connect-stage connect-stage--entry">
-          <header className="connect-form__heading">
-            <p><ShieldCheck size={13} /> Secure sign in</p>
-            <h2>Welcome to Chainward</h2>
-            <span>Verify a restricted Torn key to open your faction workspace.</span>
-          </header>
-          <span className="sr-only" aria-live="polite">{loading ? "Verifying your Torn connection." : ""}</span>
-          <div className="api-key-field">
-            <label className="api-key-field__label" htmlFor="torn-api-key"><strong>Torn API key</strong><small>Exactly 16 characters</small></label>
-            <div><input id="torn-api-key" name="apiKey" type={visible ? "text" : "password"} autoComplete="off" autoCapitalize="none" spellCheck={false} inputMode="text" enterKeyHint="go" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={loading} placeholder="Paste your Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} /><button type="button" disabled={loading} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
-            <small id="api-key-guidance"><span><ShieldCheck size={13} /> Limited Access is enough. Never use your Torn password.</span><a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create a key <ExternalLink size={12} /></a></small>
+        <header className="connect-form__heading">
+          <p><ShieldCheck size={13} /> Secure sign in</p>
+          <h2 id="login-title">Welcome to Chainward</h2>
+          <span>Connect a restricted Torn key to open your faction workspace.</span>
+        </header>
+        <span className="sr-only" aria-live="polite">{loading ? "Verifying your Torn connection." : ""}</span>
+
+        <div className="api-key-field">
+          <label className="api-key-field__label" htmlFor="torn-api-key"><strong>Torn API key</strong><small>16 characters</small></label>
+          <div>
+            <input id="torn-api-key" name="apiKey" type={visible ? "text" : "password"} autoComplete="off" autoCapitalize="none" spellCheck={false} inputMode="text" enterKeyHint="go" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={loading} placeholder="Paste your Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} />
+            <button type="button" disabled={loading} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
           </div>
-          <label className="remember-connection">
-            <input name="remember" type="checkbox" defaultChecked disabled={loading} />
-            <span aria-hidden="true"><Check size={14} /></span>
-            <span><strong>Keep me signed in</strong><small>Remember this browser for 30 days.</small></span>
-          </label>
-          {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
-          <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Verifying Torn connection" /> Verifying securely…</> : <>Verify and continue <ArrowRight size={16} /></>}</button>
-          <p className="connect-security-note"><LockKeyhole size={15} /><span><strong>Encrypted handoff</strong><small>Your raw key is handled server-side and never returned to browser code.</small></span></p>
-          <details className="connect-details">
-            <summary><ShieldCheck size={14} /> Access &amp; data details <ChevronDown size={15} /></summary>
-            <div>
-              <p>Chainward checks these selections before opening a workspace, and keeps clear boundaries for everything it stores.</p>
-              <ul className="connect-details__selections">{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
-              <dl>
-                <div><dt>Stored data</dt><dd>Operational records, member reports, and awards persist in the configured Chainward database until the workspace operator removes that data. Torn roster responses are briefly cached.</dd></div>
-                <div><dt>Shared with</dt><dd>The connected faction workspace. Entries marked leadership-only are restricted to authorised member managers.</dd></div>
-                <div><dt>API key</dt><dd>Used server-side only. A temporary connection is encrypted for up to 12 hours; “Keep me signed in” stores the encrypted key server-side for up to 30 days.</dd></div>
-              </dl>
-            </div>
-          </details>
-          {offlineEnabled && <details className="offline-test-entry">
-            <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>
-            <p>Development fixture only. Never available in production.</p>
-            <div><button type="button" disabled={loading} onClick={() => void openOfflineSession("member")}><KeyRound size={14} /><span><strong>Faction tester</strong><small>Preview member access</small></span></button><button type="button" disabled={loading} onClick={() => void openOfflineSession("owner")}><UserRoundCog size={14} /><span><strong>Owner reviewer</strong><small>Preview owner access</small></span></button></div>
-          </details>}
+          <small id="api-key-guidance">
+            <span><ShieldCheck size={13} /> Limited Access is enough — never your password.</span>
+            <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create a key <ExternalLink size={12} /></a>
+          </small>
+        </div>
+
+        <label className="remember-connection">
+          <input name="remember" type="checkbox" defaultChecked disabled={loading} />
+          <span className="remember-connection__track" aria-hidden="true"><span /></span>
+          <span className="remember-connection__text"><strong>Keep me signed in</strong><small>Remember this browser for 30 days</small></span>
+        </label>
+
+        {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
+
+        <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Verifying Torn connection" /> Verifying securely…</> : <>Enter workspace <ArrowRight size={16} /></>}</button>
+
+        <details className="connect-details">
+          <summary><ShieldCheck size={14} /> How your key is used <ChevronDown size={15} /></summary>
+          <div>
+            <p>Your raw key is validated and encrypted server-side and never returned to browser code. Chainward checks these selections before opening a workspace:</p>
+            <ul className="connect-details__selections">{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
+            <dl>
+              <div><dt>Stored data</dt><dd>Operational records, member reports, and awards persist in the configured Chainward database until the workspace operator removes that data. Torn roster responses are briefly cached.</dd></div>
+              <div><dt>Shared with</dt><dd>The connected faction workspace. Entries marked leadership-only are restricted to authorised member managers.</dd></div>
+              <div><dt>API key</dt><dd>Used server-side only. A temporary connection is encrypted for up to 12 hours; “Keep me signed in” stores the encrypted key server-side for up to 30 days.</dd></div>
+            </dl>
+          </div>
+        </details>
+
+        {offlineEnabled && <details className="offline-test-entry">
+          <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>
+          <p>Development fixture only. Never available in production.</p>
+          <div><button type="button" disabled={loading} onClick={() => void openOfflineSession("member")}><KeyRound size={14} /><span><strong>Faction tester</strong><small>Preview member access</small></span></button><button type="button" disabled={loading} onClick={() => void openOfflineSession("owner")}><UserRoundCog size={14} /><span><strong>Owner reviewer</strong><small>Preview owner access</small></span></button></div>
+        </details>}
       </div>
     </form>
   );
