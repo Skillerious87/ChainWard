@@ -184,6 +184,15 @@ roster facts returned by `GET /faction/members`. Reports may be faction-visible
 or leadership-only; only operators with `members:manage` can create reports,
 assign badges, or revoke an award. Revocation preserves the award history.
 
+Faction honours has twelve distinctions across leadership, operations,
+community, and service. The catalogue includes criteria and a live citation
+preview; existing active awards are unavailable for reassignment. Citations
+require 10–600 characters, and the store validates them again before writing.
+Award assignment checks for duplicates inside the write transaction (a SQLite
+write lock locally and a faction row lock in PostgreSQL). Revocation uses the
+same locking boundary, retains attribution, and permits a later re-award.
+The original six badge identifiers and their historical records remain valid.
+
 Torn's documentation also tells service owners to contact Torn staff before
 charging users for usage. The in-game licensing workflow remains configurable
 and disabled by default. The owner must obtain guidance from Torn before publicly

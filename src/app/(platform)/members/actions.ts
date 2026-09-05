@@ -5,7 +5,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
-import { isMemberBadgeId } from "@/lib/members/member-badges";
+import { AWARD_CITATION_MAX, AWARD_CITATION_MIN, isMemberBadgeId } from "@/lib/members/member-badges";
 import { setMemberActivity, setMemberActivityPolicy } from "@/lib/members/member-activity-store";
 import { assignMemberAward, createMemberReport, revokeMemberAward } from "@/lib/members/member-profile-store";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
@@ -37,7 +37,7 @@ const reportSchema = memberRecordTargetSchema.extend({
 
 const awardSchema = memberRecordTargetSchema.extend({
   badgeId: z.string().refine(isMemberBadgeId),
-  citation: z.string().trim().min(5).max(240),
+  citation: z.string().trim().min(AWARD_CITATION_MIN).max(AWARD_CITATION_MAX),
 });
 
 const revokeAwardSchema = memberRecordTargetSchema.extend({

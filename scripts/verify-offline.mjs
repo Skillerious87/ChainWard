@@ -249,7 +249,7 @@ async function run() {
     check("member activity persists an inactivity period log", membersPage.html.includes("Inactivity patterns") && membersPage.html.includes("Period log") && membersPage.html.includes("member-inactivity-log"));
     const memberReport = await getRoute("/members/9000002", session.cookie);
     check("member report renders verified tenure and activity facts", memberReport.html.includes("Chainward member report") && memberReport.html.includes("Faction tenure") && memberReport.html.includes("Torn API v2") === false);
-    check("member report separates faction records from Torn facts", memberReport.html.includes("Reports and notes") && memberReport.html.includes("Awards on record") && memberReport.html.includes("Offline fixture"));
+    check("member report separates faction records from Torn facts", memberReport.html.includes("Reports and notes") && memberReport.html.includes("Faction honours") && memberReport.html.includes("Offline fixture"));
     check("member report includes its durable inactivity timeline", memberReport.html.includes("Inactivity periods") && memberReport.html.includes("Activity pattern"));
 
     const history = await getRoute("/chains", session.cookie);

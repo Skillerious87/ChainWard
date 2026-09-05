@@ -48,4 +48,42 @@ describe.sequential("member profile store", () => {
     expect(finalView.awards.filter((award) => !award.revokedAt)).toHaveLength(1);
     expect(finalView.awards.filter((award) => award.revokedAt)).toHaveLength(1);
   });
+
+  it("accepts only one of two simultaneous submissions for the same active award", async () => {
+    directory = mkdtempSync(path.join(tmpdir(), "chainward-award-race-"));
+    process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "awards.sqlite");
+    delete process.env.DATABASE_URL;
+    createLocalDatabase();
+    const faction = { id: 51393, name: "Faction", tag: "F" };
+    const member = { tornUserId: 123, memberName: "Member" };
+    const actor = { tornUserId: 456, name: "Manager", isPlatformAdmin: false };
+    const submissions = await Promise.allSettled([
+      assignMemberAward(faction, member, actor, { badgeId: "VANGUARD", citation: "Led the faction through a difficult operation." }),
+      assignMemberAward(faction, member, actor, { badgeId: "VANGUARD", citation: "A second submission from another open tab." }),
+    ]);
+    expect(submissions.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(submissions.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const result = await getMemberProfileWorkspace(faction.id, member.tornUserId, true);
+    expect(result.awards).toHaveLength(1);
+
+    // The uniqueness boundary is a member within a faction, not a global badge.
+    await assignMemberAward(faction, { ...member, tornUserId: 124 }, actor, { badgeId: "VANGUARD", citation: "Led a different team's operation successfully." });
+    await assignMemberAward({ ...faction, id: 99999 }, member, actor, { badgeId: "VANGUARD", citation: "Contributed to a different faction's operation." });
+    await expect(revokeMemberAward(faction, { ...member, tornUserId: 124 }, actor, result.awards[0]!.id, "Wrong member.")).rejects.toThrow("could not be found");
+  });
+
+  it("validates and trims citations at the storage boundary and saves new distinctions", async () => {
+    directory = mkdtempSync(path.join(tmpdir(), "chainward-award-validation-"));
+    process.env.CHAINWARD_LOCAL_DB_PATH = path.join(directory, "awards.sqlite");
+    delete process.env.DATABASE_URL;
+    createLocalDatabase();
+    const faction = { id: 51393, name: "Faction", tag: "F" };
+    const member = { tornUserId: 123, memberName: "Member" };
+    const actor = { tornUserId: 456, name: "Manager", isPlatformAdmin: false };
+    await expect(assignMemberAward(faction, member, actor, { badgeId: "LIFELINE", citation: "   " })).rejects.toThrow("at least 10");
+    await expect(assignMemberAward(faction, member, actor, { badgeId: "LIFELINE", citation: "x".repeat(601) })).rejects.toThrow("600");
+    await assignMemberAward(faction, member, actor, { badgeId: "LIFELINE", citation: `  ${"x".repeat(600)}  ` });
+    const result = await getMemberProfileWorkspace(faction.id, member.tornUserId, true);
+    expect(result.awards).toEqual([expect.objectContaining({ badgeId: "LIFELINE", citation: "x".repeat(600), awardedByName: "Manager" })]);
+  });
 });

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import { cache } from "react";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
-import { isMemberBadgeId, type MemberBadgeId } from "@/lib/members/member-badges";
+import { awardCitationError, isMemberBadgeId, type MemberBadgeId } from "@/lib/members/member-badges";
 
 export type MemberReportCategory = "RECOGNITION" | "DEVELOPMENT" | "INCIDENT" | "GENERAL";
 export type MemberReportVisibility = "FACTION" | "LEADERSHIP";
@@ -92,14 +92,15 @@ export async function assignMemberAward(
   actor: MemberActor,
   input: NewMemberAward,
 ): Promise<void> {
-  const current = await getUncachedWorkspace(faction.id, target.tornUserId, true);
-  if (current.awards.some((award) => award.badgeId === input.badgeId && !award.revokedAt)) throw new Error(`${target.memberName} already has this active badge.`);
+  if (!isMemberBadgeId(input.badgeId)) throw new Error("Choose a valid faction distinction.");
+  const citationError = awardCitationError(input.citation);
+  if (citationError) throw new Error(citationError);
   const award: MemberAward = {
     id: randomUUID(),
     tornUserId: target.tornUserId,
     memberName: target.memberName,
     badgeId: input.badgeId,
-    citation: input.citation,
+    citation: input.citation.trim(),
     awardedByTornUserId: actor.tornUserId,
     awardedByName: actor.name,
     awardedAt: new Date().toISOString(),
@@ -124,12 +125,6 @@ export async function revokeMemberAward(
     return;
   }
   revokeLocalAward(faction.id, target, actor, awardId, reason);
-}
-
-async function getUncachedWorkspace(factionId: number, tornUserId: number, includeLeadershipReports: boolean): Promise<MemberProfileWorkspace> {
-  return process.env.DATABASE_URL?.trim()
-    ? getPostgresWorkspace(factionId, tornUserId, includeLeadershipReports)
-    : getLocalWorkspace(factionId, tornUserId, includeLeadershipReports);
 }
 
 function getLocalWorkspace(factionId: number, tornUserId: number, includeLeadershipReports: boolean): MemberProfileWorkspace {
@@ -177,8 +172,21 @@ function workspaceFromSettings(settings: Array<{ key: string; value: unknown }>,
 function createLocalRecord(factionId: number, key: string, value: MemberReportEntry | MemberAward, unavailableMessage: string): void {
   const database = openLocalDatabase();
   if (!database) throw new Error(unavailableMessage);
+  let transactionStarted = false;
   try {
+    if ("badgeId" in value) {
+      // Check and insert under one write lock, including requests from other
+      // processes. A preflight read alone allows simultaneous duplicate awards.
+      database.exec("BEGIN IMMEDIATE");
+      transactionStarted = true;
+      const rows = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key LIKE ?").all(factionId, `${awardPrefix(value.tornUserId)}%`) as unknown as Array<{ value_json: string }>;
+      assertAwardAvailable(rows.map((row) => safeJson(row.value_json)), value);
+    }
     database.prepare("INSERT INTO faction_settings (faction_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)").run(factionId, key, JSON.stringify(value), new Date().toISOString());
+    if (transactionStarted) database.exec("COMMIT");
+  } catch (error) {
+    if (transactionStarted) database.exec("ROLLBACK");
+    throw error;
   } finally {
     database.close();
   }
@@ -188,13 +196,20 @@ function revokeLocalAward(factionId: number, target: MemberTarget, actor: Member
   const database = openLocalDatabase();
   if (!database) throw new Error("Create local storage before changing member awards.");
   const key = awardKey(target.tornUserId, awardId);
+  let transactionStarted = false;
   try {
+    database.exec("BEGIN IMMEDIATE");
+    transactionStarted = true;
     const row = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key = ?").get(factionId, key) as unknown as { value_json: string } | undefined;
     const award = row ? parseAward(safeJson(row.value_json)) : null;
     if (!award || award.tornUserId !== target.tornUserId) throw new Error("That award could not be found in this faction workspace.");
     if (award.revokedAt) throw new Error("That award has already been revoked.");
     const next: MemberAward = { ...award, revokedAt: new Date().toISOString(), revokedByTornUserId: actor.tornUserId, revokedByName: actor.name, revokeReason: reason };
     database.prepare("UPDATE faction_settings SET value_json = ?, updated_at = ? WHERE faction_id = ? AND key = ?").run(JSON.stringify(next), next.revokedAt, factionId, key);
+    database.exec("COMMIT");
+  } catch (error) {
+    if (transactionStarted) database.exec("ROLLBACK");
+    throw error;
   } finally {
     database.close();
   }
@@ -213,6 +228,12 @@ async function createPostgresRecord(
   const jsonValue = JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   await db.$transaction(async (transaction) => {
     const faction = await transaction.faction.upsert({ where: { tornFactionId: factionIdentity.id }, update: { name: factionIdentity.name, tag: factionIdentity.tag }, create: { tornFactionId: factionIdentity.id, name: factionIdentity.name, tag: factionIdentity.tag } });
+    if ("badgeId" in value) {
+      // Serialise award changes within this faction before checking its ledger.
+      await transaction.$queryRaw`SELECT id FROM "Faction" WHERE id = ${faction.id}::uuid FOR UPDATE`;
+      const existing = await transaction.factionSetting.findMany({ where: { factionId: faction.id, key: { startsWith: awardPrefix(value.tornUserId) } }, select: { value: true } });
+      assertAwardAvailable(existing.map((setting) => setting.value), value);
+    }
     const actorUser = await transaction.user.upsert({ where: { tornUserId: actor.tornUserId }, update: { name: actor.name, isPlatformAdmin: actor.isPlatformAdmin }, create: { tornUserId: actor.tornUserId, name: actor.name, isPlatformAdmin: actor.isPlatformAdmin } });
     await transaction.factionSetting.create({ data: { factionId: faction.id, key, value: jsonValue } });
     await transaction.auditLog.create({ data: { factionId: faction.id, actorId: actorUser.id, action, entityType, entityId, metadata: jsonValue } });
@@ -224,6 +245,7 @@ async function revokePostgresAward(factionIdentity: FactionIdentity, target: Mem
   await db.$transaction(async (transaction) => {
     const faction = await transaction.faction.findUnique({ where: { tornFactionId: factionIdentity.id } });
     if (!faction) throw new Error("That award could not be found in this faction workspace.");
+    await transaction.$queryRaw`SELECT id FROM "Faction" WHERE id = ${faction.id}::uuid FOR UPDATE`;
     const key = awardKey(target.tornUserId, awardId);
     const setting = await transaction.factionSetting.findUnique({ where: { factionId_key: { factionId: faction.id, key } } });
     const award = setting ? parseAward(setting.value) : null;
@@ -241,6 +263,12 @@ function reportPrefix(tornUserId: number): string { return `members.report.${tor
 function awardPrefix(tornUserId: number): string { return `members.award.${tornUserId}.`; }
 function reportKey(tornUserId: number, id: string): string { return `${reportPrefix(tornUserId)}${id}`; }
 function awardKey(tornUserId: number, id: string): string { return `${awardPrefix(tornUserId)}${id}`; }
+function assertAwardAvailable(values: unknown[], next: MemberAward): void {
+  if (values.some((value) => {
+    const award = parseAward(value);
+    return award && award.tornUserId === next.tornUserId && award.badgeId === next.badgeId && !award.revokedAt;
+  })) throw new Error(`${next.memberName} already has this active badge.`);
+}
 function safeJson(value: string): unknown { try { return JSON.parse(value) as unknown; } catch { return null; } }
 function empty(databaseConfigured: boolean, databaseAvailable: boolean, message: string): MemberProfileWorkspace { return { databaseConfigured, databaseAvailable, reports: [], awards: [], message }; }
 

@@ -16,6 +16,7 @@ import "./history.css";
 import "./unlock.css";
 import "./members.css";
 import "./mobile.css";
+import "./member-awards.css";
 
 const siteDescription = "A third-party Torn faction chain tracker, reward engine, and payout operations platform.";
 const publicOrigin = deploymentOrigin();

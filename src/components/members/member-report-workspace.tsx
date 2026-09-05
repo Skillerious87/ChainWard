@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   Award,
-  BadgeCheck,
   BookOpenText,
   CalendarDays,
   ChevronLeft,
@@ -24,11 +23,13 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { addMemberAward, addMemberReport, removeMemberAward } from "@/app/(platform)/members/actions";
+import { addMemberReport, removeMemberAward } from "@/app/(platform)/members/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { MemberAvatar } from "@/components/ui/member-avatar";
 import { notify } from "@/lib/client-actions";
-import { MEMBER_BADGES, memberBadgeDefinition, type MemberBadgeId } from "@/lib/members/member-badges";
+import { memberBadgeDefinition } from "@/lib/members/member-badges";
+import { MemberAwardDialog } from "./member-award-dialog";
+import { MemberAwardCard } from "./member-award-card";
 import type { MemberActivityAssessment } from "@/lib/members/member-activity-intelligence";
 import { buildMemberInactivityInsights, periodDurationSeconds, type MemberInactivityPeriod } from "@/lib/members/member-inactivity";
 import type { MemberAward, MemberProfileWorkspace, MemberReportCategory, MemberReportVisibility } from "@/lib/members/member-profile-store";
@@ -74,8 +75,6 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
   const [visibility, setVisibility] = useState<MemberReportVisibility>("FACTION");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [badgeId, setBadgeId] = useState<MemberBadgeId>("CHAIN_SENTINEL");
-  const [citation, setCitation] = useState("");
   const [revokeReason, setRevokeReason] = useState("");
   const activeAwards = useMemo(() => profile.awards.filter((award) => !award.revokedAt), [profile.awards]);
   const awardHistory = useMemo(() => profile.awards.filter((award) => award.revokedAt), [profile.awards]);
@@ -92,15 +91,6 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
     setBody("");
     setCategory("RECOGNITION");
     setVisibility("FACTION");
-    router.refresh();
-  }
-
-  async function saveAward(): Promise<void> {
-    const result = await addMemberAward({ factionId, tornUserId: member.tornId, badgeId, citation });
-    notify({ title: result.ok ? "Badge awarded" : "Badge was not assigned", description: result.message, tone: result.ok ? "success" : "danger" });
-    if (!result.ok) throw new Error(result.message);
-    setCitation("");
-    setBadgeId("CHAIN_SENTINEL");
     router.refresh();
   }
 
@@ -142,9 +132,9 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
 
     <MemberInactivityRecord activity={activity} periods={inactivityPeriods} checkedAt={checkedAt} periodCount={inactivityInsights.recordedPeriods} averageCompletedSeconds={inactivityInsights.averageCompletedSeconds} longestSeconds={inactivityInsights.longestPeriodSeconds} />
 
-    <section className="member-award-showcase">
-      <header><div><p className="eyebrow"><Sparkles size={12} /> Recognition</p><h2>Awards on record</h2><p>Deliberate faction recognition assigned by authorised Chainward managers.</p></div>{canManage && <button className="button button--secondary" disabled={!profile.databaseAvailable} onClick={() => setAwardOpen(true)}><Award size={15} /> Award badge</button>}</header>
-      {activeAwards.length ? <div className="member-award-showcase__grid">{activeAwards.map((award) => <AwardCard key={award.id} award={award} canManage={canManage} onRevoke={() => { setRevokeReason(""); setRevoking(award); }} />)}</div> : <div className="member-award-empty"><span><Medal size={22} /></span><div><strong>No awards yet</strong><p>Awards appear here with their citation and the manager who assigned them.</p></div></div>}
+    <section className="member-award-showcase honours-showcase">
+      <header><div><p className="eyebrow"><Sparkles size={12} /> Recognition</p><h2>Faction honours <span className="honours-count">{activeAwards.length}</span></h2><p>The contributions that made a difference. The people who made them happen.</p></div>{canManage && <button className="button button--secondary" disabled={!profile.databaseAvailable} onClick={() => setAwardOpen(true)}><Award size={15} /> Award distinction</button>}</header>
+      {activeAwards.length ? <div className="member-award-showcase__grid">{activeAwards.map((award) => <MemberAwardCard key={award.id} award={award} canManage={canManage} onRevoke={() => { setRevokeReason(""); setRevoking(award); }} />)}</div> : <div className="member-award-empty"><span><Medal size={22} /></span><div><strong>No awards yet</strong><p>Awards appear here with their citation and the manager who assigned them.</p></div></div>}
     </section>
 
     <div className="member-report-grid">
@@ -171,9 +161,7 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       </div>
     </Dialog>
 
-    <Dialog open={awardOpen} className="dialog--member-award" title={`Award ${member.name}`} description="Choose a deliberate faction recognition and explain why it was earned." confirmLabel="Assign badge" confirmDisabled={!citation.trim() || citation.trim().length < 5} onConfirm={saveAward} onClose={() => setAwardOpen(false)}>
-      <div className="member-award-form"><div className="member-award-catalogue">{MEMBER_BADGES.map((badge) => <label key={badge.id} className={badgeId === badge.id ? "member-award-option--selected" : undefined}><input type="radio" name="member-badge" value={badge.id} checked={badgeId === badge.id} onChange={() => setBadgeId(badge.id)} /><BadgeGlyph badgeId={badge.id} /><span><strong>{badge.label}</strong><small>{badge.detail}</small></span></label>)}</div><label><span>Award citation <small>{citation.length}/240</small></span><textarea value={citation} maxLength={240} onChange={(event) => setCitation(event.target.value)} placeholder="What did this member do to earn the badge?" /></label><p><ShieldCheck size={14} /> Awards are Chainward faction records, not Torn achievements or automated scores.</p></div>
-    </Dialog>
+    {awardOpen && <MemberAwardDialog member={member} factionId={factionId} awards={profile.awards} onSaved={() => router.refresh()} onClose={() => setAwardOpen(false)} />}
 
     <Dialog open={Boolean(revoking)} className="dialog--member-award-revoke" title={revoking ? `Revoke ${memberBadgeDefinition(revoking.badgeId).label}?` : "Revoke badge"} description="The badge leaves the active showcase, but its history and attribution remain." destructive confirmLabel="Revoke badge" confirmDisabled={revokeReason.trim().length < 3} onConfirm={revokeAward} onClose={() => setRevoking(null)}>
       <label className="member-award-revoke"><span>Reason for revocation <small>{revokeReason.length}/240</small></span><textarea value={revokeReason} maxLength={240} onChange={(event) => setRevokeReason(event.target.value)} placeholder="Briefly explain why this award is being removed…" /></label>
@@ -220,8 +208,6 @@ function MemberInactivityRecord({ activity, periods, checkedAt, periodCount, ave
     {periods.length ? <><dl><div><dt>Periods logged</dt><dd>{periodCount}</dd></div><div><dt>Completed</dt><dd>{completedCount}</dd></div><div><dt>Average completed</dt><dd>{completedCount ? formatInactivityDuration(averageCompletedSeconds) : "—"}</dd></div><div><dt>Longest observed</dt><dd>{formatInactivityDuration(longestSeconds)}</dd></div></dl><div className="member-report-inactivity__timeline">{periods.slice(0, 12).map((period) => <article key={period.id}><span className={period.endedAt ? undefined : "member-report-inactivity__open"}><i /></span><div><strong>{formatShortDateTime(period.startedAt)} <em>to</em> {period.endedAt ? formatShortDateTime(period.endedAt) : "ongoing"}</strong><p className="member-report-inactivity__period-meta"><span>{formatInactivityDuration(periodDurationSeconds(period, checkedAtSeconds))}</span>{period.holidayProtected && <em><Umbrella size={11} />Holiday protected</em>}{period.watchListed && <em><Eye size={11} />Watch-listed</em>}</p><small>First observed {formatShortDateTime(period.firstObservedAt)}</small></div></article>)}</div></> : <div className="member-report-inactivity__empty">{activity.holidayActive ? <Umbrella size={18} /> : <Clock3 size={18} />}<p><strong>No inactivity periods logged</strong><span>{emptyDetail}</span></p></div>}
   </section>;
 }
-function AwardCard({ award, canManage, onRevoke }: { award: MemberAward; canManage: boolean; onRevoke: () => void }) { const badge = memberBadgeDefinition(award.badgeId); return <article><BadgeGlyph badgeId={award.badgeId} /><div><header><h3>{badge.label}</h3><time dateTime={award.awardedAt}>{formatShortDate(award.awardedAt)}</time></header><p>{award.citation}</p><footer><span>Awarded by <strong>{award.awardedByName}</strong></span>{canManage && <button onClick={onRevoke}>Revoke</button>}</footer></div></article>; }
-function BadgeGlyph({ badgeId }: { badgeId: MemberBadgeId }) { const index = MEMBER_BADGES.findIndex((badge) => badge.id === badgeId); const Icon = [Award, BadgeCheck, ShieldCheck, Sparkles, Medal, CalendarDays][index] ?? Award; return <span className={`member-badge-glyph member-badge-glyph--${index + 1}`}><Icon size={20} /></span>; }
 function ReportIcon({ category }: { category: MemberReportCategory }) { if (category === "RECOGNITION") return <Sparkles size={15} />; if (category === "DEVELOPMENT") return <BookOpenText size={15} />; if (category === "INCIDENT") return <LockKeyhole size={15} />; return <MessageSquareText size={15} />; }
 function describeActivity(activity: MemberActivityAssessment): ActivityPresentation {
   if (activity.holidayActive) return {
