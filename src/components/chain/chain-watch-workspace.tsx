@@ -7,6 +7,7 @@ import { bulkDeleteChainWatchSlotsAction, duplicateChainWatchRangeAction, swapCh
 import { createChainWatchRotationAction, deleteChainWatchRotationAction, pauseChainWatchRotationAction, updateChainWatchRotationAction } from "@/app/(platform)/chain-watch/rotation-actions";
 import { ChainHero } from "@/components/chain/chain-hero";
 import { ChainWatchRotationDialog } from "@/components/chain/chain-watch-rotation-dialog";
+import { ChainWatchTimeline } from "@/components/chain/chain-watch-timeline";
 import { Dialog } from "@/components/ui/dialog";
 import { MemberAvatar } from "@/components/ui/member-avatar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -73,6 +74,15 @@ export function ChainWatchWorkspace({
   const [editingRotationId, setEditingRotationId] = useState<string | null>(null);
   const [deleteRotationTarget, setDeleteRotationTarget] = useState<ChainWatchRotation | null>(null);
   const editingRotation = editingRotationId ? rotations.find((rotation) => rotation.id === editingRotationId) ?? null : null;
+
+  const [viewMode, setViewModeState] = useState<"list" | "timeline">(() => {
+    if (typeof window === "undefined") return "list";
+    try { return window.localStorage.getItem("chainward:chain-watch-view:v1") === "timeline" ? "timeline" : "list"; } catch { return "list"; }
+  });
+  function setViewMode(next: "list" | "timeline") {
+    setViewModeState(next);
+    try { window.localStorage.setItem("chainward:chain-watch-view:v1", next); } catch { /* view choice still applies to this tab */ }
+  }
 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedSlotIds, setSelectedSlotIds] = useState<ReadonlySet<string>>(new Set());
@@ -205,6 +215,20 @@ export function ChainWatchWorkspace({
     setSwapWithId("");
   }
 
+  async function resizeSlot(slotId: string, range: { startAt: string; endAt: string }) {
+    const slot = workspace.slots.find((item) => item.id === slotId);
+    if (!slot) return;
+    const result = await updateChainWatchSlotAction({
+      slotId,
+      startAt: range.startAt,
+      endAt: range.endAt,
+      primaryTornUserId: slot.primaryTornUserId,
+      backupTornUserId: slot.backupTornUserId,
+      note: slot.note,
+    });
+    notify({ title: result.ok ? "Slot updated" : "Not updated", description: result.message, tone: result.ok ? "success" : "danger" });
+  }
+
   const manuallyAdjustedFutureCount = useMemo(() => {
     if (!editingRotationId) return 0;
     return workspace.slots.filter((slot) => slot.rotationId === editingRotationId && Date.parse(slot.startAt) > now && slot.updatedAt !== slot.createdAt).length;
@@ -281,63 +305,85 @@ export function ChainWatchWorkspace({
           <p>{workspace.slots.length ? workspace.message : "Verified faction members only."}</p>
         </header>
 
+        <div className="chain-watch-view-toggle">
+          <button className={viewMode === "list" ? "active" : ""} type="button" onClick={() => setViewMode("list")}>List</button>
+          <button className={viewMode === "timeline" ? "active" : ""} type="button" onClick={() => setViewMode("timeline")}>Timeline</button>
+        </div>
+
         {canManage && (
           <div className="chain-watch-list__toolbar">
             <button className="button button--secondary" type="button" onClick={() => duplicateForward(1)}><Copy size={14} /> Duplicate today forward</button>
             <button className="button button--secondary" type="button" onClick={() => duplicateForward(7)}><Copy size={14} /> Duplicate this week forward</button>
-            <button
-              className="button button--secondary"
-              type="button"
-              onClick={() => { setSelectMode((current) => !current); setSelectedSlotIds(new Set()); }}
-            >
-              {selectMode ? <X size={14} /> : <CheckSquare size={14} />} {selectMode ? "Cancel select" : "Select"}
-            </button>
+            {viewMode === "list" && (
+              <button
+                className="button button--secondary"
+                type="button"
+                onClick={() => { setSelectMode((current) => !current); setSelectedSlotIds(new Set()); }}
+              >
+                {selectMode ? <X size={14} /> : <CheckSquare size={14} />} {selectMode ? "Cancel select" : "Select"}
+              </button>
+            )}
           </div>
         )}
 
         {!workspace.databaseAvailable && <div className="chain-watch-alert chain-watch-alert--danger"><ShieldAlert size={16} /><span>{workspace.message}</span></div>}
         {!rosterResult.available && <div className="chain-watch-alert"><Clock3 size={16} /><span>Roster verification unavailable — scheduling is disabled until Torn confirms current membership.</span></div>}
 
-        {selectMode && selectedSlotIds.size > 0 && (
-          <div className="chain-watch-bulk-bar">
-            <span>{selectedSlotIds.size} selected</span>
-            <button className="button button--danger" type="button" onClick={() => setBulkDeleteConfirmOpen(true)}><Trash2 size={14} /> Delete selected</button>
-          </div>
-        )}
+        {viewMode === "timeline" ? (
+          <ChainWatchTimeline
+            slots={workspace.slots}
+            gaps={gaps}
+            now={now}
+            canManage={canManage}
+            onCreateSlot={openCreate}
+            onOpenRotation={openEditRotation}
+            onEditSlot={openEdit}
+            onResizeSlot={resizeSlot}
+          />
+        ) : (
+          <>
+            {selectMode && selectedSlotIds.size > 0 && (
+              <div className="chain-watch-bulk-bar">
+                <span>{selectedSlotIds.size} selected</span>
+                <button className="button button--danger" type="button" onClick={() => setBulkDeleteConfirmOpen(true)}><Trash2 size={14} /> Delete selected</button>
+              </div>
+            )}
 
-        <div className="chain-watch-slots" role="list">
-          {upcomingSlots.map((slot) => (
-            <SlotRow
-              key={slot.id}
-              slot={slot}
-              status={slotStatus(slot, now)}
-              roleName={workspace.roleName}
-              canManage={canManage}
-              onEdit={() => openEdit(slot)}
-              onOpenRotation={openEditRotation}
-              onDelete={() => setDeleteTarget(slot)}
-              selectMode={selectMode}
-              selected={selectedSlotIds.has(slot.id)}
-              onToggleSelected={() => toggleSelected(slot.id)}
-              onSwap={() => setSwapTarget(slot)}
-            />
-          ))}
-          {upcomingSlots.length === 0 && (
-            <div className="chain-watch-empty">
-              <Users size={22} />
-              <strong>No upcoming coverage scheduled</strong>
-              <p>Add a slot for each stretch of the chain someone needs to own — overnight coverage matters most.</p>
+            <div className="chain-watch-slots" role="list">
+              {upcomingSlots.map((slot) => (
+                <SlotRow
+                  key={slot.id}
+                  slot={slot}
+                  status={slotStatus(slot, now)}
+                  roleName={workspace.roleName}
+                  canManage={canManage}
+                  onEdit={() => openEdit(slot)}
+                  onOpenRotation={openEditRotation}
+                  onDelete={() => setDeleteTarget(slot)}
+                  selectMode={selectMode}
+                  selected={selectedSlotIds.has(slot.id)}
+                  onToggleSelected={() => toggleSelected(slot.id)}
+                  onSwap={() => setSwapTarget(slot)}
+                />
+              ))}
+              {upcomingSlots.length === 0 && (
+                <div className="chain-watch-empty">
+                  <Users size={22} />
+                  <strong>No upcoming coverage scheduled</strong>
+                  <p>Add a slot for each stretch of the chain someone needs to own — overnight coverage matters most.</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {pastSlots.length > 0 && (
-          <details className="chain-watch-history">
-            <summary>Past slots <span>{pastSlots.length}</span></summary>
-            <div className="chain-watch-slots">
-              {pastSlots.map((slot) => <SlotRow key={slot.id} slot={slot} status="past" roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onOpenRotation={openEditRotation} onDelete={() => setDeleteTarget(slot)} />)}
-            </div>
-          </details>
+            {pastSlots.length > 0 && (
+              <details className="chain-watch-history">
+                <summary>Past slots <span>{pastSlots.length}</span></summary>
+                <div className="chain-watch-slots">
+                  {pastSlots.map((slot) => <SlotRow key={slot.id} slot={slot} status="past" roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onOpenRotation={openEditRotation} onDelete={() => setDeleteTarget(slot)} />)}
+                </div>
+              </details>
+            )}
+          </>
         )}
       </section>
 

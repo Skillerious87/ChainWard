@@ -11,6 +11,7 @@ import "./admin.css";
 import "./settings.css";
 import "./chain.css";
 import "./chain-watch.css";
+import "./chain-watch-timeline.css";
 import "./history.css";
 import "./unlock.css";
 import "./members.css";
