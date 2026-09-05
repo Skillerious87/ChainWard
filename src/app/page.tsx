@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
+import { LoginBackdrop } from "@/components/onboarding/login-backdrop";
 import { licensePlans } from "@/lib/licensing/pricing";
 
 export const metadata: Metadata = {
@@ -52,8 +53,7 @@ const pricingPresentation = [
 export default function HomePage() {
   return (
     <main className="welcome-page">
-      <div className="welcome-ambient welcome-ambient--one" />
-      <div className="welcome-ambient welcome-ambient--two" />
+      <LoginBackdrop />
 
       <header className="welcome-nav">
         <Link href="/" aria-label="Chainward home"><BrandMark /></Link>

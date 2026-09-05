@@ -17,9 +17,10 @@ import "./unlock.css";
 import "./members.css";
 import "./mobile.css";
 import "./member-awards.css";
-// Loaded after mobile.css so the feature's own responsive rules take precedence
-// over the shared table/section base styles.
+// Loaded after mobile.css so each feature's own responsive rules take
+// precedence over the shared base styles.
 import "./organized-crimes.css";
+import "./welcome.css";
 
 const siteDescription = "A third-party Torn faction chain tracker, reward engine, and payout operations platform.";
 const publicOrigin = deploymentOrigin();
