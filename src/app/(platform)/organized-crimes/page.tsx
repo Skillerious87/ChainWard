@@ -36,12 +36,15 @@ export default async function OrganizedCrimesPage() {
   const canReview = isPlatformOwner(actor)
     || Boolean(assignment && assignment.status === "ACTIVE" && hasPermission(assignment.role, "oc:review"));
 
+  // One server timestamp drives every "now"-relative label so the client's
+  // first render matches this HTML exactly (no hydration text mismatch).
+  const nowMs = new Date().getTime();
   const reviews = reviewMembers(
     roster.available ? roster.data : [],
     allIntel,
     live,
     history,
-    new Date().getTime(),
+    nowMs,
     settings.minimumCpr,
   );
   const ownIntel = allIntel.find((record) => record.tornUserId === actor.tornUserId) ?? null;
@@ -49,6 +52,7 @@ export default async function OrganizedCrimesPage() {
   return (
     <OrganizedCrimesWorkspace
       canReview={canReview}
+      nowMs={nowMs}
       reviews={canReview ? reviews : null}
       ownIntel={ownIntel}
       currentUser={{ tornUserId: actor.tornUserId, name: actor.name }}

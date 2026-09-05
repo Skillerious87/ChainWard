@@ -215,7 +215,7 @@ function activeCrimes(actorId: number, now: number) {
       slots: [
         crimeSlot("Robber", "1", "Robber #1", null, cpr.a, null),
         crimeSlot("Robber", "2", "Robber #2", null, cpr.b, { id: 568, is_available: true, is_reusable: false }),
-        crimeSlot("Lookout", "1", "Lookout", { id: OFFLINE_IDENTITIES.owner.id, joined_at: now - 3_600 }, null, null),
+        crimeSlot("Lookout", "1", "Lookout", { id: 9_000_003, joined_at: now - 3_600 }, null, null),
       ],
     },
     {
