@@ -117,10 +117,44 @@
 .chain-watch-history summary span { min-width: 20px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: rgba(255, 255, 255, .06); font-size: 10px; }
 .chain-watch-history[open] summary { border-bottom: 1px solid var(--border); }
 
+/* Generated-by-a-rotation badge, inline with a slot's primary member -------- */
+.chain-watch-rotation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  border: 1px solid rgba(var(--accent-rgb), .26);
+  border-radius: 6px;
+  background: rgba(var(--accent-rgb), .07);
+  color: var(--accent);
+  cursor: pointer;
+}
+.chain-watch-rotation-badge:hover { background: rgba(var(--accent-rgb), .12); }
+
+/* Rotations list -------------------------------------------------------------- */
+.chain-watch-rotations { display: flex; flex-direction: column; padding: 6px 14px; }
+.chain-watch-rotation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--admin-line, var(--border));
+}
+.chain-watch-rotation-row:last-child { border-bottom: 0; }
+.chain-watch-rotation-row--paused { opacity: .62; }
+.chain-watch-rotation-row__summary { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chain-watch-rotation-row__summary strong { font-size: 12.5px; font-weight: 640; }
+.chain-watch-rotation-row__summary span { color: var(--text-muted); font-size: 10.5px; }
+.chain-watch-rotation-row__members { color: var(--text-secondary); font-size: 11.5px; }
+
 /* Dialog forms ---------------------------------------------------------------- */
 .dialog--chain-watch-settings { width: min(460px, calc(100vw - 32px)); }
 .dialog--chain-watch-slot { width: min(520px, calc(100vw - 32px)); }
 .dialog--chain-watch-delete { width: min(480px, calc(100vw - 32px)); }
+.dialog--chain-watch-rotation { width: min(560px, calc(100vw - 32px)); }
 
 .chain-watch-settings-form,
 .chain-watch-slot-form { display: grid; gap: 14px; }
@@ -149,6 +183,47 @@
 
 .chain-watch-slot-form__times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .chain-watch-slot-form__error { margin: -6px 0 0; color: var(--danger); font-size: 11px !important; }
+
+.chain-watch-rotation-form { display: grid; gap: 14px; }
+.chain-watch-rotation-form label { display: flex; flex-direction: column; gap: 6px; }
+.chain-watch-rotation-form label > span, .chain-watch-rotation-form__label { color: var(--text-secondary); font-size: 11.5px; font-weight: 650; }
+.chain-watch-rotation-form label > span em { color: var(--text-muted); font-style: normal; font-weight: 500; }
+.chain-watch-rotation-form input, .chain-watch-rotation-form select {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0d1013;
+  color: var(--text);
+  font-size: 13px;
+}
+.chain-watch-rotation-form input:focus, .chain-watch-rotation-form select:focus { border-color: rgba(var(--accent-rgb), .5); outline: 0; box-shadow: 0 0 0 2px rgba(var(--accent-rgb), .08); }
+.chain-watch-rotation-form input:disabled { opacity: .5; }
+.chain-watch-rotation-form__hint { margin: -6px 0 0; color: var(--text-muted); font-size: 11px !important; }
+.chain-watch-rotation-form__checkbox { flex-direction: row !important; align-items: center; gap: 8px !important; color: var(--text-secondary); font-size: 12px; }
+.chain-watch-rotation-form__checkbox input { width: 16px; height: 16px; }
+
+.chain-watch-weekday-picker { display: flex; gap: 6px; margin-top: 6px; }
+.chain-watch-weekday-picker__day {
+  flex: 1;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0d1013;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 640;
+  cursor: pointer;
+  transition: border-color 130ms ease, background 130ms ease, color 130ms ease;
+}
+.chain-watch-weekday-picker__day:hover { border-color: var(--border-strong); }
+.chain-watch-weekday-picker__day--active { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .12); color: var(--accent); }
+
+.chain-watch-rotation-members { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.chain-watch-rotation-members li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255, 255, 255, .015); }
+.chain-watch-rotation-members__index { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 6px; background: rgba(var(--accent-rgb), .1); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+.chain-watch-rotation-members__name { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.chain-watch-rotation-members__empty { justify-content: center; color: var(--text-muted); font-size: 11.5px; }
 
 /* Mobile ----------------------------------------------------------------------
    Same philosophy as the rest of the console on a phone: elevated cards with
@@ -184,4 +259,25 @@
   .chain-watch-slot__actions .icon-button { min-width: 40px; min-height: 40px; }
 
   .chain-watch-slot-form__times { grid-template-columns: 1fr; }
+
+  .chain-watch-rotations { padding: 10px; gap: 10px; }
+  .chain-watch-rotation-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "summary status" "members members" "actions actions";
+    row-gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #11161b;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .2);
+  }
+  .chain-watch-rotation-row:last-child { border-bottom: 1px solid var(--border); }
+  .chain-watch-rotation-row__summary { grid-area: summary; }
+  .chain-watch-rotation-row__members { grid-area: members; }
+  .chain-watch-rotation-row .chain-watch-status { grid-area: status; justify-self: end; }
+  .chain-watch-rotation-row .chain-watch-slot__actions { grid-area: actions; justify-content: flex-end; }
+  .chain-watch-rotation-row .chain-watch-slot__actions .icon-button { min-width: 40px; min-height: 40px; }
+
+  .chain-watch-weekday-picker { flex-wrap: wrap; }
+  .chain-watch-weekday-picker__day { min-width: 40px; }
 }

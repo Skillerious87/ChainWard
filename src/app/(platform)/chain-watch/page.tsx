@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ChainWatchWorkspace } from "@/components/chain/chain-watch-workspace";
 import { hasPermission } from "@/lib/auth/authorization";
 import { getChainWatchWorkspace } from "@/lib/chain-watch/chain-watch-store";
+import { listChainWatchRotations } from "@/lib/chain-watch/chain-watch-rotation-store";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
@@ -20,11 +21,12 @@ export default async function ChainWatchPage() {
     getCurrentActor(),
     getConfiguredTornConnection(),
   ]);
-  const [workspace, assignment] = await Promise.all([
+  const [workspace, assignment, rotations] = await Promise.all([
     getChainWatchWorkspace(telemetry.faction?.id ?? null),
     getFactionAccessAssignment(connection?.factionId ?? null, actor.tornUserId),
+    telemetry.faction?.id ? listChainWatchRotations(telemetry.faction.id) : Promise.resolve([]),
   ]);
   const canManage = isPlatformOwner(actor) || Boolean(assignment && assignment.status === "ACTIVE" && hasPermission(assignment.role, "chain:manage"));
 
-  return <ChainWatchWorkspace workspace={workspace} rosterResult={roster} canManage={canManage} />;
+  return <ChainWatchWorkspace workspace={workspace} rosterResult={roster} rotations={rotations} canManage={canManage} />;
 }

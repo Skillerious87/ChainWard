@@ -1,9 +1,11 @@
 "use client";
 
-import { AlarmClock, CalendarClock, CalendarPlus, Clock3, Pencil, Settings2, ShieldAlert, ShieldCheck, Trash2, TriangleAlert, UserRoundCheck, Users } from "lucide-react";
+import { AlarmClock, CalendarClock, CalendarPlus, Clock3, Pause, Pencil, Play, Repeat, Settings2, ShieldAlert, ShieldCheck, Trash2, TriangleAlert, UserRoundCheck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createChainWatchSlotAction, deleteChainWatchSlotAction, updateChainWatchSettingsAction, updateChainWatchSlotAction } from "@/app/(platform)/chain-watch/actions";
+import { createChainWatchRotationAction, deleteChainWatchRotationAction, pauseChainWatchRotationAction, updateChainWatchRotationAction } from "@/app/(platform)/chain-watch/rotation-actions";
 import { ChainHero } from "@/components/chain/chain-hero";
+import { ChainWatchRotationDialog } from "@/components/chain/chain-watch-rotation-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { MemberAvatar } from "@/components/ui/member-avatar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -11,6 +13,7 @@ import { TornUserName } from "@/components/ui/torn-user-link";
 import { findChainWatchConflicts, type ChainWatchConflict } from "@/lib/chain-watch/chain-watch-conflicts";
 import { findChainWatchGaps } from "@/lib/chain-watch/chain-watch-gaps";
 import { findActiveSlot, findNextSlot, slotStatus } from "@/lib/chain-watch/chain-watch-schedule";
+import type { ChainWatchRotation, ChainWatchRotationInput } from "@/lib/chain-watch/chain-watch-rotation-store";
 import type { ChainWatchSlot, ChainWatchWorkspace as ChainWatchWorkspaceData } from "@/lib/chain-watch/chain-watch-store";
 import { notify } from "@/lib/client-actions";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
@@ -31,10 +34,12 @@ const EMPTY_DRAFT: SlotDraft = { startAt: "", endAt: "", primaryTornUserId: "", 
 export function ChainWatchWorkspace({
   workspace,
   rosterResult,
+  rotations,
   canManage,
 }: {
   workspace: ChainWatchWorkspaceData;
   rosterResult: TornDataResult<TornRosterMember[]>;
+  rotations: ChainWatchRotation[];
   canManage: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -50,6 +55,11 @@ export function ChainWatchWorkspace({
   const [slotDialog, setSlotDialog] = useState<{ mode: "create" | "edit"; slotId?: string } | null>(null);
   const [draft, setDraft] = useState<SlotDraft>(EMPTY_DRAFT);
   const [deleteTarget, setDeleteTarget] = useState<ChainWatchSlot | null>(null);
+
+  const [rotationDialogOpen, setRotationDialogOpen] = useState(false);
+  const [editingRotationId, setEditingRotationId] = useState<string | null>(null);
+  const [deleteRotationTarget, setDeleteRotationTarget] = useState<ChainWatchRotation | null>(null);
+  const editingRotation = editingRotationId ? rotations.find((rotation) => rotation.id === editingRotationId) ?? null : null;
 
   const sortedRoster = useMemo(() => [...rosterResult.data].toSorted((left, right) => left.name.localeCompare(right.name)), [rosterResult.data]);
 
@@ -109,6 +119,42 @@ export function ChainWatchWorkspace({
     if (!result.ok) throw new Error(result.message);
   }
 
+  function openCreateRotation() {
+    setEditingRotationId(null);
+    setRotationDialogOpen(true);
+  }
+
+  function openEditRotation(rotationId: string) {
+    setEditingRotationId(rotationId);
+    setRotationDialogOpen(true);
+  }
+
+  async function saveRotation(input: ChainWatchRotationInput) {
+    const result = editingRotationId
+      ? await updateChainWatchRotationAction({ rotationId: editingRotationId, ...input })
+      : await createChainWatchRotationAction(input);
+    notify({ title: result.ok ? "Rotation saved" : "Rotation not saved", description: result.message, tone: result.ok ? "success" : "danger" });
+    if (!result.ok) throw new Error(result.message);
+    setRotationDialogOpen(false);
+  }
+
+  async function confirmDeleteRotation() {
+    if (!deleteRotationTarget) return;
+    const result = await deleteChainWatchRotationAction({ rotationId: deleteRotationTarget.id });
+    notify({ title: result.ok ? "Rotation removed" : "Rotation not removed", description: result.message, tone: result.ok ? "success" : "danger" });
+    if (!result.ok) throw new Error(result.message);
+  }
+
+  async function togglePauseRotation(rotation: ChainWatchRotation) {
+    const result = await pauseChainWatchRotationAction({ rotationId: rotation.id, isPaused: !rotation.isPaused });
+    notify({ title: result.ok ? "Rotation updated" : "Could not update rotation", description: result.message, tone: result.ok ? "success" : "danger" });
+  }
+
+  const manuallyAdjustedFutureCount = useMemo(() => {
+    if (!editingRotationId) return 0;
+    return workspace.slots.filter((slot) => slot.rotationId === editingRotationId && Date.parse(slot.startAt) > now && slot.updatedAt !== slot.createdAt).length;
+  }, [workspace.slots, editingRotationId, now]);
+
   const draftEndValid = draft.startAt && draft.endAt && fromLocalInputValue(draft.endAt) > fromLocalInputValue(draft.startAt);
   const draftConflicts = useMemo(() => {
     if (!draft.startAt || !draft.endAt || !draftEndValid || !draft.primaryTornUserId) return [];
@@ -131,6 +177,7 @@ export function ChainWatchWorkspace({
         description={`Plan who keeps the chain alive and when. Times are shown in Torn City Time (UTC)${canManage ? "." : " — ask an administrator for edit access."}`}
         actions={canManage ? <>
           <button className="button button--secondary" type="button" onClick={() => { setRoleNameDraft(workspace.roleName); setBufferDraft(workspace.bufferSeconds); setSettingsOpen(true); }}><Settings2 size={15} /> Customize</button>
+          <button className="button button--secondary" type="button" onClick={openCreateRotation}><Repeat size={15} /> New rotation</button>
           <button className="button button--primary" type="button" onClick={() => openCreate()}><CalendarPlus size={15} /> Add slot</button>
         </> : undefined}
       />
@@ -184,7 +231,7 @@ export function ChainWatchWorkspace({
 
         <div className="chain-watch-slots" role="list">
           {upcomingSlots.map((slot) => (
-            <SlotRow key={slot.id} slot={slot} status={slotStatus(slot, now)} roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onDelete={() => setDeleteTarget(slot)} />
+            <SlotRow key={slot.id} slot={slot} status={slotStatus(slot, now)} roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onOpenRotation={openEditRotation} onDelete={() => setDeleteTarget(slot)} />
           ))}
           {upcomingSlots.length === 0 && (
             <div className="chain-watch-empty">
@@ -199,11 +246,26 @@ export function ChainWatchWorkspace({
           <details className="chain-watch-history">
             <summary>Past slots <span>{pastSlots.length}</span></summary>
             <div className="chain-watch-slots">
-              {pastSlots.map((slot) => <SlotRow key={slot.id} slot={slot} status="past" roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onDelete={() => setDeleteTarget(slot)} />)}
+              {pastSlots.map((slot) => <SlotRow key={slot.id} slot={slot} status="past" roleName={workspace.roleName} canManage={canManage} onEdit={() => openEdit(slot)} onOpenRotation={openEditRotation} onDelete={() => setDeleteTarget(slot)} />)}
             </div>
           </details>
         )}
       </section>
+
+      {rotations.length > 0 && (
+        <section className="chain-watch-list panel">
+          <header className="chain-watch-list__header">
+            <span><Repeat size={17} /></span>
+            <div><p className="eyebrow">Automation</p><h2>Recurring rotations</h2></div>
+            <p>Repeats automatically -- generated slots appear above.</p>
+          </header>
+          <div className="chain-watch-rotations" role="list">
+            {rotations.map((rotation) => (
+              <RotationRow key={rotation.id} rotation={rotation} canManage={canManage} onEdit={() => openEditRotation(rotation.id)} onTogglePause={() => togglePauseRotation(rotation)} onDelete={() => setDeleteRotationTarget(rotation)} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <Dialog
         open={settingsOpen}
@@ -266,6 +328,28 @@ export function ChainWatchWorkspace({
       >
         <div className="chain-watch-alert chain-watch-alert--danger"><Trash2 size={16} /><span>This cannot be undone. The member can be scheduled again at any time.</span></div>
       </Dialog>
+
+      <ChainWatchRotationDialog
+        open={rotationDialogOpen}
+        rotation={editingRotation}
+        rosterResult={rosterResult}
+        manuallyAdjustedFutureCount={manuallyAdjustedFutureCount}
+        onSave={saveRotation}
+        onClose={() => setRotationDialogOpen(false)}
+      />
+
+      <Dialog
+        open={Boolean(deleteRotationTarget)}
+        className="dialog--chain-watch-delete"
+        title="Remove this rotation?"
+        description={deleteRotationTarget ? `"${deleteRotationTarget.label}" will stop repeating. Its not-yet-started generated slots will be removed; slots that already started stay as history.` : undefined}
+        confirmLabel="Remove rotation"
+        destructive
+        onConfirm={confirmDeleteRotation}
+        onClose={() => setDeleteRotationTarget(null)}
+      >
+        <div className="chain-watch-alert chain-watch-alert--danger"><Trash2 size={16} /><span>This cannot be undone. A new rotation can be created again at any time.</span></div>
+      </Dialog>
     </div>
   );
 }
@@ -276,6 +360,7 @@ function SlotRow({
   roleName,
   canManage,
   onEdit,
+  onOpenRotation,
   onDelete,
 }: {
   slot: ChainWatchSlot;
@@ -283,8 +368,10 @@ function SlotRow({
   roleName: string;
   canManage: boolean;
   onEdit: () => void;
+  onOpenRotation: (rotationId: string) => void;
   onDelete: () => void;
 }) {
+  const rotationId = slot.rotationId;
   return (
     <article className={`chain-watch-slot chain-watch-slot--${status}`} role="listitem">
       <div className="chain-watch-slot__time">
@@ -292,7 +379,10 @@ function SlotRow({
         <span>→ {formatTime(slot.endAt)}</span>
       </div>
       <div className="chain-watch-slot__people">
-        <div><MemberAvatar name={slot.primaryMemberName} /><TornUserName name={slot.primaryMemberName} tornUserId={slot.primaryTornUserId} detail={roleName} /></div>
+        <div>
+          <MemberAvatar name={slot.primaryMemberName} /><TornUserName name={slot.primaryMemberName} tornUserId={slot.primaryTornUserId} detail={roleName} />
+          {rotationId && <button className="chain-watch-rotation-badge" type="button" onClick={() => onOpenRotation(rotationId)} aria-label="Generated by a rotation -- open it" title="Generated by a rotation"><Repeat size={11} /></button>}
+        </div>
         {slot.backupMemberName && slot.backupTornUserId && <div className="chain-watch-slot__backup"><UserRoundCheck size={13} /><TornUserName name={slot.backupMemberName} tornUserId={slot.backupTornUserId} detail="Backup" /></div>}
         {slot.note && <p className="chain-watch-slot__note">{slot.note}</p>}
       </div>
@@ -301,6 +391,56 @@ function SlotRow({
         <div className="chain-watch-slot__actions">
           <button className="icon-button" type="button" onClick={onEdit} aria-label="Edit slot" title="Edit slot"><Pencil size={15} /></button>
           <button className="icon-button icon-button--danger" type="button" onClick={onDelete} aria-label="Remove slot" title="Remove slot"><Trash2 size={15} /></button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function describeWeekdays(mask: number): string {
+  if (mask === 0b111_1111) return "Every day";
+  if (mask === 0b001_1111) return "Weekdays";
+  if (mask === 0b110_0000) return "Weekends";
+  return WEEKDAY_SHORT.filter((_, index) => (mask & (1 << index)) !== 0).join(", ") || "No days selected";
+}
+
+function describeMinutes(minutes: number): string {
+  return `${Math.floor(minutes / 60).toString().padStart(2, "0")}:${(minutes % 60).toString().padStart(2, "0")}`;
+}
+
+function RotationRow({
+  rotation,
+  canManage,
+  onEdit,
+  onTogglePause,
+  onDelete,
+}: {
+  rotation: ChainWatchRotation;
+  canManage: boolean;
+  onEdit: () => void;
+  onTogglePause: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <article className={`chain-watch-rotation-row${rotation.isPaused ? " chain-watch-rotation-row--paused" : ""}`} role="listitem">
+      <div className="chain-watch-rotation-row__summary">
+        <strong>{rotation.label}</strong>
+        <span>{describeWeekdays(rotation.weekdaysMask)} · {describeMinutes(rotation.startMinuteUtc)}–{describeMinutes(rotation.endMinuteUtc)} TCT</span>
+      </div>
+      <div className="chain-watch-rotation-row__members">
+        {rotation.members.length} member{rotation.members.length === 1 ? "" : "s"} rotating
+        {rotation.effectiveUntil ? ` · until ${formatTime(rotation.effectiveUntil).replace(" TCT", "")}` : " · no end date"}
+      </div>
+      {rotation.isPaused && <span className="chain-watch-status chain-watch-status--past"><i />Paused</span>}
+      {canManage && (
+        <div className="chain-watch-slot__actions">
+          <button className="icon-button" type="button" onClick={onTogglePause} aria-label={rotation.isPaused ? "Resume rotation" : "Pause rotation"} title={rotation.isPaused ? "Resume rotation" : "Pause rotation"}>
+            {rotation.isPaused ? <Play size={15} /> : <Pause size={15} />}
+          </button>
+          <button className="icon-button" type="button" onClick={onEdit} aria-label="Edit rotation" title="Edit rotation"><Pencil size={15} /></button>
+          <button className="icon-button icon-button--danger" type="button" onClick={onDelete} aria-label="Remove rotation" title="Remove rotation"><Trash2 size={15} /></button>
         </div>
       )}
     </article>
