@@ -284,7 +284,10 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
 
   useEffect(() => {
     const root = document.documentElement;
-    const critical = liveTelemetry.chain?.state === "active" && chainSeconds <= 60;
+    // Excludes exactly 0: once the timer runs out, the accent must release
+    // immediately rather than staying red while a stale "active" reading
+    // waits on the next poll to confirm the chain actually ended.
+    const critical = liveTelemetry.chain?.state === "active" && chainSeconds > 0 && chainSeconds <= 60;
     if (critical) root.dataset.chainDanger = "critical";
     else delete root.dataset.chainDanger;
     return () => { delete root.dataset.chainDanger; };
