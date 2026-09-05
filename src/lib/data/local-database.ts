@@ -246,6 +246,27 @@ function initializeSchema(database: DatabaseSync): void {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS chain_watch_rotations (
+      id TEXT PRIMARY KEY,
+      faction_id INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      weekdays_mask INTEGER NOT NULL,
+      start_minute_utc INTEGER NOT NULL,
+      end_minute_utc INTEGER NOT NULL,
+      members_json TEXT NOT NULL,
+      backup_torn_user_id INTEGER,
+      backup_member_name TEXT,
+      note TEXT,
+      effective_from TEXT NOT NULL,
+      effective_until TEXT,
+      is_paused INTEGER NOT NULL DEFAULT 0,
+      cursor_date TEXT,
+      cursor_index INTEGER,
+      created_by_torn_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS licensing_audit (
       id TEXT PRIMARY KEY,
       faction_id INTEGER REFERENCES licensing_factions(faction_id) ON DELETE RESTRICT,
@@ -269,8 +290,12 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS licensing_audit_recent ON licensing_audit(action, created_at DESC);
     CREATE INDEX IF NOT EXISTS chain_settlement_reverts_recent ON chain_settlement_reverts(faction_id, reverted_at DESC);
     CREATE INDEX IF NOT EXISTS chain_watch_slots_faction_time ON chain_watch_slots(faction_id, start_at);
+    CREATE INDEX IF NOT EXISTS chain_watch_rotations_faction ON chain_watch_rotations(faction_id, is_paused);
   `);
   ensureColumn(database, "chain_settlements", "paid_by_name", "TEXT");
+  ensureColumn(database, "chain_watch_slots", "rotation_id", "TEXT");
+  ensureColumn(database, "chain_watch_slots", "rotation_sequence", "INTEGER");
+  database.exec("CREATE UNIQUE INDEX IF NOT EXISTS chain_watch_slots_rotation_unique ON chain_watch_slots(rotation_id, start_at)");
 }
 
 function ensureColumn(database: DatabaseSync, table: string, column: string, declaration: string): void {

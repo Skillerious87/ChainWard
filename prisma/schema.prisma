@@ -146,6 +146,7 @@ model Faction {
   settings            FactionSetting[]
   chainWatchSettings  ChainWatchSettings?
   chainWatchSlots     ChainWatchSlot[]
+  chainWatchRotations ChainWatchRotation[]
   pushSubscriptions   WebPushSubscription[]
 }
 
@@ -457,9 +458,9 @@ model ChainWatchSettings {
  * between `startAt` and `endAt`, with an optional backup for redundancy.
  */
 model ChainWatchSlot {
-  id                String   @id @default(uuid()) @db.Uuid
-  factionId         String   @db.Uuid
-  faction           Faction  @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  id                String              @id @default(uuid()) @db.Uuid
+  factionId         String              @db.Uuid
+  faction           Faction             @relation(fields: [factionId], references: [id], onDelete: Restrict)
   startAt           DateTime
   endAt             DateTime
   primaryTornUserId Int
@@ -467,11 +468,48 @@ model ChainWatchSlot {
   backupTornUserId  Int?
   backupMemberName  String?
   note              String?
+  rotationId        String?             @db.Uuid
+  rotation          ChainWatchRotation? @relation(fields: [rotationId], references: [id], onDelete: SetNull)
+  rotationSequence  Int?
   createdByTornId   Int
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@index([factionId, startAt])
+  @@unique([rotationId, startAt])
+}
+
+/**
+ * A repeating coverage pattern. Materializes concrete ChainWatchSlot rows for
+ * a bounded rolling horizon rather than being interpreted at read time by an
+ * RRULE-style engine -- there is no scheduled job in this deployment to walk
+ * one. `cursorDate`/`cursorIndex` record how far generation has progressed
+ * and whose turn it was, so refilling the horizon only walks forward from
+ * the cursor instead of recomputing the rotation's whole history.
+ */
+model ChainWatchRotation {
+  id               String           @id @default(uuid()) @db.Uuid
+  factionId        String           @db.Uuid
+  faction          Faction          @relation(fields: [factionId], references: [id], onDelete: Restrict)
+  label            String
+  weekdaysMask     Int
+  startMinuteUtc   Int
+  endMinuteUtc     Int
+  members          Json
+  backupTornUserId Int?
+  backupMemberName String?
+  note             String?
+  effectiveFrom    DateTime
+  effectiveUntil   DateTime?
+  isPaused         Boolean          @default(false)
+  cursorDate       DateTime?
+  cursorIndex      Int?
+  slots            ChainWatchSlot[]
+  createdByTornId  Int
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([factionId, isPaused])
 }
 
 /**

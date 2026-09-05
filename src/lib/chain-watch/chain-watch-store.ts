@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
+import { ensureRotationsMaterialized } from "./chain-watch-rotation-store";
 
 export const DEFAULT_ROLE_NAME = "Chain Watcher";
 export const DEFAULT_BUFFER_SECONDS = 120;
@@ -16,6 +17,8 @@ export interface ChainWatchSlot {
   backupTornUserId: number | null;
   backupMemberName: string | null;
   note: string | null;
+  rotationId: string | null;
+  rotationSequence: number | null;
   createdByTornId: number;
   createdAt: string;
   updatedAt: string;
@@ -49,6 +52,7 @@ export const getChainWatchWorkspace = cache(async (factionId: number | null): Pr
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return empty(false, false, "Create local storage in Settings before scheduling chain watch coverage.");
   if (!factionId) return empty(true, true, "Connect a verified faction to schedule chain watch coverage.");
+  await ensureRotationsMaterialized(factionId);
   return hasPostgres ? getPostgresWorkspace(factionId) : getLocalWorkspace(factionId);
 });
 
@@ -119,7 +123,7 @@ function createLocalSlot(factionId: number, input: ChainWatchSlotInput, createdB
       INSERT INTO chain_watch_slots (id, faction_id, start_at, end_at, primary_torn_user_id, primary_member_name, backup_torn_user_id, backup_member_name, note, created_by_torn_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, factionId, input.startAt, input.endAt, input.primaryTornUserId, input.primaryMemberName, input.backupTornUserId, input.backupMemberName, input.note, createdByTornId, now, now);
-    return { id, startAt: input.startAt, endAt: input.endAt, primaryTornUserId: input.primaryTornUserId, primaryMemberName: input.primaryMemberName, backupTornUserId: input.backupTornUserId, backupMemberName: input.backupMemberName, note: input.note, createdByTornId, createdAt: now, updatedAt: now };
+    return { id, startAt: input.startAt, endAt: input.endAt, primaryTornUserId: input.primaryTornUserId, primaryMemberName: input.primaryMemberName, backupTornUserId: input.backupTornUserId, backupMemberName: input.backupMemberName, note: input.note, rotationId: null, rotationSequence: null, createdByTornId, createdAt: now, updatedAt: now };
   } finally {
     database.close();
   }
@@ -130,14 +134,19 @@ function updateLocalSlot(factionId: number, slotId: string, input: ChainWatchSlo
   if (!database) throw new Error("The local chain watch schedule is unavailable.");
   const now = new Date().toISOString();
   try {
-    const existing = database.prepare("SELECT created_by_torn_id, created_at FROM chain_watch_slots WHERE id = ? AND faction_id = ?").get(slotId, factionId) as unknown as { created_by_torn_id: number; created_at: string } | undefined;
+    const existing = database.prepare("SELECT created_by_torn_id, created_at, rotation_id, rotation_sequence FROM chain_watch_slots WHERE id = ? AND faction_id = ?").get(slotId, factionId) as unknown as { created_by_torn_id: number; created_at: string; rotation_id: string | null; rotation_sequence: number | null } | undefined;
     if (!existing) throw new Error("This coverage slot no longer exists.");
     database.prepare(`
       UPDATE chain_watch_slots
       SET start_at = ?, end_at = ?, primary_torn_user_id = ?, primary_member_name = ?, backup_torn_user_id = ?, backup_member_name = ?, note = ?, updated_at = ?
       WHERE id = ? AND faction_id = ?
     `).run(input.startAt, input.endAt, input.primaryTornUserId, input.primaryMemberName, input.backupTornUserId, input.backupMemberName, input.note, now, slotId, factionId);
-    return { id: slotId, startAt: input.startAt, endAt: input.endAt, primaryTornUserId: input.primaryTornUserId, primaryMemberName: input.primaryMemberName, backupTornUserId: input.backupTornUserId, backupMemberName: input.backupMemberName, note: input.note, createdByTornId: existing.created_by_torn_id, createdAt: existing.created_at, updatedAt: now };
+    return {
+      id: slotId, startAt: input.startAt, endAt: input.endAt, primaryTornUserId: input.primaryTornUserId, primaryMemberName: input.primaryMemberName,
+      backupTornUserId: input.backupTornUserId, backupMemberName: input.backupMemberName, note: input.note,
+      rotationId: existing.rotation_id, rotationSequence: existing.rotation_sequence,
+      createdByTornId: existing.created_by_torn_id, createdAt: existing.created_at, updatedAt: now,
+    };
   } finally {
     database.close();
   }
@@ -236,7 +245,7 @@ async function deletePostgresSlot(factionId: number, slotId: string): Promise<vo
   await db.chainWatchSlot.delete({ where: { id: slotId } });
 }
 
-function mapPostgresSlot(slot: { id: string; startAt: Date; endAt: Date; primaryTornUserId: number; primaryMemberName: string; backupTornUserId: number | null; backupMemberName: string | null; note: string | null; createdByTornId: number; createdAt: Date; updatedAt: Date }): ChainWatchSlot {
+function mapPostgresSlot(slot: { id: string; startAt: Date; endAt: Date; primaryTornUserId: number; primaryMemberName: string; backupTornUserId: number | null; backupMemberName: string | null; note: string | null; rotationId: string | null; rotationSequence: number | null; createdByTornId: number; createdAt: Date; updatedAt: Date }): ChainWatchSlot {
   return {
     id: slot.id,
     startAt: slot.startAt.toISOString(),
@@ -246,6 +255,8 @@ function mapPostgresSlot(slot: { id: string; startAt: Date; endAt: Date; primary
     backupTornUserId: slot.backupTornUserId,
     backupMemberName: slot.backupMemberName,
     note: slot.note,
+    rotationId: slot.rotationId,
+    rotationSequence: slot.rotationSequence,
     createdByTornId: slot.createdByTornId,
     createdAt: slot.createdAt.toISOString(),
     updatedAt: slot.updatedAt.toISOString(),
@@ -262,6 +273,8 @@ function mapLocalSlot(row: LocalSlotRow): ChainWatchSlot {
     backupTornUserId: row.backup_torn_user_id,
     backupMemberName: row.backup_member_name,
     note: row.note,
+    rotationId: row.rotation_id,
+    rotationSequence: row.rotation_sequence,
     createdByTornId: row.created_by_torn_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -282,6 +295,8 @@ interface LocalSlotRow {
   backup_torn_user_id: number | null;
   backup_member_name: string | null;
   note: string | null;
+  rotation_id: string | null;
+  rotation_sequence: number | null;
   created_by_torn_id: number;
   created_at: string;
   updated_at: string;
