@@ -2,10 +2,13 @@ import { z } from "zod";
 
 const stat = z.number().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const battleStatsSchema = z.object({ strength: stat, defense: stat, speed: stat, dexterity: stat, total: stat });
-export const battleStatsResponseSchema = z.object({ battlestats: z.object({
-  strength: z.object({ value: stat }), defense: z.object({ value: stat }),
-  speed: z.object({ value: stat }), dexterity: z.object({ value: stat }), total: stat,
-}) });
+// Torn API v2 has shipped `/user/battlestats` as both a flat number per stat and
+// as `{ value: number }`, and may add more keys. Keep the envelope permissive and
+// normalise the numbers in the data service so a shape change degrades to a clear
+// message instead of a validation crash.
+export const battleStatsResponseSchema = z.object({
+  battlestats: z.record(z.string(), z.unknown()),
+}).loose();
 const timestamp = z.number().int().nonnegative();
 // `.loose()` throughout: Torn keeps adding fields to the v2 OC payload and an
 // unmodelled key must never invalidate a row. `crimesResponseSchema` only
@@ -23,8 +26,8 @@ export const crimeSchema = z.object({
   }).loose()),
 }).loose();
 export const crimesResponseSchema = z.object({
-  crimes: z.array(z.unknown()),
-  _metadata: z.object({ links: z.object({ next: z.string().nullable().optional() }).loose() }).loose(),
+  crimes: z.array(z.unknown()).default([]),
+  _metadata: z.object({ links: z.object({ next: z.string().nullable().optional() }).loose().optional() }).loose().optional(),
 }).loose();
 export const roleObservationSchema = z.object({
   crimeId: z.number().int().positive(), crimeName: z.string(), difficulty: z.number().int().positive(),

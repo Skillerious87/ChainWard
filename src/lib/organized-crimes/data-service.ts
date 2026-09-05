@@ -49,7 +49,7 @@ export const getCrimeFeed = cache(async (category: "available" | "completed"): P
         if (parsed.success) collected.push(parsed.data);
         else dropped += 1;
       }
-      const next = value._metadata.links.next;
+      const next = value._metadata?.links?.next ?? null;
       if (!next || value.crimes.length === 0) { complete = true; break; }
       offset += value.crimes.length;
       if (collected.length >= MAX_CRIMES) break;
@@ -90,14 +90,16 @@ export const getOwnOcIntelDraft = cache(async (): Promise<OwnOcIntelResult> => {
     return { ok: false, message: safeError(error) };
   }
 
-  const bs = statsResponse.value.battlestats;
-  const stats: BattleStats = {
-    strength: bs.strength.value,
-    defense: bs.defense.value,
-    speed: bs.speed.value,
-    dexterity: bs.dexterity.value,
-    total: bs.total,
-  };
+  const bs = statsResponse.value.battlestats as Record<string, unknown>;
+  const strength = readStatValue(bs.strength);
+  const defense = readStatValue(bs.defense);
+  const speed = readStatValue(bs.speed);
+  const dexterity = readStatValue(bs.dexterity);
+  const total = readStatValue(bs.total) || strength + defense + speed + dexterity;
+  if (total <= 0) {
+    return { ok: false, message: "Torn returned no battle-stat values for your key. Make sure the key includes battle-stat access, then try again." };
+  }
+  const stats: BattleStats = { strength, defense, speed, dexterity, total };
   const source: "torn" | "offline" = connection.client.dataMode === "offline" ? "offline" : "torn";
 
   const live = await getCrimeFeed("available");
@@ -116,6 +118,16 @@ export const getOwnOcIntelDraft = cache(async (): Promise<OwnOcIntelResult> => {
     draft: { stats, statsAt: new Date(statsResponse.fetchedAt).toISOString(), roles, rolesMessage, source },
   };
 });
+
+/** Torn v2 has returned each battle stat as a plain number and as `{ value }`. */
+function readStatValue(raw: unknown): number {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return raw;
+  if (raw && typeof raw === "object" && "value" in raw) {
+    const value = (raw as { value: unknown }).value;
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  }
+  return 0;
+}
 
 function safeError(error: unknown): string {
   return error instanceof TornApiError

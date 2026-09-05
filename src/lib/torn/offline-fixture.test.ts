@@ -47,7 +47,7 @@ describe("offline Torn fixture", () => {
     expect(history.chains).toHaveLength(3);
     expect(members.members.some((member) => member.id === connection.player.id)).toBe(true);
     expect(report.chainreport.faction_id).toBe(connection.faction.id);
-    expect(battleStats.value.battlestats.total).toBeGreaterThan(0);
+    expect(Number(battleStats.value.battlestats.total)).toBeGreaterThan(0);
     const parsedActive = activeCrimes.value.crimes.map((crime) => crimeSchema.parse(crime));
     const parsedCompleted = completedCrimes.value.crimes.map((crime) => crimeSchema.parse(crime));
     expect(parsedActive.every((crime) => crime.status === "Recruiting" || crime.status === "Planning")).toBe(true);
