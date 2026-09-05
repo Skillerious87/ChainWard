@@ -44,9 +44,16 @@ export const DEFAULT_MINIMUM_CPR = 70;
 export const ocReviewSettingsSchema = z.object({
   minimumCpr: z.number().int().min(0).max(100),
 });
+/** Per-member sharing preference. `autoShare` re-pushes the member's own stats
+ *  whenever they open the workspace and the last snapshot is stale. */
+export const ocSharePreferenceSchema = z.object({
+  autoShare: z.boolean(),
+  lastAutoShareAt: z.string().datetime().nullable().optional(),
+});
 export type BattleStats = z.infer<typeof battleStatsSchema>;
 export type OrganizedCrime = z.infer<typeof crimeSchema>;
 export type MemberIntel = z.infer<typeof memberIntelSchema>;
 export type RoleObservation = z.infer<typeof roleObservationSchema>;
 export type OcReviewSettings = z.infer<typeof ocReviewSettingsSchema>;
+export type OcSharePreference = z.infer<typeof ocSharePreferenceSchema>;
 export interface CrimeFeed { crimes: OrganizedCrime[]; available: boolean; complete: boolean; fetchedAt: string | null; message: string }

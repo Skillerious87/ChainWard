@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   deleteMemberIntel: vi.fn(),
   readMemberIntel: vi.fn(),
   writeOcReviewSettings: vi.fn(),
+  readOcSharePreference: vi.fn(),
+  writeOcSharePreference: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -18,10 +20,14 @@ vi.mock("@/lib/organized-crimes/store", () => ({
   deleteMemberIntel: mocks.deleteMemberIntel,
   readMemberIntel: mocks.readMemberIntel,
   writeOcReviewSettings: mocks.writeOcReviewSettings,
+  readOcSharePreference: mocks.readOcSharePreference,
+  writeOcSharePreference: mocks.writeOcSharePreference,
 }));
 
 import {
+  autoShareOwnOcIntelAction,
   removeMemberOcIntelAction,
+  setOcAutoShareAction,
   setOcReviewSettingsAction,
   shareOwnOcIntelAction,
   withdrawOwnOcIntelAction,
@@ -75,11 +81,55 @@ describe("shareOwnOcIntelAction", () => {
 });
 
 describe("withdrawOwnOcIntelAction", () => {
-  it("removes only the caller's own record", async () => {
+  it("removes only the caller's own record and disables auto-share", async () => {
     const result = await withdrawOwnOcIntelAction();
 
     expect(mocks.requireFactionPermission).toHaveBeenCalledWith("faction:view");
     expect(mocks.deleteMemberIntel).toHaveBeenCalledWith(42, 555);
+    expect(mocks.writeOcSharePreference).toHaveBeenCalledWith(AUTH.faction, 555, { autoShare: false, lastAutoShareAt: null });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("setOcAutoShareAction", () => {
+  it("enabling shares once and stores the preference on", async () => {
+    mocks.getOwnOcIntelDraft.mockResolvedValue(DRAFT);
+
+    const result = await setOcAutoShareAction({ enabled: true });
+
+    expect(mocks.requireFactionPermission).toHaveBeenCalledWith("faction:view");
+    expect(mocks.saveMemberIntel).toHaveBeenCalled();
+    expect(mocks.writeOcSharePreference).toHaveBeenCalledWith(AUTH.faction, 555, expect.objectContaining({ autoShare: true }));
+    expect(result.ok).toBe(true);
+  });
+
+  it("disabling stores the preference off without sharing", async () => {
+    const result = await setOcAutoShareAction({ enabled: false });
+
+    expect(mocks.saveMemberIntel).not.toHaveBeenCalled();
+    expect(mocks.writeOcSharePreference).toHaveBeenCalledWith(AUTH.faction, 555, { autoShare: false, lastAutoShareAt: null });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("autoShareOwnOcIntelAction", () => {
+  it("no-ops when the member has auto-share turned off", async () => {
+    mocks.readOcSharePreference.mockResolvedValue({ autoShare: false, lastAutoShareAt: null });
+
+    const result = await autoShareOwnOcIntelAction();
+
+    expect(result.ok).toBe(false);
+    expect(mocks.saveMemberIntel).not.toHaveBeenCalled();
+  });
+
+  it("re-shares and stamps the cooldown when auto-share is on", async () => {
+    mocks.readOcSharePreference.mockResolvedValue({ autoShare: true, lastAutoShareAt: null });
+    mocks.getOwnOcIntelDraft.mockResolvedValue(DRAFT);
+
+    const result = await autoShareOwnOcIntelAction();
+
+    expect(mocks.saveMemberIntel).toHaveBeenCalled();
+    expect(mocks.writeOcSharePreference).toHaveBeenCalledWith(AUTH.faction, 555, expect.objectContaining({ autoShare: true, lastAutoShareAt: expect.any(String) }));
     expect(result.ok).toBe(true);
   });
 });

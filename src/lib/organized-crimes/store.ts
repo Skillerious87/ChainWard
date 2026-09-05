@@ -1,11 +1,14 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { openLocalDatabase } from "@/lib/data/local-database";
-import { DEFAULT_MINIMUM_CPR, memberIntelSchema, ocReviewSettingsSchema, type MemberIntel, type OcReviewSettings } from "./types";
+import { DEFAULT_MINIMUM_CPR, memberIntelSchema, ocReviewSettingsSchema, ocSharePreferenceSchema, type MemberIntel, type OcReviewSettings, type OcSharePreference } from "./types";
 
 interface Faction { id: number; name: string; tag: string }
 // Kept outside portable configuration backups: importing a backup must not restore withdrawn consent.
 const prefix = "oc.private.";
+// Per-member sharing preference (auto-share opt-in). Like the private records it
+// carries personal choice, so it is also kept out of configuration backups.
+const prefPrefix = "oc.pref.";
 // Non-private review tuning, deliberately outside the `oc.private.` prefix so a
 // configuration backup does carry it.
 const settingsKey = "oc.review-settings";
@@ -59,6 +62,47 @@ export async function deleteMemberIntel(factionId: number, tornUserId: number): 
     const database = openLocalDatabase();
     if (!database) throw new Error("The OC store is unavailable.");
     try { database.prepare("DELETE FROM faction_settings WHERE faction_id = ? AND key = ?").run(factionId, key); }
+    finally { database.close(); }
+  }
+}
+
+const defaultSharePref: OcSharePreference = { autoShare: false, lastAutoShareAt: null };
+
+export async function readOcSharePreference(factionId: number, tornUserId: number): Promise<OcSharePreference> {
+  const key = `${prefPrefix}${tornUserId}`;
+  let raw: unknown;
+  if (process.env.DATABASE_URL?.trim()) {
+    const { db } = await import("@/lib/db");
+    const row = await db.factionSetting.findFirst({ where: { faction: { tornFactionId: factionId }, key }, select: { value: true } });
+    raw = row?.value;
+  } else {
+    const database = openLocalDatabase();
+    if (!database) return defaultSharePref;
+    try {
+      const row = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key = ?").get(factionId, key) as { value_json: string } | undefined;
+      raw = row ? (JSON.parse(row.value_json) as unknown) : undefined;
+    } catch { return defaultSharePref; }
+    finally { database.close(); }
+  }
+  const parsed = ocSharePreferenceSchema.safeParse(raw);
+  return parsed.success ? { autoShare: parsed.data.autoShare, lastAutoShareAt: parsed.data.lastAutoShareAt ?? null } : defaultSharePref;
+}
+
+export async function writeOcSharePreference(faction: Faction, tornUserId: number, value: OcSharePreference): Promise<void> {
+  const record = ocSharePreferenceSchema.parse(value);
+  const key = `${prefPrefix}${tornUserId}`;
+  if (process.env.DATABASE_URL?.trim()) {
+    const { db } = await import("@/lib/db");
+    await db.$transaction(async (tx) => {
+      const tenant = await tx.faction.upsert({ where: { tornFactionId: faction.id }, update: {}, create: { tornFactionId: faction.id, name: faction.name, tag: faction.tag } });
+      await tx.factionSetting.upsert({ where: { factionId_key: { factionId: tenant.id, key } },
+        create: { factionId: tenant.id, key, value: record as unknown as Prisma.InputJsonValue }, update: { value: record as unknown as Prisma.InputJsonValue } });
+    });
+  } else {
+    const database = openLocalDatabase();
+    if (!database) throw new Error("Create storage in Settings before changing sharing preferences.");
+    try { database.prepare("INSERT INTO faction_settings (faction_id, key, value_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(faction_id, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at")
+      .run(faction.id, key, JSON.stringify(record), new Date().toISOString()); }
     finally { database.close(); }
   }
 }

@@ -7,7 +7,7 @@ import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getCrimeFeed } from "@/lib/organized-crimes/data-service";
 import { reviewMembers } from "@/lib/organized-crimes/intelligence";
-import { readMemberIntel, readOcReviewSettings } from "@/lib/organized-crimes/store";
+import { readMemberIntel, readOcReviewSettings, readOcSharePreference } from "@/lib/organized-crimes/store";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
@@ -25,12 +25,13 @@ export default async function OrganizedCrimesPage() {
   ]);
   const factionId = telemetry.faction?.id ?? connection?.factionId ?? null;
 
-  const [assignment, allIntel, live, history, settings] = await Promise.all([
+  const [assignment, allIntel, live, history, settings, sharePref] = await Promise.all([
     getFactionAccessAssignment(factionId, actor.tornUserId),
     factionId ? readMemberIntel(factionId) : Promise.resolve([]),
     getCrimeFeed("available"),
     getCrimeFeed("completed"),
     factionId ? readOcReviewSettings(factionId) : Promise.resolve({ minimumCpr: 70 }),
+    factionId && actor.tornUserId ? readOcSharePreference(factionId, actor.tornUserId) : Promise.resolve({ autoShare: false, lastAutoShareAt: null }),
   ]);
 
   const canReview = isPlatformOwner(actor)
@@ -49,6 +50,14 @@ export default async function OrganizedCrimesPage() {
   );
   const ownIntel = allIntel.find((record) => record.tornUserId === actor.tornUserId) ?? null;
 
+  // The client fires an auto-refresh only when the member opted in and the last
+  // push (auto or manual) is older than the window. Deciding it here keeps the
+  // client effect a single guarded call.
+  const AUTO_SHARE_STALE_MS = 12 * 60 * 60 * 1_000;
+  const autoShareReference = sharePref.lastAutoShareAt ?? ownIntel?.statsAt ?? null;
+  const autoShareDue = sharePref.autoShare
+    && (!autoShareReference || nowMs - Date.parse(autoShareReference) > AUTO_SHARE_STALE_MS);
+
   return (
     <OrganizedCrimesWorkspace
       canReview={canReview}
@@ -56,6 +65,7 @@ export default async function OrganizedCrimesPage() {
       reviews={canReview ? reviews : null}
       ownIntel={ownIntel}
       currentUser={{ tornUserId: actor.tornUserId, name: actor.name }}
+      autoShare={{ enabled: sharePref.autoShare, due: autoShareDue }}
       settings={settings}
       feeds={{
         live: { available: live.available, complete: live.complete, fetchedAt: live.fetchedAt, message: live.message, crimeCount: live.crimes.length },

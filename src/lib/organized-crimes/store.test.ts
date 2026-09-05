@@ -7,8 +7,10 @@ import {
   deleteMemberIntel,
   readMemberIntel,
   readOcReviewSettings,
+  readOcSharePreference,
   saveMemberIntel,
   writeOcReviewSettings,
+  writeOcSharePreference,
 } from "./store";
 import type { MemberIntel } from "./types";
 
@@ -86,5 +88,13 @@ describe.sequential("organized crimes store", () => {
     expect(await readOcReviewSettings(FACTION.id)).toEqual({ minimumCpr: 70 });
     await writeOcReviewSettings(FACTION, { minimumCpr: 85 });
     expect(await readOcReviewSettings(FACTION.id)).toEqual({ minimumCpr: 85 });
+  });
+
+  it("round-trips a per-member share preference and defaults to off", async () => {
+    expect(await readOcSharePreference(FACTION.id, 111)).toEqual({ autoShare: false, lastAutoShareAt: null });
+    await writeOcSharePreference(FACTION, 111, { autoShare: true, lastAutoShareAt: "2026-09-05T00:00:00.000Z" });
+    expect(await readOcSharePreference(FACTION.id, 111)).toEqual({ autoShare: true, lastAutoShareAt: "2026-09-05T00:00:00.000Z" });
+    // Scoped per member.
+    expect(await readOcSharePreference(FACTION.id, 222)).toEqual({ autoShare: false, lastAutoShareAt: null });
   });
 });

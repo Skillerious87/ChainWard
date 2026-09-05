@@ -1,11 +1,13 @@
 "use client";
 
-import { CheckCircle2, ChevronRight, CircleSlash, Crosshair, Gauge, Info, Lock, RefreshCw, ShieldCheck, Swords, Trash2, TriangleAlert, UploadCloud } from "lucide-react";
+import { CheckCircle2, ChevronDown, CircleSlash, Crosshair, Gauge, Info, Lock, RefreshCw, ShieldCheck, Swords, Trash2, TriangleAlert, UploadCloud, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
+  autoShareOwnOcIntelAction,
   refreshOwnOcIntelAction,
   removeMemberOcIntelAction,
+  setOcAutoShareAction,
   setOcReviewSettingsAction,
   shareOwnOcIntelAction,
   withdrawOwnOcIntelAction,
@@ -22,6 +24,7 @@ import type { MemberIntel, OcReviewSettings } from "@/lib/organized-crimes/types
 type StatKey = "total" | "strength" | "defense" | "speed" | "dexterity";
 type SortKey = StatKey | "name" | "level";
 type View = "overview" | "review" | "suggestions" | "contributions" | "my-stats";
+type Feedback = { tone: "ok" | "warn"; text: string } | null;
 
 interface FeedMeta {
   available: boolean;
@@ -37,6 +40,7 @@ interface OrganizedCrimesWorkspaceProps {
   reviews: MemberReview[] | null;
   ownIntel: MemberIntel | null;
   currentUser: { tornUserId: number; name: string };
+  autoShare: { enabled: boolean; due: boolean };
   settings: OcReviewSettings;
   feeds: { live: FeedMeta; history: FeedMeta };
   roster: { available: boolean; message: string; memberCount: number };
@@ -44,12 +48,13 @@ interface OrganizedCrimesWorkspaceProps {
 
 const VIEWS: readonly View[] = ["overview", "review", "suggestions", "contributions", "my-stats"];
 
-export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, currentUser, settings, feeds, roster }: OrganizedCrimesWorkspaceProps) {
+export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, currentUser, autoShare, settings, feeds, roster }: OrganizedCrimesWorkspaceProps) {
   const router = useRouter();
   const { view: rawView } = useWorkspaceSectionNavigation("organized-crimes");
   const view: View = VIEWS.includes(rawView as View) ? (rawView as View) : "overview";
   const [pending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  const autoAttempted = useRef(false);
 
   const shared = useMemo(() => (reviews ?? []).filter((entry) => entry.intel !== null), [reviews]);
   const missing = useMemo(() => (reviews ?? []).filter((entry) => entry.intel === null), [reviews]);
@@ -69,10 +74,23 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
       }
       setFeedback({ tone: result.ok ? "ok" : "warn", text: result.message });
       notify({ title: result.ok ? "Organized crimes updated" : failureTitle, description: result.message, tone: result.ok ? "success" : "danger" });
-      // Re-pull the server component either way so the panel reflects reality.
       router.refresh();
     });
   }
+
+  // Opted-in members get their snapshot refreshed on arrival when it has gone
+  // stale. Runs at most once per mount; the server stamps the cooldown.
+  useEffect(() => {
+    if (!autoShare.due || autoAttempted.current) return;
+    autoAttempted.current = true;
+    startTransition(async () => {
+      const result = await autoShareOwnOcIntelAction().catch(() => null);
+      if (result?.ok) {
+        setFeedback({ tone: "ok", text: "Your shared stats were refreshed automatically." });
+        router.refresh();
+      }
+    });
+  }, [autoShare.due, router]);
 
   return (
     <div className="page-stack oc-page">
@@ -83,12 +101,12 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
         actions={
           <button type="button" className="button button--secondary" disabled={pending} onClick={() => startTransition(() => router.refresh())}>
             {pending ? <Spinner size={15} label="Refreshing" tone="muted" /> : <RefreshCw size={15} />}
-            {pending ? "Working…" : "Refresh"}
+            <span className="oc-hide-xs">{pending ? "Working…" : "Refresh"}</span>
           </button>
         }
       />
 
-      {/* Every view is always in the DOM; only `hidden` changes. The section
+      {/* Every view is always mounted; only `hidden` toggles. The section
           switcher flips `view` in a post-hydration effect, so conditionally
           mounting whole subtrees here would race hydration. */}
       <div id="organized-crimes-panel-overview" role="tabpanel" aria-labelledby="organized-crimes-tab-overview" hidden={view !== "overview"}>
@@ -101,6 +119,7 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
           feeds={feeds}
           ownShared={Boolean(ownIntel)}
           ownFresh={ownFresh}
+          autoShareOn={autoShare.enabled}
         />
       </div>
 
@@ -137,9 +156,11 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
           nowMs={nowMs}
           pending={pending}
           feedback={feedback}
+          autoShareOn={autoShare.enabled}
           onShare={() => run(shareOwnOcIntelAction, "Your stats were not shared")}
           onRefresh={() => run(refreshOwnOcIntelAction, "Your stats were not refreshed")}
           onWithdraw={() => run(withdrawOwnOcIntelAction, "Your shared data was not removed")}
+          onSetAutoShare={(enabled) => run(() => setOcAutoShareAction({ enabled }), "Automatic sharing was not changed")}
         />
       </div>
     </div>
@@ -148,7 +169,7 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
 
 /* ------------------------------------------------------------------ Overview */
 
-function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCount, feeds, ownShared, ownFresh }: {
+function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCount, feeds, ownShared, ownFresh, autoShareOn }: {
   canReview: boolean;
   sharedCount: number;
   missingCount: number;
@@ -157,6 +178,7 @@ function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCoun
   feeds: { live: FeedMeta; history: FeedMeta };
   ownShared: boolean;
   ownFresh: boolean;
+  autoShareOn: boolean;
 }) {
   const { selectView } = useWorkspaceSectionNavigation("organized-crimes");
   const ownState: "none" | "stale" | "ok" = !ownShared ? "none" : ownFresh ? "ok" : "stale";
@@ -173,7 +195,7 @@ function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCoun
             {ownState === "stale" && "Your shared stats are over 7 days old."}
             {ownState === "ok" && "Your battle stats are shared and current."}
           </h2>
-          <p>Torn does not expose other players&apos; battle stats. Only what each member shares from their own key can be reviewed — and you can withdraw at any time.</p>
+          <p>Torn does not expose other players&apos; battle stats. Only what each member shares from their own key can be reviewed — you can withdraw at any time.{autoShareOn ? " Automatic refresh is on." : ""}</p>
         </div>
         <button type="button" className="button button--primary oc-hero__cta" onClick={() => selectView("my-stats")}>
           <UploadCloud size={15} /> {ownShared ? "Manage sharing" : "Share my stats"}
@@ -195,21 +217,30 @@ function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCoun
           </div>
 
           {rosterCount !== null && (
-            <div className="oc-coverage" aria-hidden>
+            <div className="oc-coverage" role="img" aria-label={`${coverage}% of the roster is sharing`}>
               <span style={{ width: `${Math.min(100, coverage)}%` }} />
             </div>
           )}
 
           <div className="oc-jump">
-            <button type="button" onClick={() => selectView("review")}><Gauge size={15} /> Battle-stat table <ChevronRight size={14} /></button>
-            <button type="button" onClick={() => selectView("suggestions")}><Crosshair size={15} /> Role suggestions <ChevronRight size={14} /></button>
-            <button type="button" onClick={() => selectView("contributions")}><ShieldCheck size={15} /> Contributions <ChevronRight size={14} /></button>
+            <JumpCard icon={Gauge} label="Battle-stat table" sub="Sortable, per-stat bars" onClick={() => selectView("review")} />
+            <JumpCard icon={Crosshair} label="Role suggestions" sub="Open slots by CPR" onClick={() => selectView("suggestions")} />
+            <JumpCard icon={ShieldCheck} label="Contributions" sub="Manage who's shared" onClick={() => selectView("contributions")} />
           </div>
         </section>
       )}
 
       <FeedProvenance feeds={feeds} />
     </div>
+  );
+}
+
+function JumpCard({ icon: Icon, label, sub, onClick }: { icon: typeof Gauge; label: string; sub: string; onClick: () => void }) {
+  return (
+    <button type="button" className="oc-jumpcard" onClick={onClick}>
+      <span className="oc-jumpcard__icon"><Icon size={16} /></span>
+      <span className="oc-jumpcard__text"><strong>{label}</strong><small>{sub}</small></span>
+    </button>
   );
 }
 
@@ -229,7 +260,12 @@ function ReviewTable({ reviews, missing, rosterAvailable, nowMs }: { reviews: Me
   if (reviews.length === 0) {
     return (
       <section className="panel">
+        <div className="section-heading">
+          <div><h2>Battle stats</h2><p>0 sharing · {missing.length} not sharing</p></div>
+          <span className="analytics-panel-icon"><Gauge size={17} /></span>
+        </div>
         <EmptyRow icon={<CircleSlash size={20} />} title="No shared battle stats yet" detail={rosterAvailable ? "Ask members to open Organized crimes and share their stats from the My stats tab." : "The faction roster could not be verified, so nothing can be matched yet."} />
+        {missing.length > 0 && <NotSharing names={missing.map((entry) => entry.member.name)} />}
       </section>
     );
   }
@@ -237,32 +273,32 @@ function ReviewTable({ reviews, missing, rosterAvailable, nowMs }: { reviews: Me
   return (
     <section className="panel oc-review">
       <div className="section-heading">
-        <div><h2>Battle stats</h2><p>{reviews.length} sharing · {missing.length} not sharing · sorted by {sortLabel(sort)}</p></div>
+        <div><h2>Battle stats</h2><p>{reviews.length} sharing · {missing.length} not sharing</p></div>
         <span className="analytics-panel-icon"><Gauge size={17} /></span>
       </div>
 
-      <div className="oc-sort-row">
+      <div className="oc-sort-row" role="group" aria-label="Sort battle stats">
         <span>Sort</span>
-        {([["total", "Total"], ["strength", "Strength"], ["defense", "Defense"], ["speed", "Speed"], ["dexterity", "Dexterity"], ["level", "Level"], ["name", "Name"]] as const).map(([key, label]) => (
+        {([["total", "Total"], ["strength", "Str"], ["defense", "Def"], ["speed", "Spd"], ["dexterity", "Dex"], ["level", "Lvl"], ["name", "Name"]] as const).map(([key, label]) => (
           <button type="button" key={key} aria-pressed={sort === key} className={sort === key ? "oc-sort--active" : undefined} onClick={() => setSort(key)}>{label}</button>
         ))}
       </div>
 
-      <div className="table-scroll" role="region" aria-label="Member battle stats" tabIndex={0}>
+      <div className="table-scroll oc-review__scroll" role="region" aria-label="Member battle stats" tabIndex={0}>
         <table className="data-table oc-review__table">
           <thead>
-            <tr><th>#</th><th>Member</th><th className="oc-num">Lvl</th><th className="oc-num">Strength</th><th className="oc-num">Defense</th><th className="oc-num">Speed</th><th className="oc-num">Dexterity</th><th className="oc-num">Total</th><th>Shared</th><th>Current OC</th></tr>
+            <tr><th className="oc-rank-h">#</th><th>Member</th><th className="oc-num">Lvl</th><th className="oc-num">Strength</th><th className="oc-num">Defense</th><th className="oc-num">Speed</th><th className="oc-num">Dexterity</th><th className="oc-num">Total</th><th>Shared</th><th>Current OC</th></tr>
           </thead>
           <tbody>
             {rows.map((entry, index) => (
               <tr key={entry.member.tornId}>
-                <td data-label="#" className="oc-rank">{index + 1}</td>
+                <td data-label="Rank" className="oc-rank">{index + 1}</td>
                 <td data-label="Member"><TornUserLink name={entry.member.name} tornUserId={entry.member.tornId} detail={entry.member.position || "Unassigned"} /></td>
                 <td data-label="Level" className="oc-num">{entry.member.level}</td>
-                <StatCell value={entry.intel!.stats.strength} max={max.strength} />
-                <StatCell value={entry.intel!.stats.defense} max={max.defense} />
-                <StatCell value={entry.intel!.stats.speed} max={max.speed} />
-                <StatCell value={entry.intel!.stats.dexterity} max={max.dexterity} />
+                <StatCell label="Strength" value={entry.intel!.stats.strength} max={max.strength} />
+                <StatCell label="Defense" value={entry.intel!.stats.defense} max={max.defense} />
+                <StatCell label="Speed" value={entry.intel!.stats.speed} max={max.speed} />
+                <StatCell label="Dexterity" value={entry.intel!.stats.dexterity} max={max.dexterity} />
                 <td data-label="Total" className="oc-num oc-num--strong">{formatStat(entry.intel!.stats.total)}</td>
                 <td data-label="Shared"><FreshBadge fresh={entry.statsFresh} at={entry.intel!.statsAt} nowMs={nowMs} /></td>
                 <td data-label="Current OC">{entry.assignment ? <span className="oc-assigned">{entry.assignment}</span> : <span className="muted-value">Available</span>}</td>
@@ -272,21 +308,32 @@ function ReviewTable({ reviews, missing, rosterAvailable, nowMs }: { reviews: Me
         </table>
       </div>
 
-      {missing.length > 0 && (
-        <p className="oc-inline-note oc-inline-note--warn"><TriangleAlert size={13} /> Not sharing: {missing.map((entry) => entry.member.name).join(", ")}</p>
-      )}
+      {missing.length > 0 && <NotSharing names={missing.map((entry) => entry.member.name)} />}
       <FootNote />
     </section>
   );
 }
 
-function StatCell({ value, max }: { value: number; max: number }) {
+function StatCell({ label, value, max }: { label: string; value: number; max: number }) {
   const pct = Math.max(4, Math.round((value / max) * 100));
   return (
-    <td className="oc-num oc-statcell">
+    <td data-label={label} className="oc-num oc-statcell">
       <span className="oc-statcell__bar" aria-hidden><span style={{ width: `${pct}%` }} /></span>
       <span className="oc-statcell__value">{formatStat(value)}</span>
     </td>
+  );
+}
+
+function NotSharing({ names }: { names: string[] }) {
+  return (
+    <details className="oc-notsharing">
+      <summary>
+        <TriangleAlert size={13} />
+        <span>{names.length} not sharing</span>
+        <ChevronDown size={14} className="oc-notsharing__chev" />
+      </summary>
+      <p>{names.join(", ")}</p>
+    </details>
   );
 }
 
@@ -327,7 +374,8 @@ function Suggestions({ reviews, settings, live, nowMs }: { reviews: MemberReview
             {groups.map((group) => (
               <article key={`${group.crimeId}:${group.positionLabel}`} className="oc-suggestion">
                 <header>
-                  <div><h3>{group.crimeName}</h3><p>Difficulty {group.difficulty} · {group.positionLabel} · <span className="muted-value">#{group.crimeId}</span></p></div>
+                  <h3>{group.crimeName}</h3>
+                  <p><span className="oc-diff">D{group.difficulty}</span> {group.positionLabel} <span className="muted-value">#{group.crimeId}</span></p>
                 </header>
                 <ol>
                   {group.candidates.map((candidate, index) => (
@@ -371,7 +419,7 @@ function Contributions({ shared, missing, settings, pending, nowMs, onRemove, on
     <div className="oc-stack">
       <section className="panel">
         <div className="section-heading">
-          <div><h2>Suggestion threshold</h2><p>Minimum checkpoint pass rate for a member to be suggested for a role</p></div>
+          <div><h2>Suggestion threshold</h2><p>Minimum checkpoint pass rate for a role suggestion</p></div>
           <span className="analytics-panel-icon"><Gauge size={17} /></span>
         </div>
         <div className="oc-threshold-control">
@@ -386,30 +434,33 @@ function Contributions({ shared, missing, settings, pending, nowMs, onRemove, on
       <section className="panel">
         <div className="section-heading">
           <div><h2>Sharing members</h2><p>{shared.length} sharing · {missing.length} not sharing</p></div>
-          <span className="analytics-panel-icon"><ShieldCheck size={17} /></span>
+          <span className="analytics-panel-icon"><Users size={17} /></span>
         </div>
-        <div className="table-scroll" role="region" aria-label="Shared OC contributions" tabIndex={0}>
-          <table className="data-table">
-            <thead><tr><th>Member</th><th>Shared</th><th className="oc-num">Live roles</th><th>Source</th><th><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {shared.map((entry) => (
-                <tr key={entry.member.tornId}>
-                  <td data-label="Member"><TornUserLink name={entry.member.name} tornUserId={entry.member.tornId} /></td>
-                  <td data-label="Shared"><FreshBadge fresh={entry.statsFresh} at={entry.intel!.statsAt} nowMs={nowMs} /></td>
-                  <td data-label="Live roles" className="oc-num">{entry.intel!.roles.length}</td>
-                  <td data-label="Source"><span className="muted-value">{entry.intel!.source === "offline" ? "Offline fixture" : "Torn API v2"}</span></td>
-                  <td data-label="Actions">
-                    <button type="button" className="button button--danger button--small" disabled={pending} onClick={() => onRemove(entry.member.tornId, entry.member.name)}>
-                      <Trash2 size={13} /> Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {shared.length === 0 && <tr><td colSpan={5}><span className="muted-value">No members are sharing yet.</span></td></tr>}
-            </tbody>
-          </table>
-        </div>
-        {missing.length > 0 && <p className="oc-inline-note oc-inline-note--warn"><TriangleAlert size={13} /> Not sharing: {missing.map((entry) => entry.member.name).join(", ")}</p>}
+        {shared.length === 0
+          ? <EmptyRow icon={<CircleSlash size={20} />} title="No members are sharing yet" detail="Members share from the My stats tab. Their snapshot then appears here for you to manage." />
+          : (
+            <div className="table-scroll" role="region" aria-label="Shared OC contributions" tabIndex={0}>
+              <table className="data-table oc-contrib__table">
+                <thead><tr><th>Member</th><th>Shared</th><th className="oc-num">Live roles</th><th>Source</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                  {shared.map((entry) => (
+                    <tr key={entry.member.tornId}>
+                      <td data-label="Member"><TornUserLink name={entry.member.name} tornUserId={entry.member.tornId} /></td>
+                      <td data-label="Shared"><FreshBadge fresh={entry.statsFresh} at={entry.intel!.statsAt} nowMs={nowMs} /></td>
+                      <td data-label="Live roles" className="oc-num">{entry.intel!.roles.length}</td>
+                      <td data-label="Source"><span className="muted-value">{entry.intel!.source === "offline" ? "Offline fixture" : "Torn API v2"}</span></td>
+                      <td data-label="Actions">
+                        <button type="button" className="button button--danger button--small" disabled={pending} onClick={() => onRemove(entry.member.tornId, entry.member.name)}>
+                          <Trash2 size={13} /> Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        {missing.length > 0 && <NotSharing names={missing.map((entry) => entry.member.name)} />}
       </section>
     </div>
   );
@@ -417,17 +468,19 @@ function Contributions({ shared, missing, settings, pending, nowMs, onRemove, on
 
 /* ----------------------------------------------------------------- My stats */
 
-function MyStats({ name, tornUserId, intel, fresh, nowMs, pending, feedback, onShare, onRefresh, onWithdraw }: {
+function MyStats({ name, tornUserId, intel, fresh, nowMs, pending, feedback, autoShareOn, onShare, onRefresh, onWithdraw, onSetAutoShare }: {
   name: string;
   tornUserId: number;
   intel: MemberIntel | null;
   fresh: boolean;
   nowMs: number;
   pending: boolean;
-  feedback: { tone: "ok" | "warn"; text: string } | null;
+  feedback: Feedback;
+  autoShareOn: boolean;
   onShare: () => void;
   onRefresh: () => void;
   onWithdraw: () => void;
+  onSetAutoShare: (enabled: boolean) => void;
 }) {
   return (
     <div className="oc-stack">
@@ -437,7 +490,7 @@ function MyStats({ name, tornUserId, intel, fresh, nowMs, pending, feedback, onS
             <p className="eyebrow">My battle stats</p>
             <h2>{intel ? "Shared with your OC leader" : "Private — nothing shared"}</h2>
           </div>
-          <span className="oc-me__badge"><Swords size={18} /></span>
+          <span className="oc-me__badge">{intel ? <CheckCircle2 size={18} /> : <Lock size={18} />}</span>
         </header>
 
         <div className="oc-me__who"><TornUserLink name={name} tornUserId={tornUserId} /></div>
@@ -458,7 +511,7 @@ function MyStats({ name, tornUserId, intel, fresh, nowMs, pending, feedback, onS
               <MeStat label="Total" value={intel.stats.total} strong />
             </div>
             <p className={`oc-inline-note oc-inline-note--${fresh ? "ok" : "warn"}`}>
-              {fresh ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />} Shared {formatWhen(intel.statsAt, nowMs)}{fresh ? "" : " — older than 7 days, please refresh"}. {intel.rolesMessage}
+              {fresh ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />} Shared {formatWhen(intel.statsAt, nowMs)}{fresh ? "" : " — over 7 days old, please refresh"}. {intel.rolesMessage}
             </p>
             <div className="oc-action-row">
               <button type="button" className="button button--primary" disabled={pending} onClick={onRefresh}>
@@ -471,13 +524,22 @@ function MyStats({ name, tornUserId, intel, fresh, nowMs, pending, feedback, onS
           </>
         ) : (
           <div className="oc-me__cta">
-            <p>Sharing sends a snapshot of your own Torn battle stats and the live checkpoint pass rates on open OC slots to the OC leader. You can withdraw at any time.</p>
+            <p>Sharing sends a snapshot of your own Torn battle stats and the live checkpoint pass rates on open OC slots to the OC leader. Withdraw at any time.</p>
             <button type="button" className="button button--primary oc-me__share" disabled={pending} onClick={onShare}>
               {pending ? <Spinner size={14} label="Working" /> : <UploadCloud size={15} />} Share my stats
             </button>
             <p className="oc-hint"><Info size={12} /> Your Torn API key must include battle-stat access. If it doesn&apos;t, the message above will say so after you try.</p>
           </div>
         )}
+
+        <label className="oc-toggle">
+          <input type="checkbox" checked={autoShareOn} disabled={pending} onChange={(event) => onSetAutoShare(event.target.checked)} />
+          <span className="oc-toggle__track" aria-hidden><span /></span>
+          <span className="oc-toggle__text">
+            <strong>Keep my shared stats fresh automatically</strong>
+            <small>Re-share when you open this page and the last snapshot is over 12 hours old. Turning this on shares once now.</small>
+          </span>
+        </label>
       </section>
     </div>
   );
@@ -556,10 +618,6 @@ function compareReview(a: MemberReview, b: MemberReview, sort: SortKey): number 
   const left = a.intel?.stats[sort] ?? -1;
   const right = b.intel?.stats[sort] ?? -1;
   return right - left || a.member.name.localeCompare(b.member.name);
-}
-
-function sortLabel(sort: SortKey): string {
-  return { total: "total", strength: "strength", defense: "defense", speed: "speed", dexterity: "dexterity", level: "level", name: "name" }[sort];
 }
 
 /** Deterministic thousands grouping — never depends on the runtime locale, so
