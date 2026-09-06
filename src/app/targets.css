@@ -5,7 +5,8 @@
    --text-muted) are already in scope. Desktop-first; phone card collapse at end.
    =========================================================================== */
 
-.targets-workspace { max-width: 1200px; }
+.targets-workspace { max-width: 1200px; min-width: 0; }
+.targets-workspace > * { min-width: 0; }
 
 /* --- Empty / connect / storage states --------------------------------- */
 .targets-empty { display: flex; align-items: flex-start; gap: 15px; padding: 26px 24px; }

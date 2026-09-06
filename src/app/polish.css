@@ -1805,37 +1805,49 @@ body {
 .view-loading__stage-bar { width: min(300px,55%); height: 20px; border-radius: 7px; }
 .view-loading__stage .view-loading__panel { flex: 1; }
 
-/* Precision loading instrument. Two restrained orbits move independently
-   around a still, readable brand core; text remains useful rather than
-   disappearing into an ornamental animation. */
-.page-loading-core { --loader-size: 154px; display: grid; min-width: min(350px,calc(100vw - 40px)); justify-items: center; color: #d9e2dd; text-align: center; }
-.page-loading-core__visual { position: relative; display: grid; width: var(--loader-size); height: var(--loader-size); place-items: center; isolation: isolate; }
-.page-loading-core__aura { position: absolute; z-index: -1; inset: -28%; border-radius: 50%; background: radial-gradient(circle,rgba(var(--accent-rgb),.095),rgba(var(--accent-rgb),.018) 43%,transparent 70%); filter: blur(5px); animation: page-core-aura 2.8s ease-in-out infinite; }
-.page-loading-core__visual > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 8px rgba(var(--accent-rgb),.08)); }
-.page-loading-core__visual > svg circle { fill: none; transform-origin: 50% 50%; }
-.page-loading-core__track--outer { stroke: rgba(255,255,255,.075); stroke-width: 2.5; }
-.page-loading-core__track--inner { stroke: rgba(var(--accent-rgb),.07); stroke-width: 1; stroke-dasharray: 1 5; }
-.page-loading-core__arc { fill: none; stroke: var(--accent); stroke-linecap: round; transform-origin: 50% 50%; }
-.page-loading-core__arc--primary { stroke-width: 3.5; stroke-dasharray: 36 8 4 52; filter: drop-shadow(0 0 5px rgba(var(--accent-rgb),.34)); animation: page-core-spin 1.5s linear infinite; }
-.page-loading-core__arc--secondary { stroke-width: 1.6; stroke-dasharray: 5 14; opacity: .48; animation: page-core-spin-reverse 2.6s linear infinite; }
-.page-loading-core__satellite { position: absolute; z-index: 1; inset: 3px; border-radius: 50%; animation: page-core-satellite 2.6s linear infinite; }
-.page-loading-core__satellite::before { position: absolute; top: 7px; left: 50%; width: 6px; height: 6px; border: 2px solid #142018; border-radius: 50%; background: #c4f3a4; box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.08),0 0 13px rgba(var(--accent-rgb),.48); content: ""; transform: translateX(-50%); }
-.page-loading-core__centre { position: relative; z-index: 2; display: grid; width: 72px; aspect-ratio: 1; place-items: center; border: 1px solid rgba(var(--accent-rgb),.19); border-radius: 24px; background: radial-gradient(circle at 38% 30%,rgba(255,255,255,.04),transparent 32%),rgba(10,16,14,.83); box-shadow: 0 20px 45px rgba(0,0,0,.3),inset 0 1px rgba(255,255,255,.035),0 0 0 7px rgba(var(--accent-rgb),.025); }
-.page-loading-core__centre::after { position: absolute; inset: 6px; border: 1px solid rgba(var(--accent-rgb),.075); border-radius: 18px; content: ""; }
-.page-loading-core__centre img { position: relative; z-index: 1; width: 61%; height: 61%; object-fit: contain; background: transparent; filter: drop-shadow(0 7px 13px rgba(0,0,0,.3)); animation: page-core-mark 2.2s ease-in-out infinite; }
-.page-loading-core__copy { display: grid; max-width: 390px; justify-items: center; margin-top: 18px; }
-.page-loading-core__eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 7px; color: #718078; font-size: 8.5px; font-weight: 720; letter-spacing: 1.35px; text-transform: uppercase; }
-.page-loading-core__eyebrow i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-rgb),.065); }
-.page-loading-core__copy strong { color: #e2e9e5; font-size: 15px; font-weight: 640; letter-spacing: -.18px; }
-.page-loading-core__copy small { max-width: 320px; margin-top: 6px; color: #76827b; font-size: 10.5px; line-height: 1.5; text-wrap: balance; }
-.page-loading-core__meter { position: relative; width: 88px; height: 1px; margin-top: 15px; overflow: hidden; border-radius: 1px; background: rgba(255,255,255,.065); }
-.page-loading-core__meter i { position: absolute; inset: 0; width: 42%; border-radius: inherit; background: linear-gradient(90deg,transparent,var(--accent),transparent); animation: page-core-meter 1.45s cubic-bezier(.45,0,.55,1) infinite; }
+/* Full-page loading mark. One spinning ring around a still brand chip, a soft
+   halo, and a slim indeterminate track. Calm and legible — nothing orbits,
+   nothing pulses hard, the text is always the point. */
+.page-loading-core {
+  --core-size: 92px;
+  display: grid; justify-items: center; gap: 20px;
+  min-width: min(340px, calc(100vw - 40px));
+  color: #dbe4de; text-align: center;
+}
+.page-loading-core__mark { position: relative; display: grid; place-items: center; width: var(--core-size); height: var(--core-size); isolation: isolate; }
+.page-loading-core__halo {
+  position: absolute; inset: -36%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), .11), transparent 68%);
+  animation: page-core-breathe 2.6s ease-in-out infinite;
+}
+.page-loading-core__ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .07);
+  border-top-color: var(--accent);
+  border-right-color: rgba(var(--accent-rgb), .45);
+  animation: page-core-spin .9s linear infinite;
+}
+.page-loading-core__chip {
+  position: relative; z-index: 1; display: grid; place-items: center;
+  width: 58%; height: 58%; border-radius: 20px;
+  border: 1px solid rgba(var(--accent-rgb), .16);
+  background: linear-gradient(160deg, rgba(255, 255, 255, .045), transparent 60%), rgba(10, 15, 13, .92);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .04);
+}
+.page-loading-core__chip img { width: 62%; height: 62%; object-fit: contain; background: transparent; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
+.page-loading-core__copy { display: grid; justify-items: center; gap: 5px; max-width: 340px; }
+.page-loading-core__eyebrow { color: #6f7c75; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.page-loading-core__copy strong { color: #eef2f0; font-size: 15px; font-weight: 620; letter-spacing: -.15px; }
+.page-loading-core__copy small { color: #7c8880; font-size: 11px; line-height: 1.5; text-wrap: balance; }
+.page-loading-core__bar { position: relative; width: 132px; height: 2px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, .06); }
+.page-loading-core__bar i {
+  position: absolute; inset: 0; width: 38%; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: page-core-track 1.3s cubic-bezier(.5, 0, .5, 1) infinite;
+}
 @keyframes page-core-spin { to { transform: rotate(360deg); } }
-@keyframes page-core-spin-reverse { to { transform: rotate(-360deg); } }
-@keyframes page-core-satellite { to { transform: rotate(360deg); } }
-@keyframes page-core-meter { from { transform: translateX(-130%); } to { transform: translateX(340%); } }
-@keyframes page-core-aura { 50% { opacity: .72; transform: scale(.94); } }
-@keyframes page-core-mark { 0%,100% { opacity: .86; transform: scale(.97); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes page-core-breathe { 50% { opacity: .5; transform: scale(.9); } }
+@keyframes page-core-track { from { transform: translateX(-140%); } to { transform: translateX(360%); } }
 
 /* Compact loading mark: the same orbit language, simplified to stay crisp in
    dense controls where a miniature logo would become visual noise. */
@@ -1872,29 +1884,22 @@ body {
   .workspace-loading-screen::before { width: 116vw; }
   .workspace-loading-screen::after { width: 82vw; }
   .workspace-loading-screen__assurance { margin-top: 25px; }
-  .page-loading-core { --loader-size: 138px; min-width: min(320px,calc(100vw - 32px)); }
-  .page-loading-core__centre { width: 64px; border-radius: 21px; }
-  .page-loading-core__centre::after { border-radius: 16px; }
+  .page-loading-core { --core-size: 78px; min-width: min(300px,calc(100vw - 32px)); gap: 17px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .view-loading { animation-duration: 1ms; }
   .skeleton-line { animation: none; background: #171e24; }
   .cw-spinner__arc,
-  .page-loading-core__aura,
-  .page-loading-core__arc,
-  .page-loading-core__satellite,
-  .page-loading-core__centre img,
-  .page-loading-core__meter i { animation: none; }
-  .page-loading-core__arc--primary { stroke-dasharray: 42 58; }
+  .page-loading-core__halo,
+  .page-loading-core__bar i { animation: none; }
+  .page-loading-core__ring { animation-duration: 1.8s; }
 }
 :root.reduced-motion .skeleton-line { animation: none; background: #171e24; }
 :root.reduced-motion .cw-spinner__arc,
-:root.reduced-motion .page-loading-core__aura,
-:root.reduced-motion .page-loading-core__arc,
-:root.reduced-motion .page-loading-core__satellite,
-:root.reduced-motion .page-loading-core__centre img,
-:root.reduced-motion .page-loading-core__meter i { animation: none; }
+:root.reduced-motion .page-loading-core__halo,
+:root.reduced-motion .page-loading-core__bar i { animation: none; }
+:root.reduced-motion .page-loading-core__ring { animation-duration: 1.8s; }
 
 /* Shared interaction polish. Custom controls that visually replace their
    native inputs keep an equally obvious keyboard focus indicator. */
