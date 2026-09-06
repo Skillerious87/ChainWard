@@ -107,7 +107,7 @@ export function OrganizedCrimesWorkspace({ canReview, nowMs, reviews, ownIntel, 
       <PageHeader
         eyebrow="Organized crimes"
         title="OC battle-stat review"
-        description="Connected members share their own battle stats and live checkpoint pass rates so the OC leader can place them in the right OC 2.0 role."
+        description="Members share their own live checkpoint pass rates — the figure Torn uses to gate OC 2.0 roles — alongside their battle stats as supporting context, so the OC leader can place each member in the right role."
         actions={
           <button type="button" className="button button--secondary" disabled={pending} onClick={() => { setBusyKey("page"); startTransition(() => router.refresh()); }}>
             {isBusy("page") ? <Spinner size={15} label="Refreshing" tone="muted" /> : <RefreshCw size={15} />}
@@ -212,7 +212,7 @@ function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCoun
             {ownState === "stale" && "Your shared stats are over 7 days old."}
             {ownState === "ok" && "Your battle stats are shared and current."}
           </h2>
-          <p>Torn does not expose other players&apos; battle stats. Only what each member shares from their own key can be reviewed — you can withdraw at any time.{autoShareOn ? " Automatic refresh is on." : ""}</p>
+          <p>Torn doesn&apos;t expose other players&apos; battle stats or checkpoint rates, so members share their own. Checkpoint pass rate is what actually gates OC 2.0 roles; battle stats are supporting context. You can withdraw at any time.{autoShareOn ? " Automatic refresh is on." : ""}</p>
         </div>
         <button type="button" className="button button--primary oc-hero__cta" onClick={() => selectView("my-stats")}>
           <UploadCloud size={15} /> {ownShared ? "Manage sharing" : "Share my stats"}
@@ -241,8 +241,8 @@ function Overview({ canReview, sharedCount, missingCount, staleCount, rosterCoun
             )}
 
             <div className="oc-jump">
-              <JumpCard icon={Gauge} label="Battle-stat table" sub="Sortable, per-stat bars" onClick={() => selectView("review")} />
-              <JumpCard icon={Crosshair} label="Role suggestions" sub="Open slots by CPR" onClick={() => selectView("suggestions")} />
+              <JumpCard icon={Crosshair} label="Role suggestions" sub="Members ranked by CPR" onClick={() => selectView("suggestions")} />
+              <JumpCard icon={Gauge} label="Battle stats" sub="Supporting context" onClick={() => selectView("review")} />
               <JumpCard icon={ShieldCheck} label="Contributions" sub="Manage who's shared" onClick={() => selectView("contributions")} />
             </div>
           </div>
@@ -297,6 +297,8 @@ function ReviewTable({ reviews, missing, rosterAvailable, nowMs }: { reviews: Me
       </div>
 
       <div className="oc-panel__body">
+        <CprNote />
+
         <div className="oc-sort-row" role="group" aria-label="Sort battle stats">
           <span>Sort</span>
           {([["total", "Total"], ["strength", "Str"], ["defense", "Def"], ["speed", "Spd"], ["dexterity", "Dex"], ["level", "Lvl"], ["name", "Name"]] as const).map(([key, label]) => (
@@ -319,7 +321,10 @@ function ReviewTable({ reviews, missing, rosterAvailable, nowMs }: { reviews: Me
                   <StatCell label="Defense" value={entry.intel!.stats.defense} max={max.defense} />
                   <StatCell label="Speed" value={entry.intel!.stats.speed} max={max.speed} />
                   <StatCell label="Dexterity" value={entry.intel!.stats.dexterity} max={max.dexterity} />
-                  <td data-label="Total" className="oc-num oc-num--strong">{formatStat(entry.intel!.stats.total)}</td>
+                  <td data-label="Total" className="oc-num oc-num--strong">
+                  {formatStat(entry.intel!.stats.total)}
+                  {entry.intel!.stats.total >= 1_000_000_000 && <span className="oc-capchip" title="Battle stats' contribution to checkpoint pass rate is understood to level off around 1b total.">cap</span>}
+                </td>
                   <td data-label="Shared"><FreshBadge fresh={entry.statsFresh} at={entry.intel!.statsAt} nowMs={nowMs} /></td>
                   <td data-label="Current OC">{entry.assignment ? <span className="oc-assigned">{entry.assignment}</span> : <span className="muted-value">Available</span>}</td>
                 </tr>
@@ -554,7 +559,7 @@ function MyStats({ name, tornUserId, intel, fresh, nowMs, pending, isBusy, feedb
           </>
         ) : (
           <div className="oc-me__cta">
-            <p>Sharing sends a snapshot of your own Torn battle stats and the live checkpoint pass rates on open OC slots to the OC leader. Withdraw at any time.</p>
+            <p>Sharing sends a snapshot of your live checkpoint pass rates on open OC slots — plus your battle stats as context — to the OC leader. Withdraw at any time.</p>
             <button type="button" className="button button--primary oc-me__share" disabled={pending} onClick={onShare}>
               {isBusy("share") ? <Spinner size={14} label="Working" /> : <UploadCloud size={15} />} Share my stats
             </button>
@@ -637,10 +642,21 @@ function FreshBadge({ fresh, at, nowMs }: { fresh: boolean; at: string; nowMs: n
   );
 }
 
+function CprNote() {
+  return (
+    <p className="oc-inline-note">
+      <Info size={13} />
+      <span>
+        In OC 2.0 a role&apos;s <strong>checkpoint pass rate (CPR)</strong> is what decides success. It is built on each member&apos;s Crime Experience — which also caps it — and only then do battle stats and crime skills add anything, for the roles that use them (physical roles such as Muscle lean on strength and defense; that contribution is understood to level off around 1b total). Rank members by CPR in <strong>Suggestions</strong>; treat this table as background.
+      </span>
+    </p>
+  );
+}
+
 function FootNote() {
   return (
     <p className="oc-footnote">
-      Live personal checkpoint evidence counts for 15 minutes after a member refreshes; otherwise completed-crime history from the last 7 days is used. Confirm every placement in Torn before assigning.
+      Checkpoint pass rate is Torn&apos;s own figure for each open role. Live personal rates count for 15 minutes after a member refreshes; otherwise completed-crime history from the last 7 days is used. Confirm every placement in Torn before assigning.
     </p>
   );
 }
