@@ -5,7 +5,7 @@ import type { ZodType } from "zod";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { TornApiError } from "./errors";
 import { CHAIN_CACHE_SECONDS } from "./polling-policy";
-import { battleStatsResponseSchema, crimesResponseSchema, myOrganizedCrimesResponseSchema } from "@/lib/organized-crimes/types";
+import { battleStatsResponseSchema } from "@/lib/members/member-battle-stats";
 import {
   chainReportResponseSchema,
   chainsResponseSchema,
@@ -15,6 +15,7 @@ import {
   ongoingChainResponseSchema,
   tornErrorSchema,
   userBasicResponseSchema,
+  userProfileByIdResponseSchema,
   userProfileResponseSchema,
   type ChainReportResponse,
   type ChainsResponse,
@@ -23,6 +24,7 @@ import {
   type KeyInfoResponse,
   type OngoingChainResponse,
   type UserBasicResponse,
+  type UserProfileByIdResponse,
   type UserProfileResponse,
 } from "./schemas";
 
@@ -124,22 +126,13 @@ export class TornClient {
     return this.requestWithMeta("/user/battlestats", battleStatsResponseSchema, 60_000);
   }
 
-  getOrganizedCrimes(category: "available" | "completed", offset = 0) {
-    return this.requestWithMeta("/faction/crimes", crimesResponseSchema, category === "available" ? 60_000 : 600_000,
-      { cat: category, limit: "100", offset: String(offset), sort: "DESC" });
-  }
-
   /**
-   * The signed-in member's own view of joinable OCs. Unlike `/faction/crimes`,
-   * this still carries the key owner's real checkpoint pass rate on empty
-   * Recruiting slots (Torn zeroed that on the faction endpoint in June 2026).
+   * Public profile of an arbitrary Torn player, read with the operator's own
+   * key — powers the personal Targets list. Cached for 60s, which matches the
+   * Targets workspace's ~90s staleness window.
    */
-  getMyOrganizedCrimes() {
-    return this.requestWithMeta("/user/organizedcrimes", myOrganizedCrimesResponseSchema, 60_000);
-  }
-
-  getOcIdentity() {
-    return this.request("/key/info", keyInfoResponseSchema, 60_000);
+  getUserProfileById(tornUserId: number): Promise<{ value: UserProfileByIdResponse; fetchedAt: number }> {
+    return this.requestWithMeta(`/user/${tornUserId}`, userProfileByIdResponseSchema, 60_000, { selections: "profile" });
   }
 
   getMyProfileDetails(): Promise<UserProfileResponse> {

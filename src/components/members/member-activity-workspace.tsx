@@ -34,7 +34,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Spinner } from "@/components/ui/spinner";
 import { TornUserLink, TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
+import { MemberBattleStatsPanel } from "@/components/members/member-battle-stats-panel";
 import { assessMemberActivity, criticalThreshold, type MemberActivityAssessment } from "@/lib/members/member-activity-intelligence";
+import type { MemberBattleStats } from "@/lib/members/member-battle-stats";
 import type {
   ManagedMemberActivityState,
   MemberActivityAuditEvent,
@@ -45,7 +47,7 @@ import { buildMemberInactivityInsights, periodDurationSeconds, type MemberInacti
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
 
-type WorkspaceView = "overview" | "roster" | "patterns" | "controls";
+type WorkspaceView = "overview" | "roster" | "battle-stats" | "patterns" | "controls";
 type ActivityView = "all" | "attention" | "critical" | "dueSoon" | "active" | "holiday" | "expired" | "watch";
 type ActivitySort = "attention" | "recent" | "inactive" | "name" | "level" | "tenure";
 type ManagedFilter = "all" | "standard" | "holiday" | "expired" | "watch";
@@ -60,9 +62,13 @@ interface MemberActivityWorkspaceProps {
   telemetry: WorkspaceTelemetry;
   activity: ActivityWorkspace;
   canManage: boolean;
+  nowMs: number;
+  battleStats: { records: MemberBattleStats[]; databaseAvailable: boolean; message: string };
+  currentUser: { tornUserId: number; name: string };
+  autoShare: { enabled: boolean; due: boolean };
 }
 
-export function MemberActivityWorkspace({ rosterResult, telemetry, activity, canManage }: MemberActivityWorkspaceProps) {
+export function MemberActivityWorkspace({ rosterResult, telemetry, activity, canManage, nowMs, battleStats, currentUser, autoShare }: MemberActivityWorkspaceProps) {
   const router = useRouter();
   const { view: workspaceViewValue, selectView: selectWorkspaceSection } = useWorkspaceSectionNavigation("members");
   const workspaceView = isWorkspaceView(workspaceViewValue) ? workspaceViewValue : "overview";
@@ -271,6 +277,20 @@ export function MemberActivityWorkspace({ rosterResult, telemetry, activity, can
       </section>
     </section>
 
+    <section id="members-panel-battle-stats" className="member-workspace-panel" role="tabpanel" aria-labelledby="members-tab-battle-stats" hidden={workspaceView !== "battle-stats"}>
+      <MemberBattleStatsPanel
+        records={battleStats.records}
+        databaseAvailable={battleStats.databaseAvailable}
+        message={battleStats.message}
+        canManage={canManage}
+        roster={members}
+        currentUser={currentUser}
+        own={battleStats.records.find((record) => record.tornUserId === currentUser.tornUserId) ?? null}
+        autoShare={autoShare}
+        nowMs={nowMs}
+      />
+    </section>
+
     <section id="members-panel-patterns" className="member-workspace-panel" role="tabpanel" aria-labelledby="members-tab-patterns" hidden={workspaceView !== "patterns"}><InactivityHistory periods={activity.inactivityPeriods} checkedAt={rosterResult.checkedAt} databaseAvailable={activity.databaseAvailable} /></section>
 
     <section id="members-panel-controls" className="member-workspace-panel" role="tabpanel" aria-labelledby="members-tab-controls" hidden={workspaceView !== "controls"}><ActivityControls thresholdDays={thresholdDays} criticalAfterDays={criticalAfterDays} policyDirty={policyDirty} policyDisabled={policyDisabled} savingPolicy={savingPolicy} updatedByName={activity.policy.updatedByName} canManage={canManage} audit={activity.audit} onThresholdChange={setThresholdDays} onSave={() => void saveThreshold()} /></section>
@@ -325,7 +345,7 @@ function compareRows(left: MemberActivityAssessment, right: MemberActivityAssess
   return Number(right.critical) - Number(left.critical) || Number(right.needsAttention) - Number(left.needsAttention) || right.riskScore - left.riskScore || right.ageSeconds - left.ageSeconds;
 }
 
-function isWorkspaceView(value: string | null): value is WorkspaceView { return value === "overview" || value === "roster" || value === "patterns" || value === "controls"; }
+function isWorkspaceView(value: string | null): value is WorkspaceView { return value === "overview" || value === "roster" || value === "battle-stats" || value === "patterns" || value === "controls"; }
 function isActivityView(value: string | null): value is ActivityView { return value === "all" || value === "attention" || value === "critical" || value === "dueSoon" || value === "active" || value === "holiday" || value === "expired" || value === "watch"; }
 function MemberRosterTableRow({ row, canManage, onInspect }: { row: MemberActivityAssessment; canManage: boolean; onInspect: () => void }) {
   return <tr className={`member-activity-row--${rosterTone(row)}`}>

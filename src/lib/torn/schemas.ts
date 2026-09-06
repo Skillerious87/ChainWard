@@ -60,6 +60,39 @@ export const userProfileResponseSchema = z.object({
   }).loose(),
 });
 
+// `/user/{id}?selections=profile` — public data readable with any key. `.loose()`
+// throughout: Torn keeps adding and renaming fields on the v2 profile payload and
+// an unmodelled key must never invalidate a target row.
+export const userProfileByIdResponseSchema = z.object({
+  profile: z.object({
+    id: z.number().int().positive(),
+    name: z.string(),
+    level: z.number().int().nonnegative().catch(0),
+    last_action: z.object({
+      status: z.string().default(""),
+      timestamp: unixTimestamp.catch(0),
+      relative: z.string().default(""),
+    }).loose().catch({ status: "", timestamp: 0, relative: "" }),
+    status: z.object({
+      description: z.string().default(""),
+      details: z.string().nullable().catch(null),
+      state: z.string().default(""),
+      until: unixTimestamp.nullable().catch(null),
+      color: z.string().default(""),
+    }).loose().catch({ description: "", details: null, state: "", until: null, color: "" }),
+    faction: z.object({
+      faction_id: z.number().int().nonnegative().catch(0),
+      faction_name: z.string().default(""),
+      position: z.string().default(""),
+      days_in_faction: z.number().int().nonnegative().catch(0),
+    }).loose().nullable().catch(null),
+    life: z.object({
+      current: z.number().int().nonnegative().catch(0),
+      maximum: z.number().int().nonnegative().catch(0),
+    }).loose().catch({ current: 0, maximum: 0 }),
+  }).loose(),
+});
+
 export const factionBasicResponseSchema = z.object({
   basic: z.object({
     id: z.number().int().positive(),
@@ -199,6 +232,7 @@ export const factionMembersResponseSchema = z.object({
 export type KeyInfoResponse = z.infer<typeof keyInfoResponseSchema>;
 export type UserBasicResponse = z.infer<typeof userBasicResponseSchema>;
 export type UserProfileResponse = z.infer<typeof userProfileResponseSchema>;
+export type UserProfileByIdResponse = z.infer<typeof userProfileByIdResponseSchema>;
 export type FactionBasicResponse = z.infer<typeof factionBasicResponseSchema>;
 export type OngoingChainResponse = z.infer<typeof ongoingChainResponseSchema>;
 export type ChainsResponse = z.infer<typeof chainsResponseSchema>;

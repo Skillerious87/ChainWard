@@ -30,6 +30,7 @@ describe("WorkspaceSectionNavigation", () => {
     expect(markup).toContain('role="tablist"');
     expect(markup).toContain('id="members-tab-overview"');
     expect(markup).toContain('aria-controls="members-panel-roster"');
+    expect(markup).toContain('aria-controls="members-panel-battle-stats"');
     expect(markup).toContain('aria-controls="members-panel-patterns"');
     expect(markup).toContain('aria-controls="members-panel-controls"');
   });

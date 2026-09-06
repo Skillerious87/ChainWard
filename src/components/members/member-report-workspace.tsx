@@ -32,6 +32,7 @@ import { MemberAwardDialog } from "./member-award-dialog";
 import { MemberAwardCard } from "./member-award-card";
 import type { MemberActivityAssessment } from "@/lib/members/member-activity-intelligence";
 import { buildMemberInactivityInsights, periodDurationSeconds, type MemberInactivityPeriod } from "@/lib/members/member-inactivity";
+import { isBattleStatsFresh, type MemberBattleStats } from "@/lib/members/member-battle-stats";
 import type { MemberAward, MemberProfileWorkspace, MemberReportCategory, MemberReportVisibility } from "@/lib/members/member-profile-store";
 import type { TornRosterMember } from "@/lib/torn/workspace-types";
 
@@ -45,6 +46,7 @@ interface MemberReportWorkspaceProps {
   thresholdDays: number;
   inactivityPeriods: MemberInactivityPeriod[];
   canManage: boolean;
+  battleStats: MemberBattleStats | null;
 }
 
 type ActivityTone = "current" | "protected" | "watch" | "attention" | "critical";
@@ -66,7 +68,7 @@ const reportCategories: ReadonlyArray<{ id: MemberReportCategory; label: string;
   { id: "GENERAL", label: "General", detail: "Other useful faction context." },
 ];
 
-export function MemberReportWorkspace({ member, factionId, source, checkedAt, profile, activity, thresholdDays, inactivityPeriods, canManage }: MemberReportWorkspaceProps) {
+export function MemberReportWorkspace({ member, factionId, source, checkedAt, profile, activity, thresholdDays, inactivityPeriods, canManage, battleStats }: MemberReportWorkspaceProps) {
   const router = useRouter();
   const [reportOpen, setReportOpen] = useState(false);
   const [awardOpen, setAwardOpen] = useState(false);
@@ -144,6 +146,7 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
       </section>
 
       <aside className="member-report-context">
+        <MemberBattleStatsSummary battleStats={battleStats} name={member.name} checkedAt={checkedAt} />
         <section className="member-report-overview"><header><BookOpenText size={18} /><h2>Record overview</h2></header><dl><div><dt>Reports</dt><dd>{profile.reports.length}</dd></div><div><dt>Active awards</dt><dd>{activeAwards.length}</dd></div><div><dt>Inactivity periods</dt><dd>{inactivityInsights.recordedPeriods}</dd></div><div><dt>Activity posture</dt><dd>{activityPresentation.badge}</dd></div></dl><small>Live roster facts and managed faction context are brought together without changing their source.</small></section>
         <section className="member-report-governance"><header><ShieldCheck size={18} /><h2>Record boundaries</h2></header><ul><li><span>Torn facts</span><strong>Current roster API</strong></li><li><span>Reports</span><strong>{canManage ? "Faction + leadership views" : "Faction-visible only"}</strong></li><li><span>Changes</span><strong>Managers only</strong></li><li><span>History</span><strong>Attribution retained</strong></li></ul></section>
         {awardHistory.length > 0 && <section className="member-award-history"><header><History size={17} /><h2>Revoked awards</h2></header>{awardHistory.map((award) => <article key={award.id}><strong>{memberBadgeDefinition(award.badgeId).label}</strong><span>{award.revokeReason}</span><small>Revoked {formatDateTime(award.revokedAt!)}</small></article>)}</section>}
@@ -170,6 +173,40 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
 }
 
 function Fact({ icon: Icon, label, value, detail }: { icon: typeof CalendarDays; label: string; value: string; detail: string }) { return <article><span><Icon size={18} /></span><div><small>{label}</small><strong>{value}</strong><p>{detail}</p></div></article>; }
+
+function MemberBattleStatsSummary({ battleStats, name, checkedAt }: { battleStats: MemberBattleStats | null; name: string; checkedAt: string }) {
+  const reference = Date.parse(checkedAt) || 0;
+  const fresh = battleStats ? isBattleStatsFresh(battleStats.statsAt, reference) : false;
+  return (
+    <section className="member-report-battlestats">
+      <header><Activity size={18} /><h2>Battle stats</h2></header>
+      {battleStats ? (
+        <>
+          <dl>
+            <div><dt>Strength</dt><dd>{formatBattleStat(battleStats.stats.strength)}</dd></div>
+            <div><dt>Defense</dt><dd>{formatBattleStat(battleStats.stats.defense)}</dd></div>
+            <div><dt>Speed</dt><dd>{formatBattleStat(battleStats.stats.speed)}</dd></div>
+            <div><dt>Dexterity</dt><dd>{formatBattleStat(battleStats.stats.dexterity)}</dd></div>
+            <div className="member-report-battlestats__total"><dt>Total</dt><dd>{formatBattleStat(battleStats.stats.total)}</dd></div>
+          </dl>
+          <small className={fresh ? undefined : "member-report-battlestats__stale"}>
+            {name} shared this from their own key {formatShortDateTime(battleStats.statsAt)}{fresh ? "" : " — over a week old"}.
+          </small>
+        </>
+      ) : (
+        <p className="member-report-battlestats__empty">{name} has not shared their battle stats. They can opt in from Members → Battle stats.</p>
+      )}
+    </section>
+  );
+}
+
+function formatBattleStat(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "—";
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}b`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`;
+  if (value >= 100_000) return `${Math.round(value / 1_000)}k`;
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
 function ActivitySnapshot({ activity, thresholdDays, presentation }: { activity: MemberActivityAssessment; thresholdDays: number; presentation: ActivityPresentation }) {
   const Icon = presentation.icon;
   const managedState = activity.record?.state === "HOLIDAY" ? "Holiday" : activity.record?.state === "WATCH" ? "Watch list" : "Standard policy";

@@ -8,6 +8,7 @@ import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { assessMemberActivity } from "@/lib/members/member-activity-intelligence";
 import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
+import { readMemberBattleStats } from "@/lib/members/member-battle-stats-store";
 import { getMemberProfileWorkspace } from "@/lib/members/member-profile-store";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
@@ -30,7 +31,11 @@ export default async function MemberReportPage({ params }: { params: Promise<{ t
     getFactionAccessAssignment(factionId, actor.tornUserId),
   ]);
   const canManage = isPlatformOwner(actor) || Boolean(assignment && hasPermission(assignment.role, "members:manage"));
-  const profile = await getMemberProfileWorkspace(factionId, tornUserId, canManage);
+  const [profile, battleStatsRecords] = await Promise.all([
+    getMemberProfileWorkspace(factionId, tornUserId, canManage),
+    readMemberBattleStats(factionId, tornUserId).catch(() => []),
+  ]);
+  const battleStats = battleStatsRecords[0] ?? null;
   const inactivityPeriods = activity.databaseAvailable
     ? await synchronizeMemberInactivityPeriods(telemetry.faction!, roster.data, activity.records, roster.checkedAt).catch(() => activity.inactivityPeriods)
     : activity.inactivityPeriods;
@@ -53,5 +58,6 @@ export default async function MemberReportPage({ params }: { params: Promise<{ t
     thresholdDays={activity.policy.thresholdDays}
     inactivityPeriods={inactivityPeriods.filter((period) => period.tornUserId === tornUserId)}
     canManage={canManage}
+    battleStats={battleStats}
   />;
 }

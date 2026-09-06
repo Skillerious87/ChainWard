@@ -19,7 +19,8 @@ import "./mobile.css";
 import "./member-awards.css";
 // Loaded after mobile.css so each feature's own responsive rules take
 // precedence over the shared base styles.
-import "./organized-crimes.css";
+import "./member-battle-stats.css";
+import "./targets.css";
 import "./welcome.css";
 
 const siteDescription = "A third-party Torn faction chain tracker, reward engine, and payout operations platform.";
