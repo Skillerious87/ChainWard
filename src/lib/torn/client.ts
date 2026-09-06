@@ -187,11 +187,13 @@ export class TornClient {
     );
   }
 
-  getChainReport(chainId?: number): Promise<ChainReportResponse> {
+  getChainReport(chainId?: number, options: TornRequestOptions & { live?: boolean } = {}): Promise<ChainReportResponse> {
     const path = chainId
       ? `/faction/${chainId}/chainreport`
       : "/faction/chainreport";
-    return this.request(path, chainReportResponseSchema, chainId ? this.historyCacheMs : this.liveCacheMs);
+    // An explicit ID may be an ongoing chain. Never give its changing totals
+    // the fifteen-minute retention used for completed reports.
+    return this.request(path, chainReportResponseSchema, chainId && !options.live ? this.historyCacheMs : this.liveCacheMs, {}, options);
   }
 
   getFactionMembers(factionId?: number): Promise<FactionMembersResponse> {

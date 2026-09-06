@@ -1,12 +1,11 @@
 "use client";
 
-import { Activity, AlertTriangle, BellOff, BellRing, Check, ChevronLeft, ChevronRight, Clipboard, Clock3, Copy, Database, DatabaseBackup, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Palette, Play, RefreshCw, ServerCog, ShieldCheck, SlidersHorizontal, Unlock, Upload, FlaskConical, Lock, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, BellOff, BellRing, Check, ChevronRight, Clipboard, Clock3, Copy, Database, DatabaseBackup, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Palette, Play, RefreshCw, ServerCog, ShieldCheck, SlidersHorizontal, Unlock, Upload, FlaskConical, Lock, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { publishViewSwitch } from "@/components/shell/route-progress";
 import { lockWorkspaceForTesting, unlockWorkspaceForTesting } from "@/app/(platform)/settings/actions";
 import { accentOptions, saveAppearancePreferences, useAppearancePreferences, type AccentOption } from "@/lib/appearance-preferences";
 import { notify } from "@/lib/client-actions";
@@ -128,14 +127,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
     } finally { setLicenceWorking(false); }
   }
 
-  function cycle(direction: -1 | 1): void {
-    const next = Math.min(views.length - 1, Math.max(0, activeIndex + direction));
-    selectView(views[next]!.id);
-  }
-
   function selectView(next: SettingsView): void {
     if (next === activeView) return;
-    publishViewSwitch(`settings:${next}`);
     setActiveView(next);
   }
 
@@ -310,40 +303,44 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
     });
   }
 
-  // The page header and the "Workspace settings 1 of 6" panel title were both
-  // restating the navigation immediately beneath them, so the console now opens
-  // straight into the sections and fills the view.
   return <div className="settings-console">
-    <div className="professional-settings-layout">
-      <aside className="professional-settings-nav">
-        <nav aria-label="Settings sections">{views.map((view, index) => { const Icon = view.icon; return <button key={view.id} className={activeView === view.id ? "professional-settings-nav__active" : undefined} onClick={() => selectView(view.id)} aria-current={activeView === view.id ? "page" : undefined}><span><Icon size={17} /></span><p><strong>{view.label}</strong><small>{view.description}</small></p><em>{index + 1}</em></button>; })}</nav>
-        <footer><ShieldCheck size={15} /><span><strong>Safe settings</strong><small>Every action describes exactly what it changes.</small></span></footer>
+    <header className="settings-page-heading"><div><p className="eyebrow">Make it yours</p><h1>Settings</h1><p>Your connection, your alerts, your workspace.</p></div><span className="settings-workspace-label"><ShieldCheck size={16} />{telemetry.faction?.name ?? "Your workspace"}</span></header>
+    <div className="settings-overview" aria-label="Workspace status">
+      <button onClick={() => selectView("connection")}><KeyRound size={18} /><span><small>Torn connection</small><strong>{telemetry.source === "live" ? "Connected" : "Needs attention"}</strong></span><ChevronRight size={16} /></button>
+      <button onClick={() => selectView("operations")}><Activity size={18} /><span><small>Live refresh</small><strong>{preferences.autoRefresh ? `Every ${preferences.refreshIntervalSeconds}s` : "Manual sync"}</strong></span><ChevronRight size={16} /></button>
+      <button onClick={() => selectView("storage")}><Database size={18} /><span><small>Storage</small><strong>{database.available ? "Ready" : "Not configured"}</strong></span><ChevronRight size={16} /></button>
+    </div>
+    <div className="workspace-settings-layout">
+      <aside className="workspace-settings-nav">
+        <label className="settings-mobile-picker"><span>Settings section</span><select aria-label="Settings section" value={activeView} onChange={(event) => selectView(event.target.value as SettingsView)}>{views.map((view) => <option key={view.id} value={view.id}>{view.label}</option>)}</select></label>
+        <nav aria-label="Settings sections">{views.map((view, index) => { const Icon = view.icon; return <div key={view.id}>{(index === 0 || index === 4) && <p className="workspace-settings-nav-group">{index === 0 ? "Your experience" : "Workspace & data"}</p>}<button className={activeView === view.id ? "workspace-settings-nav-active" : undefined} onClick={() => selectView(view.id)} aria-current={activeView === view.id ? "true" : undefined} aria-controls="settings-panel"><Icon size={18} /><span><strong>{view.label}</strong><small>{view.description}</small></span><ChevronRight size={14} /></button></div>; })}</nav>
+        <footer><LockKeyhole size={15} /><p>Your API key stays private.<br /><span>Never included in backups.</span></p></footer>
       </aside>
 
-      <main className="professional-settings-view">
-        <header className="professional-settings-view__header">
+      <section className="settings-panel" id="settings-panel" aria-labelledby="settings-panel-title">
+        <header className="settings-panel-header">
           <span><ActiveIcon size={20} /></span>
-          <div><h1>{active.label}</h1><p>{active.description}</p></div>
-          <em className="settings-view-step">{activeIndex + 1} <i>/</i> {views.length}</em>
+          <div><h2 id="settings-panel-title">{active.label}</h2><p>{active.description}</p></div>
+          {(activeView === "operations" || activeView === "appearance") && <small className="settings-save-hint"><Check size={14} /> Saved in this browser</small>}
         </header>
-        <div className="professional-settings-view__scroll">
+        <div className="settings-panel-body">
 
         {activeView === "connection" && <section className="settings-view-content">
-          <div className="settings-status-hero"><span><KeyRound size={22} /></span><div><p className="eyebrow">Verified identity boundary</p><h3>{telemetry.source === "live" ? "Torn API connected" : "Connection required"}</h3><p>No credential value or guessed permission level is exposed here.</p></div><em className={`connection-pill connection-pill--${telemetry.source}`}><i />{telemetry.source === "live" ? "Verified" : "Not connected"}</em></div>
+          <div className="settings-status-hero"><span><KeyRound size={22} /></span><div><p className="eyebrow">Your Torn account</p><h3>{telemetry.source === "live" ? "Connected and ready" : "Connect your faction"}</h3><p>{telemetry.source === "live" ? "Your faction data is available across the workspace." : "Connect a Torn API key to bring your faction into Chainward."}</p></div><em className={`connection-pill connection-pill--${telemetry.source}`}><i />{telemetry.source === "live" ? "Verified" : "Not connected"}</em></div>
           <dl className="settings-detail-list"><div><dt>Faction</dt><dd>{telemetry.faction?.name ?? "Unavailable"}</dd></div><div><dt>Faction ID</dt><dd>{telemetry.faction?.id ?? "—"}</dd></div><div><dt>Last server check</dt><dd>{new Date(telemetry.checkedAt).toLocaleString("en-GB")}</dd></div><div><dt>Operational status</dt><dd>{telemetry.message}</dd></div></dl>
           <div className="settings-assurance-grid" aria-label="Connection safeguards">
-            <article><span><ShieldCheck size={17} /></span><div><strong>Server-verified identity</strong><p>Faction and player identity come from a server-side Torn check, never a browser claim.</p></div></article>
-            <article><span><RefreshCw size={17} /></span><div><strong>Deliberate freshness</strong><p>Active-chain checks and manual sync request an uncached chain snapshot.</p></div></article>
-            <article><span><LockKeyhole size={17} /></span><div><strong>Credential isolation</strong><p>The API key is never displayed, returned in telemetry, or included in portable backups.</p></div></article>
+            <article><span><ShieldCheck size={17} /></span><div><strong>Connected to the right faction</strong><p>Your player and faction details are checked directly with Torn.</p></div></article>
+            <article><span><RefreshCw size={17} /></span><div><strong>Fresh when it matters</strong><p>Active-chain checks and manual sync request the latest available chain data.</p></div></article>
+            <article><span><LockKeyhole size={17} /></span><div><strong>Your key stays private</strong><p>Your API key is kept on the server and excluded from reports and portable backups.</p></div></article>
           </div>
           <div className="settings-view-actions"><Link className="button button--secondary" href="/connect"><KeyRound size={15} /> {telemetry.source === "live" ? "Replace connection" : "Connect Torn API"}</Link></div>
         </section>}
 
         {activeView === "operations" && <section className="settings-view-content">
-          <div className="settings-status-hero"><span><RefreshCw size={22} /></span><div><p className="eyebrow">Live Torn telemetry</p><h3>{preferences.autoRefresh ? `General refresh every ${preferences.refreshIntervalSeconds} seconds` : "Automatic refresh paused"}</h3><p>{preferences.autoRefresh ? "Active chains tighten to an uncached check every 5 seconds while Chainward remains open and online, including in a background tab." : "Use manual sync whenever a fresh chain snapshot is needed."}</p></div><em className={`database-health database-health--${preferences.autoRefresh ? "ready" : "attention"}`}><i />{preferences.autoRefresh ? "Live" : "Manual"}</em></div>
+          <div className="settings-status-hero"><span><RefreshCw size={22} /></span><div><p className="eyebrow">Live Torn telemetry</p><h3>{preferences.autoRefresh ? "Automatic refresh is on" : "Automatic refresh paused"}</h3><p>{preferences.autoRefresh ? `Workspace updates every ${preferences.refreshIntervalSeconds} seconds. Active chains update every 5 seconds while the app is open and online.` : "Use Sync now to refresh your chain and contributors whenever you need."}</p></div><em className={`database-health database-health--${preferences.autoRefresh ? "ready" : "attention"}`}><i />{preferences.autoRefresh ? "Live" : "Manual"}</em></div>
           <div className="preference-list"><PreferenceToggle icon={RefreshCw} title="Automatic live refresh" description="Keep faction and active-chain telemetry current while Chainward remains open." checked={preferences.autoRefresh} onChange={(value) => saveAppearancePreferences({ autoRefresh: value })} /></div>
           <div className="settings-option-grid"><label><span><Clock3 size={15} /> Refresh interval</span><small>Controls automatic checks in active and background tabs. Manual refresh always requests a fresh snapshot.</small><select value={preferences.refreshIntervalSeconds} disabled={!preferences.autoRefresh} onChange={(event) => saveAppearancePreferences({ refreshIntervalSeconds: Number(event.target.value) as 30 | 60 | 120 })}><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></label><label><span><AlertTriangle size={15} /> Chain timeout warning</span><small>Show a workspace warning when the active chain falls below this remaining time.</small><select value={preferences.chainWarningSeconds} onChange={(event) => saveAppearancePreferences({ chainWarningSeconds: Number(event.target.value) as 60 | 120 | 180 | 300 })}><option value="60">1 minute</option><option value="120">2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option></select></label></div>
-          <div className="settings-explanation"><span><ShieldCheck size={20} /></span><div><strong>API-conscious polling</strong><p>Background tabs keep their schedule, focus catch-up covers browser throttling, and the last verified snapshot remains available through network failures. Only active chains and manual sync bypass Torn&apos;s service cache.</p></div></div>
+          <div className="settings-explanation"><span><ShieldCheck size={20} /></span><div><strong>Stays up to date in the background</strong><p>Refresh continues in background tabs while your browser allows it. If you lose connection, the last verified snapshot stays visible until the next successful check.</p></div></div>
         </section>}
 
         {activeView === "notifications" && <section className="settings-view-content">
@@ -367,7 +364,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         </section>}
 
         {activeView === "appearance" && <section className="settings-view-content">
-          <div className="settings-explanation"><span><Palette size={20} /></span><div><strong>Readable by default</strong><p>Inter remains the application typeface across interface labels and fine print. These choices are saved in this browser.</p></div></div>
+          <div className={`settings-appearance-preview${preferences.compact ? " settings-appearance-preview--compact" : ""}`} aria-label="Live appearance preview"><header><span><Palette size={15} /> Interface preview</span><small>Updates as you choose</small></header><div><span className="settings-preview-mark"><Activity size={24} /></span><div><small>Your workspace</small><strong>{telemetry.faction?.name ?? "Chainward"}</strong></div><span className="settings-preview-badge">{telemetry.source === "live" ? "Connected" : "Not connected"}</span></div><footer><span><i />Accent &amp; contrast</span><span>{preferences.compact ? "Compact" : "Comfortable"} spacing</span></footer></div>
           <div className="appearance-section"><h3>Accent colour</h3><p>Choose a highlight that remains legible against Chainward’s dark surfaces.</p><div className="accent-picker" aria-label="Interface accent">{accentOptions.map((color) => <button key={color} type="button" style={{ "--swatch": color } as React.CSSProperties} className={preferences.accent === color ? "accent-picker__active" : undefined} onClick={() => chooseAccent(color)} aria-label={`Use ${color} accent`}>{preferences.accent === color && <Check size={14} />}</button>)}</div></div>
           <div className="preference-list"><PreferenceToggle icon={SlidersHorizontal} title="Compact density" description="Fit more operational rows on screen." checked={preferences.compact} onChange={(value) => toggleClass("compact", value)} /><PreferenceToggle icon={ShieldCheck} title="High contrast data" description="Increase table and numeric contrast." checked={preferences.highContrast} onChange={(value) => toggleClass("highContrast", value)} /><PreferenceToggle icon={Palette} title="Reduced visual effects" description="Use calmer transitions and charts." checked={preferences.reducedEffects} onChange={(value) => toggleClass("reducedEffects", value)} /></div>
         </section>}
@@ -443,8 +440,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         </section>}
 
         </div>
-        <footer className="settings-cycle"><button className="button button--quiet" disabled={activeIndex === 0} onClick={() => cycle(-1)}><ChevronLeft size={15} /> Previous</button><div><span>{activeIndex + 1} / {views.length}</span><strong>{active.label}</strong></div><button className="button button--secondary" disabled={activeIndex === views.length - 1} onClick={() => cycle(1)}>Next section <ChevronRight size={15} /></button></footer>
-      </main>
+        <footer className="settings-panel-footer"><ShieldCheck size={14} /><span>{activeView === "operations" || activeView === "appearance" ? "Changes apply immediately to this browser." : activeView === "notifications" ? "Alert preferences apply to this device." : "Connection and storage actions apply to your workspace."}</span></footer>
+      </section>
     </div>
     <Dialog open={Boolean(restoreFile)} className="dialog--restore" title="Restore workspace configuration?" description={restoreFile ? `Selected file: ${restoreFile.name}` : undefined} confirmLabel="Restore backup" cancelLabel="Cancel" destructive onConfirm={restoreBackup} onClose={clearRestoreFile}><div className="restore-warning"><AlertTriangle size={18} /><div><strong>Review before restoring</strong><p>The backup must belong to the connected faction. Matching settings are replaced, missing scheme versions are imported, and existing schemes and paid-chain history remain untouched.</p></div></div></Dialog>
   </div>;

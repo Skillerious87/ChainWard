@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
-interface ChainHeroProps { detailed?: boolean; }
+interface ChainHeroProps { detailed?: boolean; onRefresh?: () => void; }
 
 /**
  * Torn awards a flat respect bonus at thirteen fixed chain lengths. Torn's
@@ -29,7 +29,7 @@ function milestoneWindow(target: number): number[] {
   return [...CHAIN_BONUS_MILESTONES].slice(Math.max(0, index - 1), index + 3);
 }
 
-export function ChainHero({ detailed = false }: ChainHeroProps) {
+export function ChainHero({ detailed = false, onRefresh }: ChainHeroProps) {
   const { telemetry: snapshot, seconds, deadlineAtSeconds, nowSeconds } = useLiveWorkspaceTelemetry();
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -75,6 +75,7 @@ export function ChainHero({ detailed = false }: ChainHeroProps) {
       const payload = result.payload;
       const { transitMs } = result;
       window.dispatchEvent(workspaceTelemetryEvent(payload, transitMs));
+      onRefresh?.();
       notify({
         title: payload.source === "live" ? "Torn telemetry checked" : "Telemetry unavailable",
         description: payload.source === "live" ? "Torn returned an uncached chain snapshot." : payload.message,

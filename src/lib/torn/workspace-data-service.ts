@@ -59,19 +59,26 @@ export const getCurrentChainReportView = cache(async (): Promise<TornDataResult<
   try {
     const client = await getConfiguredTornClient();
     if (!client) return unavailable(null, "Connect a Torn API key to retrieve current contributions.");
-    const [current, report, members, faction] = await Promise.all([
+    const [current, members, faction] = await Promise.all([
       client.getCurrentChain(),
-      client.getChainReport(),
       client.getFactionMembers(),
       client.getFactionBasic(),
     ]);
-    if (current.chain.id === 0 || report.chainreport.id !== current.chain.id) {
+    const active = current.chain.id > 0 && current.chain.current > 0 && current.chain.timeout > 0;
+    // The latest-report endpoint can still describe the previous chain. Torn
+    // supports ongoing reports by explicit chain ID for the connected faction.
+    const report = await client.getChainReport(active ? current.chain.id : undefined, {
+      live: true,
+      forceRefresh: true,
+      bypassUpstreamCache: active,
+    });
+    if (active && report.chainreport.id !== current.chain.id) {
       return available(null, "Torn has not published a report matching the current chain.");
     }
     if (report.chainreport.faction_id !== faction.basic.id) {
       return unavailable(null, "The current report did not match the connected faction.");
     }
-    return available(mapReport(report, members), client.dataMode === "offline" ? "Current chain report loaded from the offline test fixture." : "Current matching chain report retrieved from Torn API v2.");
+    return available(mapReport(report, members), client.dataMode === "offline" ? "Current chain report loaded from the offline test fixture." : active ? "Current matching chain report retrieved from Torn API v2." : "Last completed chain report retrieved from Torn API v2.");
   } catch (error: unknown) {
     return unavailable(null, safeError(error));
   }

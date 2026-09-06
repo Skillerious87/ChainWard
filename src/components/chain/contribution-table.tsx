@@ -95,24 +95,20 @@ export function ContributionTable({ members, title = "Chain contribution", compa
             {!compact && <td data-label="Torn status">{member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Unavailable</span>}</td>}
           </tr>)}</tbody>
         </table>
-        <ol className="mobile-data-cards contribution-mobile-list" aria-label="Chain contributors">
-          {renderedMembers.map((member) => <li key={member.tornId} className="contribution-mobile-card">
-            <header>
+        <ol className="contribution-mobile-list" aria-label="Chain contributors">
+          {renderedMembers.map((member) => <li key={member.tornId} className="contribution-mobile-row">
               <span className={`rank${member.rank <= 3 ? " rank--top" : ""}`} aria-label={`Rank ${member.rank}`}>{member.rank}</span>
-              <TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail="View Torn profile" />
-              {!compact && (member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Unavailable</span>)}
-            </header>
-            <dl>
-              <div><dt>Chain hits</dt><dd>{member.hits.toLocaleString()}</dd></div>
-              <div><dt>Respect</dt><dd>{member.respect.toFixed(2)}</dd></div>
-              {!compact && <div className="contribution-mobile-card__wide"><dt>Contribution</dt><dd><span>{member.contribution.toFixed(1)}%</span><span className="mini-progress"><i style={{ width: `${Math.min(member.contribution, 100)}%` }} /></span></dd></div>}
-            </dl>
-            {rewardColumnVisible && <footer><span>Member reward</span>{rewards
+              <div className="contribution-mobile-row__player"><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} avatar={false} detail={`ID ${member.tornId}`} />
+                {!compact && (member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Status unavailable</span>)}
+              </div>
+              <dl className="contribution-mobile-row__hits"><dt>Hits</dt><dd>{member.hits.toLocaleString()}</dd>{!compact && <><dt className="sr-only">Contribution</dt><dd className="contribution-mobile-row__share">{member.contribution.toFixed(1)}%</dd></>}</dl>
+              <dl className="contribution-mobile-row__respect"><dt>Respect</dt><dd>{member.respect.toFixed(2)}</dd></dl>
+            {rewardColumnVisible && <div className="contribution-mobile-row__reward"><span>Member reward</span>{rewards
               ? <RewardAmount amount={rewards[member.tornId]?.amount ?? 0} unit={rewardUnit ?? "units"} detail={rewards[member.tornId]?.tierLabel ?? "No matching tier"} paid={payoutStatus === "PAID"} size="compact" />
-              : <span className="reward-pending"><strong>Not calculated</strong><small>Review reward setup</small></span>}</footer>}
+              : <span className="reward-pending"><strong>Not calculated</strong><small>Review reward setup</small></span>}</div>}
           </li>)}
         </ol>
-        {visibleMembers.length === 0 && <div className="table-empty">{query ? `No members match “${query}”.` : emptyMessage}</div>}
+        {visibleMembers.length === 0 && <div className="table-empty">{query ? `No members match “${query}”.` : statusFilter !== "All" ? `No contributors have the status “${statusFilter}”.` : emptyMessage}</div>}
       </div>
       <div className="table-footer"><span>Showing {renderedMembers.length} of {visibleMembers.length} verified contributors</span>{compact && visibleMembers.length > 6 && <button onClick={() => setExpanded((value) => !value)}>{expanded ? "Show leading contributors" : "View all contributors"} →</button>}</div>
     </section>

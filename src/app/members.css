@@ -185,7 +185,7 @@
 .member-activity-table .member-activity-row--expired,.member-activity-table .member-activity-row--critical { --roster-tone-rgb: 242,109,109; background: linear-gradient(90deg,rgba(242,109,109,.07),transparent 34%); }
 .member-activity-table tbody tr:not(.member-activity-row--current) > td:first-child { box-shadow: inset 2px 0 rgba(var(--roster-tone-rgb),.72); }
 .member-activity-table .managed-state { min-height: 25px; }
-.member-roster-cards { display: none; }
+
 
 .member-inactivity-history { overflow: hidden; }
 .member-inactivity-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border-top: 1px solid #29323a; border-bottom: 1px solid #29323a; background: #0c1215; }
@@ -315,38 +315,7 @@
   .member-report-form textarea,.member-award-form textarea,.member-award-revoke textarea { min-height: 126px; }
   .member-row-actions > a,.member-row-actions > button { min-height: 42px; padding-inline: 11px; }
   .member-roster-table-scroll { display: none; }
-  .member-roster-cards { display: grid; gap: 10px; padding: 12px; border-bottom: 1px solid #29323a; background: #090e11; }
-  .member-roster-card { --roster-tone: var(--success); --roster-tone-rgb: 103,211,145; position: relative; overflow: hidden; border: 1px solid #303a40; border-radius: 12px; background: radial-gradient(circle at 100% 0,rgba(var(--roster-tone-rgb),.055),transparent 36%),#0e1417; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
-  .member-roster-card--protected { --roster-tone: #7bc8ef; --roster-tone-rgb: 98,184,232; border-color: rgba(98,184,232,.27); }
-  .member-roster-card--watch,.member-roster-card--attention { --roster-tone: var(--warning); --roster-tone-rgb: 245,185,76; border-color: rgba(245,185,76,.25); }
-  .member-roster-card--expired,.member-roster-card--critical { --roster-tone: var(--danger); --roster-tone-rgb: 242,109,109; border-color: rgba(242,109,109,.28); }
-  .member-roster-card::before { position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(180deg,var(--roster-tone),transparent 78%); content: ""; }
-  .member-roster-card > header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 14px 12px 16px; }
-  .member-roster-card > header .torn-user-link { flex: 1; }
-  .member-roster-card > header .avatar { width: 38px; height: 38px; border-radius: 9px; }
-  .member-roster-card > header .torn-user-link__copy strong { color: #e4eae7; font-size: 13.5px; }
-  .member-roster-card > header .torn-user-link__copy small { margin-top: 3px; color: #85918b; font-size: 11px; white-space: normal; }
-  .member-roster-card > header .activity-band { flex: 0 0 auto; }
-  .member-roster-card__reason { margin: 0 14px 12px 16px; color: #98a49d; font-size: 12px; line-height: 1.5; }
-  .member-roster-card > dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); margin: 0; border-top: 1px solid #29333a; border-bottom: 1px solid #29333a; background: rgba(3,7,9,.2); }
-  .member-roster-card > dl > div { display: flex; min-width: 0; min-height: 78px; flex-direction: column; justify-content: center; padding: 11px 14px 11px 16px; border-right: 1px solid #29333a; }
-  .member-roster-card > dl > div:last-child { border-right: 0; }
-  .member-roster-card dt,.member-roster-card__managed > span { color: #75827b; font-size: 9.5px; font-weight: 650; letter-spacing: .55px; text-transform: uppercase; }
-  .member-roster-card dd { margin: 4px 0 0; color: #d7dfda; font-size: 12.5px; font-weight: 650; }
-  .member-roster-card dd .member-status { color: #b7c2bc; font-size: 12px !important; }
-  .member-roster-card dl small { overflow: hidden; margin-top: 3px; color: #748179; font-size: 10.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
-  .member-roster-card__managed { display: flex; min-height: 50px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px 10px 16px; }
-  .member-roster-card__managed .managed-state { max-width: 70%; justify-content: flex-end; text-align: right; white-space: normal; }
-  .member-roster-card__note { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 10px 16px; border-top: 1px solid #29333a; }
-  .member-roster-card__note strong { color: var(--roster-tone); font-size: 9.5px; letter-spacing: .45px; text-transform: uppercase; }
-  .member-roster-card__note span { color: #8c9891; font-size: 11px; line-height: 1.45; }
-  .member-roster-card > footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px 12px 16px; border-top: 1px solid #29333a; color: #717e77; font-size: 10.5px; }
-  .member-roster-card > footer .member-row-actions { margin-left: auto; }
-  .member-roster-card > footer .member-row-actions > a { border-color: rgba(var(--accent-rgb),.25); color: #bad1ad; }
-  .member-roster-cards__empty { display: flex; min-height: 130px; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: #718078; text-align: left; }
-  .member-roster-cards__empty p { display: flex; flex-direction: column; }
-  .member-roster-cards__empty strong { color: #bdc7c1; font-size: 12.5px; }
-  .member-roster-cards__empty span { margin-top: 2px; color: #7b8881; font-size: 11px; }
+
 }
 
 @media (max-width: 600px) {
@@ -382,15 +351,7 @@
   .member-inactivity-summary article,.member-inactivity-summary article:nth-child(2) { border-right: 0; border-bottom: 1px solid #29323a; }
   .member-inactivity-summary article:last-child { border-bottom: 0; }
   .member-inactivity-empty { align-items: flex-start; justify-content: flex-start; }
-  .member-roster-cards { padding: 10px; }
-  .member-roster-card > header { flex-direction: column; }
-  .member-roster-card > header .activity-band { margin-left: 47px; }
-  .member-roster-card > dl { grid-template-columns: 1fr; }
-  .member-roster-card > dl > div { min-height: 68px; border-right: 0; border-bottom: 1px solid #29333a; }
-  .member-roster-card > dl > div:last-child { border-bottom: 0; }
-  .member-roster-card > footer { align-items: flex-start; flex-direction: column; }
-  .member-roster-card > footer .member-row-actions { display: grid; width: 100%; grid-template-columns: 1fr; margin-left: 0; }
-  .member-roster-card > footer .member-row-actions > * { width: 100%; }
+
 }
 .member-workspace-nav {
   position: sticky;
@@ -773,4 +734,30 @@
   .member-pagination {
     align-items: flex-start;
   }
+}
+
+/* Mobile roster: one continuous list, with secondary detail on demand. */
+.member-roster-list { display: none; }
+@media (max-width: 760px) {
+  .member-roster-list { display: block; margin: 0; padding: 0; list-style: none; }
+  .member-roster-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px 12px; padding: 16px; border-bottom: 1px solid var(--border); }
+  .member-roster-list-row:last-child { border-bottom: 0; }
+  .member-roster-list-row__identity { min-width: 0; }
+  .member-roster-list-row__identity .torn-user-link { min-width: 0; }
+  .member-roster-list-row__identity .avatar { width: 32px; height: 32px; border-radius: 8px; }
+  .member-roster-list-row__identity .torn-user-link strong { font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
+  .member-roster-list-row__identity .torn-user-link small { font-size: 10px; white-space: normal; }
+  .member-roster-list-row__status { display: grid; align-content: start; justify-items: end; gap: 6px; max-width: 120px; }
+  .member-roster-list-row__status .member-status { font-size: 10px; }
+  .member-roster-list-row__status > small { color: var(--text-muted); font-size: 10px; text-align: right; line-height: 1.5; }
+  .member-roster-list-row__signal { display: flex; flex-wrap: wrap; gap: 5px; grid-column: 1 / -1; padding-left: 42px; }
+  .member-roster-list-row__signal .activity-band, .member-roster-list-row__signal .managed-state { font-size: 9px; min-height: 20px; }
+  .member-roster-list-row__details { grid-column: 1; grid-row: 3; min-width: 0; margin-left: 42px; color: var(--text-muted); font-size: 11px; }
+  .member-roster-list-row__details summary { width: fit-content; min-height: 44px; align-content: center; cursor: pointer; }
+  .member-roster-list-row__details[open] { grid-column: 1 / -1; }
+  .member-roster-list-row__details[open] summary { margin-right: 90px; }
+  .member-roster-list-row__details p { margin: 6px 0 10px; line-height: 1.6; overflow-wrap: anywhere; }
+  .member-roster-list-row__details button { min-height: 44px; }
+  .member-roster-list-row__report { grid-column: 2; grid-row: 3; align-self: start; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding-inline: 8px; color: var(--accent); font-size: 11px; text-decoration: none; }
+  .member-roster-list-row :is(a, summary, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 }
