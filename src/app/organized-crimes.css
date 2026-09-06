@@ -240,6 +240,103 @@
 .oc-provenance svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent); }
 .oc-provenance strong { color: #eef2f0; }
 
+/* --- Faction OC health: difficulty coverage strip --------------------- */
+.oc-diffcov { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.oc-diffcell {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(255, 255, 255, .015); color: var(--text-secondary);
+  font-size: 11px; font-weight: 640; font-variant-numeric: tabular-nums;
+}
+.oc-diffcell i { color: var(--text-muted); font-style: normal; font-weight: 600; }
+.oc-diffcell--ok { border-color: rgba(103, 211, 145, .3); background: rgba(103, 211, 145, .07); color: var(--success); }
+.oc-diffcell--ok i { color: rgba(103, 211, 145, .8); }
+.oc-diffcell--part { border-color: rgba(245, 185, 76, .3); background: rgba(245, 185, 76, .06); color: var(--warning); }
+.oc-diffcell--part i { color: rgba(245, 185, 76, .8); }
+.oc-diffcell--bad { border-color: rgba(233, 120, 120, .3); background: rgba(233, 120, 120, .06); color: var(--danger); }
+
+/* --- Generic link-styled button (member drill-down triggers) --------- */
+.oc-linklike {
+  padding: 0; border: 0; background: none; color: var(--accent);
+  font: inherit; text-align: left; cursor: pointer; border-radius: 3px;
+}
+.oc-linklike:hover { text-decoration: underline; }
+.oc-linklike:focus-visible { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 2px; }
+.oc-linklike--strong { color: #eef2f0; font-weight: 620; }
+.oc-linklike--strong:hover { color: var(--accent); }
+
+/* --- Fill OCs -------------------------------------------------------- */
+.oc-fill { overflow: hidden; }
+.oc-fill__head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  background: linear-gradient(105deg, rgba(var(--accent-rgb), .04), transparent 60%);
+}
+.oc-fill__head h3 { margin: 0 0 4px; font-size: 14.5px; font-weight: 660; color: #eef2f0; letter-spacing: -.2px; }
+.oc-fill__head p { margin: 0; color: var(--text-muted); font-size: 11.5px !important; line-height: 1.5; }
+.oc-fill__est { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; }
+.oc-fill__est small { color: var(--text-muted); font-size: 9.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+.oc-fill__est strong { font-size: 22px; font-weight: 680; font-variant-numeric: tabular-nums; letter-spacing: -.6px; color: #eef2f0; }
+.oc-fill__est em { font-style: normal; color: var(--text-muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.oc-fill__est--ok strong { color: var(--success); }
+.oc-fill__est--mid strong { color: var(--warning); }
+.oc-fill__est--low strong { color: var(--danger); }
+.oc-fill__body { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 18px; }
+
+.oc-slot {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center; gap: 6px 14px;
+  padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+  background: rgba(255, 255, 255, .012);
+}
+.oc-slot--gap { border-color: rgba(245, 185, 76, .3); background: rgba(245, 185, 76, .04); }
+.oc-slot--weak { border-color: rgba(233, 120, 120, .28); }
+.oc-slot__role { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.oc-slot__role strong { color: #e7ecea; font-size: 12.5px; font-weight: 620; }
+.oc-slot__pick { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.oc-slot__pick .muted-value { font-size: 11.5px; }
+
+.oc-item {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 9.5px; font-weight: 640; letter-spacing: .3px; text-transform: uppercase;
+  color: var(--text-muted); cursor: help;
+}
+.oc-item--missing { border-color: rgba(233, 120, 120, .35); background: rgba(233, 120, 120, .07); color: var(--danger); }
+.oc-item--ok { border-color: var(--border-strong); }
+.oc-weakflag { padding: 1px 6px; border-radius: 6px; background: rgba(233, 120, 120, .1); color: var(--danger); font-size: 9.5px; font-weight: 680; letter-spacing: .3px; text-transform: uppercase; }
+.oc-belowbase { color: var(--warning); font-size: 10.5px; font-weight: 600; cursor: help; }
+
+.oc-alt-toggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text-secondary); font-size: 10.5px; cursor: pointer;
+}
+.oc-alt-toggle:hover { border-color: var(--border-strong); color: #d5dbdd; }
+.oc-alt-toggle .oc-rot { transform: rotate(180deg); }
+.oc-alts { list-style: none; margin: 4px 0 0; padding: 8px 0 0; grid-column: 1 / -1; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px; }
+.oc-alts li { display: flex; align-items: center; gap: 9px; font-size: 11.5px; }
+
+.oc-evidence--history { border-color: var(--border-strong); color: var(--text-muted); }
+
+/* --- Scenario intelligence table ----------------------------------- */
+.oc-scenario__table td.oc-num, .oc-scenario__table th.oc-num,
+.oc-contrib__table td.oc-num, .oc-contrib__table th.oc-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Member OC profile dialog ------------------------------------- */
+.oc-profile-dialog { max-width: 620px; }
+.oc-profile { display: flex; flex-direction: column; gap: 14px; }
+.oc-profile__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.oc-profile__stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px;
+  border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--border);
+}
+.oc-profile__stats > div { display: flex; flex-direction: column; gap: 3px; padding: 12px 13px; background: #0e1317; }
+.oc-profile__stats small { color: var(--text-muted); font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+.oc-profile__stats strong { color: #eef2f0; font-size: 16px; font-weight: 660; font-variant-numeric: tabular-nums; }
+.oc-profile .data-table td.oc-num, .oc-profile .data-table th.oc-num { text-align: right; font-variant-numeric: tabular-nums; }
+.oc-profile .muted-value { font-size: 11px; }
+
 /* ===========================================================================
    Phone  (<= 760px): tables collapse to cards, grids stack, taps grow.
    =========================================================================== */
@@ -312,6 +409,34 @@
   .oc-me__share, .oc-action-row .button { width: 100%; min-height: 44px; justify-content: center; }
   .oc-action-row { flex-direction: column; }
   .oc-threshold-control .button { width: 100%; min-height: 44px; justify-content: center; }
+
+  /* Fill OCs cards */
+  .oc-fill__head { flex-direction: column; gap: 10px; padding: 14px; }
+  .oc-fill__est { flex-direction: row; align-items: baseline; gap: 8px; align-self: flex-start; }
+  .oc-fill__body { padding: 12px 14px 14px; }
+  .oc-slot { grid-template-columns: 1fr; gap: 8px; }
+  .oc-slot__pick { justify-content: flex-start; }
+
+  /* Scenario table -> stacked cards (same pattern as the review table) */
+  .oc-page .table-scroll:has(.oc-scenario__table) { overflow: visible; border: 0; }
+  .oc-page .oc-scenario__table { display: block; width: 100%; min-width: 0; }
+  .oc-page .oc-scenario__table thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
+  .oc-page .oc-scenario__table tbody { display: flex; flex-direction: column; gap: 10px; }
+  .oc-page .oc-scenario__table tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px;
+    padding: 14px; border: 1px solid var(--border-strong); border-radius: 13px; background: #10161a;
+  }
+  .oc-page .oc-scenario__table td {
+    display: flex; flex-direction: column; gap: 3px; height: auto; min-height: 0; min-width: 0;
+    padding: 0; border: 0; white-space: normal; text-align: left !important;
+  }
+  .oc-page .oc-scenario__table td::before {
+    content: attr(data-label); color: var(--text-muted);
+    font-size: 9px; font-weight: 720; letter-spacing: .6px; text-transform: uppercase;
+  }
+  .oc-page .oc-scenario__table td[data-label="Scenario"] { grid-column: 1 / -1; }
+
+  .oc-profile__stats { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 380px) {

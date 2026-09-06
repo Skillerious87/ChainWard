@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { isActiveStatus, isCompletedStatus } from "@/lib/organized-crimes/intelligence";
 import { crimeSchema } from "@/lib/organized-crimes/types";
 import { TornClient } from "./client";
 import { createOfflineFixtureFetch, offlineConnection, offlineTestModeEnabled } from "./offline-fixture";
@@ -27,7 +28,7 @@ describe("offline Torn fixture", () => {
       sleep: async () => undefined,
     });
 
-    const [profile, profileDetails, faction, chain, history, members, report, battleStats, activeCrimes, completedCrimes] = await Promise.all([
+    const [profile, profileDetails, faction, chain, history, members, report, battleStats, activeCrimes, completedCrimes, ownCrimes] = await Promise.all([
       client.getMyProfile(),
       client.getMyProfileDetails(),
       client.getFactionBasic(),
@@ -38,6 +39,7 @@ describe("offline Torn fixture", () => {
       client.getMyBattleStats(),
       client.getOrganizedCrimes("available"),
       client.getOrganizedCrimes("completed"),
+      client.getMyOrganizedCrimes(),
     ]);
 
     expect(profile.profile.id).toBe(connection.player.id);
@@ -50,9 +52,15 @@ describe("offline Torn fixture", () => {
     expect(Number(battleStats.value.battlestats.total)).toBeGreaterThan(0);
     const parsedActive = activeCrimes.value.crimes.map((crime) => crimeSchema.parse(crime));
     const parsedCompleted = completedCrimes.value.crimes.map((crime) => crimeSchema.parse(crime));
-    expect(parsedActive.every((crime) => crime.status === "Recruiting" || crime.status === "Planning")).toBe(true);
-    expect(parsedActive.some((crime) => crime.slots.some((slot) => slot.user === null && slot.checkpoint_pass_rate !== null))).toBe(true);
-    expect(parsedCompleted.every((crime) => crime.status === "Successful" || crime.status === "Failure")).toBe(true);
+    const parsedOwn = ownCrimes.value.organizedcrimes.map((crime) => crimeSchema.parse(crime));
+    // Statuses now arrive lowercase from the fixture — exercises normStatus.
+    expect(parsedActive.every((crime) => isActiveStatus(crime.status))).toBe(true);
+    // Post June 2026 the faction feed zeroes empty-slot CPR...
+    expect(parsedActive.every((crime) => crime.slots.every((slot) => slot.user !== null || !slot.checkpoint_pass_rate))).toBe(true);
+    // ...but the member's own key still sees a real rate on empty slots.
+    expect(parsedOwn.some((crime) => crime.slots.some((slot) => slot.user === null && (slot.checkpoint_pass_rate ?? 0) > 0))).toBe(true);
+    expect(parsedCompleted.every((crime) => isCompletedStatus(crime.status))).toBe(true);
+    expect(parsedCompleted.some((crime) => crime.rewards != null)).toBe(true);
     expect(await client.getOrganizedCrimes("available", 100).then((page) => page.value.crimes)).toHaveLength(0);
   });
 });

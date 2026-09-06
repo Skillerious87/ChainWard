@@ -106,8 +106,9 @@ const organizedCrimes: WorkspaceSectionDefinition = {
   defaultView: "overview",
   items: [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "fill", label: "Fill OCs", icon: Crosshair },
+    { id: "suggestions", label: "Suggestions", icon: UsersRound },
     { id: "review", label: "Battle stats", icon: Gauge },
-    { id: "suggestions", label: "Suggestions", icon: Crosshair },
     { id: "contributions", label: "Contributions", icon: ShieldCheck },
     { id: "my-stats", label: "My stats", icon: Swords },
   ],

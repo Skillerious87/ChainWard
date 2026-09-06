@@ -82,9 +82,9 @@ describe("getCrimeFeed", () => {
 
     const feed = await getCrimeFeed("completed");
 
-    expect(getOrganizedCrimes).toHaveBeenCalledTimes(10);
+    expect(getOrganizedCrimes).toHaveBeenCalledTimes(20);
     expect(feed.complete).toBe(false);
-    expect(feed.crimes).toHaveLength(1_000);
+    expect(feed.crimes).toHaveLength(2_000);
   });
 
   it("returns an unavailable feed when Torn rejects the request", async () => {
@@ -106,12 +106,12 @@ describe("getCrimeFeed", () => {
 
 describe("getOwnOcIntelDraft", () => {
   it("builds a draft from the caller's own stats and live open-slot pass rates", async () => {
-    const getOrganizedCrimes = vi.fn().mockResolvedValue({
-      value: { crimes: [validCrime(1, 555)], _metadata: { links: { next: null } } },
+    const getMyOrganizedCrimes = vi.fn().mockResolvedValue({
+      value: { organizedcrimes: [validCrime(1, 555)] },
       fetchedAt: Date.parse("2026-09-05T12:00:00.000Z"),
     });
     getConfiguredTornConnection.mockResolvedValue(connectionWith({
-      getOrganizedCrimes,
+      getMyOrganizedCrimes,
       getMyBattleStats: vi.fn().mockResolvedValue(battleStatsResponse()),
     }));
 
@@ -122,6 +122,7 @@ describe("getOwnOcIntelDraft", () => {
     expect(result.draft.stats).toEqual({ strength: 100, defense: 200, speed: 300, dexterity: 400, total: 1_000 });
     expect(result.draft.roles).toHaveLength(1);
     expect(result.draft.roles[0]).toMatchObject({ positionLabel: "Robber #1", passRate: 84 });
+    expect(getMyOrganizedCrimes).toHaveBeenCalledOnce();
   });
 
   it("explains when the caller's key lacks battle-stat access", async () => {
@@ -138,7 +139,7 @@ describe("getOwnOcIntelDraft", () => {
 
   it("still shares stats when the live OC feed is unavailable", async () => {
     getConfiguredTornConnection.mockResolvedValue(connectionWith({
-      getOrganizedCrimes: vi.fn().mockRejectedValue(new TornApiError(17, "Torn API is down.")),
+      getMyOrganizedCrimes: vi.fn().mockRejectedValue(new TornApiError(17, "Torn API is down.")),
       getMyBattleStats: vi.fn().mockResolvedValue(battleStatsResponse()),
     }));
 
@@ -148,5 +149,19 @@ describe("getOwnOcIntelDraft", () => {
     if (!result.ok) return;
     expect(result.draft.roles).toEqual([]);
     expect(result.draft.rolesMessage).toMatch(/could not be read/i);
+  });
+
+  it("notes when the caller's key lacks the organized-crimes selection", async () => {
+    getConfiguredTornConnection.mockResolvedValue(connectionWith({
+      getMyOrganizedCrimes: vi.fn().mockRejectedValue(new TornApiError(16, "Insufficient permission.")),
+      getMyBattleStats: vi.fn().mockResolvedValue(battleStatsResponse()),
+    }));
+
+    const result = await getOwnOcIntelDraft();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.roles).toEqual([]);
+    expect(result.draft.rolesMessage).toMatch(/organized-crimes selection/i);
   });
 });

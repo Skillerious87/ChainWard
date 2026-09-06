@@ -102,11 +102,22 @@ describe("reviewMembers", () => {
     expect(() => reviewMembers([], [], liveFeed([]), emptyHistory(), NOW, Number.NaN)).toThrow();
   });
 
-  it("returns no suggestions when the live feed is stale or incomplete", () => {
-    const stale = liveFeed([crime()], { fetchedAt: new Date(NOW - 30 * MINUTE).toISOString() });
-    const review = reviewOne([member(1)], [intel(1)], stale, emptyHistory(), NOW);
+  it("returns no suggestions when the live feed is unavailable", () => {
+    const down = liveFeed([crime()], { available: false });
+    const review = reviewOne([member(1)], [intel(1)], down, emptyHistory(), NOW);
     expect(review.suggestions).toEqual([]);
-    expect(review.reason).toMatch(/incomplete or unavailable/i);
+    expect(review.reason).toMatch(/live OC feed is unavailable/i);
+  });
+
+  it("still suggests from a stale-but-available live feed (no hard fetch cutoff)", () => {
+    const stale = liveFeed([crime({ id: 21 })], { fetchedAt: new Date(NOW - 30 * MINUTE).toISOString() });
+    const record = intel(1, { roles: [{
+      crimeId: 21, crimeName: "Stage Robbery", difficulty: 7,
+      positionId: "1", positionLabel: "Robber #1", passRate: 88,
+      observedAt: new Date(NOW - 5 * MINUTE).toISOString(),
+    }] });
+    const review = reviewOne([member(1)], [record], stale, emptyHistory(), NOW, 70);
+    expect(review.suggestions).toHaveLength(1);
   });
 
   it("marks a member already occupying an active slot as assigned", () => {
@@ -127,17 +138,13 @@ describe("reviewMembers", () => {
     const review = reviewOne([member(1)], [record], liveFeed([open]), emptyHistory(), NOW, 70);
 
     expect(review.suggestions).toHaveLength(1);
-    expect(review.suggestions[0]).toMatchObject({ crimeId: 20, evidence: "personal", passRate: 88, itemId: 55 });
-    expect(review.reason).toMatch(/ranked by current personal evidence/i);
+    expect(review.suggestions[0]).toMatchObject({ crimeId: 20, evidence: "self-report", itemId: 55 });
+    expect(review.suggestions[0]?.passRate).toBeGreaterThanOrEqual(80);
+    expect(review.reason).toMatch(/recency-weighted CPR/i);
   });
 
-  it("falls back to recent completed-crime history when personal evidence is stale", () => {
+  it("uses completed-crime history when there is no self-report", () => {
     const open = crime({ id: 30, slots: [slot({ position_info: { id: "2", label: "Hacker" } })] });
-    const record = intel(1, { roles: [{
-      crimeId: 30, crimeName: "Stage Robbery", difficulty: 7,
-      positionId: "2", positionLabel: "Hacker", passRate: 91,
-      observedAt: new Date(NOW - 40 * MINUTE).toISOString(),
-    }] });
     const history: CrimeFeed = {
       crimes: [crime({
         id: 999, status: "Successful", difficulty: 7, name: "Stage Robbery",
@@ -147,10 +154,33 @@ describe("reviewMembers", () => {
       available: true, complete: true, fetchedAt: new Date(NOW - MINUTE).toISOString(), message: "ok",
     };
 
-    const review = reviewOne([member(1)], [record], liveFeed([open]), history, NOW, 70);
+    const review = reviewOne([member(1)], [intel(1)], liveFeed([open]), history, NOW, 70);
 
     expect(review.suggestions).toHaveLength(1);
-    expect(review.suggestions[0]).toMatchObject({ evidence: "history", passRate: 79 });
+    expect(review.suggestions[0]).toMatchObject({ evidence: "history" });
+    expect(review.suggestions[0]?.passRate).toBeGreaterThanOrEqual(70);
+  });
+
+  it("blends a stale self-report with fresh history into one weighted entry", () => {
+    const open = crime({ id: 31, slots: [slot({ position_info: { id: "2", label: "Hacker" } })] });
+    const record = intel(1, { roles: [{
+      crimeId: 31, crimeName: "Stage Robbery", difficulty: 7,
+      positionId: "2", positionLabel: "Hacker", passRate: 91,
+      observedAt: new Date(NOW - 40 * DAY).toISOString(),
+    }] });
+    const history: CrimeFeed = {
+      crimes: [crime({
+        id: 998, status: "Successful", difficulty: 7, name: "Stage Robbery",
+        executed_at: Math.floor((NOW - 2 * DAY) / 1_000),
+        slots: [slot({ position_info: { id: "2", label: "Hacker" }, user: { id: 1, joined_at: 1 }, checkpoint_pass_rate: 79 })],
+      })],
+      available: true, complete: true, fetchedAt: new Date(NOW - MINUTE).toISOString(), message: "ok",
+    };
+
+    const review = reviewOne([member(1)], [record], liveFeed([open]), history, NOW, 70);
+    expect(review.suggestions).toHaveLength(1);
+    // Fresh history outweighs the 40-day-old self-report.
+    expect(review.suggestions[0]?.passRate).toBeLessThan(88);
   });
 
   it("drops evidence below the CPR threshold", () => {
@@ -164,7 +194,7 @@ describe("reviewMembers", () => {
     const review = reviewOne([member(1)], [record], liveFeed([open]), emptyHistory(), NOW, 70);
 
     expect(review.suggestions).toEqual([]);
-    expect(review.reason).toMatch(/no recent matching role evidence/i);
+    expect(review.reason).toMatch(/none of it meets the current threshold/i);
   });
 
   it("skips a recruiting crime whose recruitment window has expired", () => {

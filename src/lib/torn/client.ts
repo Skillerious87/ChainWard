@@ -5,7 +5,7 @@ import type { ZodType } from "zod";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { TornApiError } from "./errors";
 import { CHAIN_CACHE_SECONDS } from "./polling-policy";
-import { battleStatsResponseSchema, crimesResponseSchema } from "@/lib/organized-crimes/types";
+import { battleStatsResponseSchema, crimesResponseSchema, myOrganizedCrimesResponseSchema } from "@/lib/organized-crimes/types";
 import {
   chainReportResponseSchema,
   chainsResponseSchema,
@@ -127,6 +127,15 @@ export class TornClient {
   getOrganizedCrimes(category: "available" | "completed", offset = 0) {
     return this.requestWithMeta("/faction/crimes", crimesResponseSchema, category === "available" ? 60_000 : 600_000,
       { cat: category, limit: "100", offset: String(offset), sort: "DESC" });
+  }
+
+  /**
+   * The signed-in member's own view of joinable OCs. Unlike `/faction/crimes`,
+   * this still carries the key owner's real checkpoint pass rate on empty
+   * Recruiting slots (Torn zeroed that on the faction endpoint in June 2026).
+   */
+  getMyOrganizedCrimes() {
+    return this.requestWithMeta("/user/organizedcrimes", myOrganizedCrimesResponseSchema, 60_000);
   }
 
   getOcIdentity() {

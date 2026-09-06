@@ -6,7 +6,14 @@ import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getCrimeFeed } from "@/lib/organized-crimes/data-service";
-import { reviewMembers } from "@/lib/organized-crimes/intelligence";
+import {
+  buildFactionOcIntel,
+  computeFactionHealth,
+  normStatus,
+  optimiseCrimeAssignment,
+  reviewMembers,
+  scenarioKeyOf,
+} from "@/lib/organized-crimes/intelligence";
 import { readMemberIntel, readOcReviewSettings, readOcSharePreference } from "@/lib/organized-crimes/store";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
@@ -40,19 +47,53 @@ export default async function OrganizedCrimesPage() {
   // One server timestamp drives every "now"-relative label so the client's
   // first render matches this HTML exactly (no hydration text mismatch).
   const nowMs = new Date().getTime();
-  const reviews = reviewMembers(
-    roster.available ? roster.data : [],
-    allIntel,
-    live,
-    history,
-    nowMs,
-    settings.minimumCpr,
-  );
+  const rosterMembers = roster.available ? roster.data : [];
+
+  // Faction-key OC intelligence: the capability matrix, member OC profiles and
+  // per-scenario stats mined from completed crimes + live assignments + shared
+  // snapshots. Needs no member setup.
+  const factionIntel = buildFactionOcIntel(live, history, allIntel, nowMs);
+  const factionHealth = computeFactionHealth(factionIntel, history, nowMs);
+  const reviews = reviewMembers(rosterMembers, allIntel, live, history, nowMs, settings.minimumCpr, factionIntel);
+
+  // Team optimiser: for every Recruiting/Planning crime with an open slot,
+  // propose the best assignment of currently-unassigned members.
+  const assignedMemberIds = new Set<number>();
+  for (const crime of factionIntel.activeCrimes) {
+    for (const slot of crime.slots) if (slot.user) assignedMemberIds.add(slot.user.id);
+  }
+  const candidates = rosterMembers
+    .filter((member) => !assignedMemberIds.has(member.tornId))
+    .map((member) => ({ tornUserId: member.tornId, name: member.name }));
+
+  // Fill the highest-difficulty / most-gapped crimes first, and never propose
+  // the same member for two different crimes — remove each proposed member from
+  // the pool before optimising the next crime.
+  const fillQueue = canReview
+    ? factionIntel.activeCrimes
+        .filter((crime) => crime.slots.some((slot) => !slot.user))
+        .filter((crime) => normStatus(crime.status) !== "expired")
+        .sort((a, b) => b.difficulty - a.difficulty || a.id - b.id)
+    : [];
+  const crimeFills: ReturnType<typeof optimiseCrimeAssignment>[] = [];
+  const takenMemberIds = new Set(assignedMemberIds);
+  for (const crime of fillQueue) {
+    const pool = candidates.filter((member) => !takenMemberIds.has(member.tornUserId));
+    const fill = optimiseCrimeAssignment(crime, pool, factionIntel.matrix, {
+      minimumCpr: settings.minimumCpr,
+      scenario: factionIntel.scenarios.get(scenarioKeyOf(crime.name, crime.difficulty)) ?? null,
+      now: nowMs,
+    });
+    for (const slot of fill.slots) if (slot.assignee) takenMemberIds.add(slot.assignee.tornUserId);
+    crimeFills.push(fill);
+  }
+  crimeFills.sort((a, b) => b.difficulty - a.difficulty || b.gaps - a.gaps || a.crimeId - b.crimeId);
+
+  const scenarioList = [...factionIntel.scenarios.values()].sort((a, b) => b.samples - a.samples || b.difficulty - a.difficulty);
   const ownIntel = allIntel.find((record) => record.tornUserId === actor.tornUserId) ?? null;
 
   // The client fires an auto-refresh only when the member opted in and the last
-  // push (auto or manual) is older than the window. Deciding it here keeps the
-  // client effect a single guarded call.
+  // push (auto or manual) is older than the window.
   const AUTO_SHARE_STALE_MS = 12 * 60 * 60 * 1_000;
   const autoShareReference = sharePref.lastAutoShareAt ?? ownIntel?.statsAt ?? null;
   const autoShareDue = sharePref.autoShare
@@ -67,6 +108,9 @@ export default async function OrganizedCrimesPage() {
       currentUser={{ tornUserId: actor.tornUserId, name: actor.name }}
       autoShare={{ enabled: sharePref.autoShare, due: autoShareDue }}
       settings={settings}
+      crimeFills={canReview ? crimeFills : null}
+      scenarios={canReview ? scenarioList : null}
+      health={canReview ? factionHealth : null}
       feeds={{
         live: { available: live.available, complete: live.complete, fetchedAt: live.fetchedAt, message: live.message, crimeCount: live.crimes.length },
         history: { available: history.available, complete: history.complete, fetchedAt: history.fetchedAt, message: history.message, crimeCount: history.crimes.length },

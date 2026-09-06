@@ -6,8 +6,8 @@ import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { collectOwnRoles } from "./intelligence";
 import { crimeSchema, type BattleStats, type CrimeFeed, type OrganizedCrime, type RoleObservation } from "./types";
 
-const MAX_PAGES = 10;
-const MAX_CRIMES = 1_000;
+const MAX_PAGES = { available: 10, completed: 20 } as const;
+const MAX_CRIMES = 2_000;
 
 export interface OwnOcIntelDraft {
   stats: BattleStats;
@@ -41,7 +41,7 @@ export const getCrimeFeed = cache(async (category: "available" | "completed"): P
     let complete = false;
     let dropped = 0;
 
-    for (let page = 0; page < MAX_PAGES; page += 1) {
+    for (let page = 0; page < MAX_PAGES[category]; page += 1) {
       const { value, fetchedAt: at } = await connection.client.getOrganizedCrimes(category, offset);
       fetchedAt = at;
       for (const raw of value.crimes) {
@@ -102,16 +102,32 @@ export const getOwnOcIntelDraft = cache(async (): Promise<OwnOcIntelResult> => {
   const stats: BattleStats = { strength, defense, speed, dexterity, total };
   const source: "torn" | "offline" = connection.client.dataMode === "offline" ? "offline" : "torn";
 
-  const live = await getCrimeFeed("available");
+  // The member's OWN key still sees real CPR on empty Recruiting slots via
+  // `/user/organizedcrimes` — the faction endpoint zeroed that in June 2026.
   const observedAt = new Date().toISOString();
-  const roles = live.available
-    ? collectOwnRoles(live.crimes, connection.tornUserId, observedAt)
-    : [];
-  const rolesMessage = !live.available
-    ? "Current OC slots could not be read, so no live role evidence was shared."
-    : roles.length > 0
-      ? `${roles.length} live checkpoint pass rate${roles.length === 1 ? "" : "s"} captured from open OC slots.`
-      : "No open OC slots currently expose a checkpoint pass rate for your key.";
+  let roles: RoleObservation[] = [];
+  let rolesState: "ok" | "no-permission" | "unreadable" = "ok";
+  try {
+    const own = await connection.client.getMyOrganizedCrimes();
+    const parsed: OrganizedCrime[] = [];
+    for (const raw of own.value.organizedcrimes) {
+      const row = crimeSchema.safeParse(raw);
+      if (row.success) parsed.push(row.data);
+    }
+    roles = collectOwnRoles(parsed, connection.tornUserId, observedAt);
+  } catch (error: unknown) {
+    // A key without the `organizedcrimes` selection still shares battle stats;
+    // so does a transient Torn failure — we just note which happened.
+    rolesState = error instanceof TornApiError && error.category === "INSUFFICIENT_PERMISSION" ? "no-permission" : "unreadable";
+    roles = [];
+  }
+  const rolesMessage = rolesState === "no-permission"
+    ? "Your key does not include the organized-crimes selection, so only battle stats were shared."
+    : rolesState === "unreadable"
+      ? "Your live checkpoint pass rates could not be read from Torn just now, so only battle stats were shared."
+      : roles.length > 0
+        ? `${roles.length} live checkpoint pass rate${roles.length === 1 ? "" : "s"} captured from your open OC slots.`
+        : "No open OC slots currently expose a checkpoint pass rate for your key.";
 
   return {
     ok: true,
