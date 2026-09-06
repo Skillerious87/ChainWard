@@ -703,7 +703,6 @@ input[type="checkbox"] { width: 14px; height: 14px; margin: 0; accent-color: var
 .connection-result dt { color: var(--text-muted); }
 .connection-result dd { display: flex; align-items: center; gap: 3px; margin: 0; color: var(--text-secondary); }
 .connect-submit { width: 100%; margin-top: 17px; }
-.connect-submit span { margin-left: auto; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .privacy-disclosure { width: min(100% - 44px, 1120px); margin: 0 auto; padding: 30px 0 70px; border-top: 1px solid var(--border); }

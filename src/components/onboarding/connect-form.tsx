@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import { useState, type FormEvent } from "react";
-import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { enterConnectedWorkspace } from "./workspace-navigation";
 
@@ -140,7 +139,20 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
         {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
 
-        <button type="submit" className="button button--primary connect-submit" disabled={loading}>{loading ? <><Spinner size={16} label="Verifying Torn connection" /> Verifying securely…</> : <>Enter workspace <ArrowRight size={16} /></>}</button>
+        <button type="submit" className="button button--primary connect-submit" data-state={loading ? "loading" : "idle"} disabled={loading}>
+          <span className="connect-submit__text">
+            <span key={loading ? "verifying" : "enter"}>{loading ? "Verifying securely…" : "Enter workspace"}</span>
+          </span>
+          <span className="connect-submit__ind" aria-hidden="true">
+            <ArrowRight className="connect-submit__arrow" size={16} />
+            <span className="connect-submit__spin">
+              <svg className="connect-submit__spin-svg" viewBox="0 0 20 20">
+                <circle className="connect-submit__spin-track" cx="10" cy="10" r="7" />
+                <circle className="connect-submit__spin-head" cx="10" cy="10" r="7" pathLength={100} />
+              </svg>
+            </span>
+          </span>
+        </button>
 
         <details className="connect-details">
           <summary><ShieldCheck size={14} /> How your key is used <ChevronDown size={15} /></summary>

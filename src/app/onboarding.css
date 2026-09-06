@@ -269,22 +269,120 @@
 .login-remember input:focus-visible + .login-remember__track { outline: 2px solid rgba(var(--accent-rgb), .6); outline-offset: 3px; }
 .connect-form--validating .login-remember { border-color: #3a493f; opacity: .7; }
 
-/* --- Submit -------------------------------------------- */
+/* --- Submit -------------------------------------------------------------------
+   A calm, self-contained loading button.
+
+     idle      [            Enter workspace   →            ]
+     loading   [        Verifying securely…        ⟳        ]
+
+   Layout is deliberately rigid so nothing can drift:
+   • the button is a centred flexbox with exactly one in-flow child, the text;
+   • the trailing arrow + spinner share one fixed 18px cell pinned to the right,
+     out of flow, so they trade places without touching the text;
+   • on loading the text eases left to clear that cell, the arrow leaves to the
+     right, and the spinner glides in from the right and settles with a small
+     spring while its own ring rotates.
+   ------------------------------------------------------------------------- */
 .login-card .connect-submit {
+  position: relative;
   display: flex;
   width: 100%;
   min-height: 52px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   margin-top: 20px;
+  padding-inline: 22px;
+  overflow: hidden;
   border-radius: 12px;
   font-size: 13px;
-  font-weight: 640;
+  font-weight: 650;
+  letter-spacing: .1px;
   box-shadow: 0 14px 34px -12px rgba(var(--accent-rgb), .5);
 }
-.login-card .connect-submit svg:last-child { transition: transform .16s ease; }
-.login-card .connect-submit:hover:not(:disabled) svg:last-child { transform: translateX(3px); }
+.login-card .connect-submit[data-state="loading"] { cursor: progress; }
+
+/* Text — the only thing in normal flow. Stays mounted so its slide is one
+   continuous move; the inner node remounts to blur-fade the wording swap. */
+.login-card .connect-submit__text {
+  display: inline-flex;
+  margin: 0;
+  white-space: nowrap;
+  transition: transform .44s cubic-bezier(.5, 0, .18, 1);
+  will-change: transform;
+}
+.login-card .connect-submit[data-state="loading"] .connect-submit__text { transform: translateX(-13px); }
+.login-card .connect-submit__text > span {
+  display: inline-block;
+  animation: connect-submit-swap .32s cubic-bezier(.22, .7, .3, 1);
+}
+@keyframes connect-submit-swap {
+  from { opacity: 0; filter: blur(3px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+/* Trailing cell — fixed size, pinned right, out of flow. */
+.login-card .connect-submit__ind {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.login-card .connect-submit__ind > * { grid-area: 1 / 1; place-self: center; }
+
+.login-card .connect-submit__arrow {
+  transition: transform .32s cubic-bezier(.5, 0, .2, 1), opacity .2s ease;
+}
+.login-card .connect-submit:hover:not(:disabled) .connect-submit__arrow { transform: translateX(3px); }
+.login-card .connect-submit[data-state="loading"] .connect-submit__arrow {
+  opacity: 0;
+  transform: translateX(16px) scale(.5);
+}
+
+/* Wrapper carries the glide-in; the inner <svg> spins on its own axis so the
+   two transforms never collide. */
+.login-card .connect-submit__spin {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  transform: translateX(22px) scale(.55);
+  transition: transform .5s cubic-bezier(.34, 1.5, .42, 1), opacity .28s ease;
+  will-change: transform;
+}
+.login-card .connect-submit[data-state="loading"] .connect-submit__spin {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+.login-card .connect-submit__spin-svg {
+  width: 18px;
+  height: 18px;
+  animation: connect-submit-spin .68s linear infinite;
+}
+.login-card .connect-submit__spin circle {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.login-card .connect-submit__spin-track { stroke: rgba(8, 14, 4, .2); }
+.login-card .connect-submit__spin-head { stroke: #0b1206; stroke-dasharray: 66 100; }
+@keyframes connect-submit-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card .connect-submit__text,
+  .login-card .connect-submit__arrow,
+  .login-card .connect-submit__spin { transition: opacity .16s ease; }
+  .login-card .connect-submit[data-state="loading"] .connect-submit__text { transform: none; }
+  .login-card .connect-submit[data-state="loading"] .connect-submit__arrow { transform: none; }
+  .login-card .connect-submit__spin,
+  .login-card .connect-submit[data-state="loading"] .connect-submit__spin { transform: none; }
+  .login-card .connect-submit__spin-svg { animation-duration: 1.1s; }
+  .login-card .connect-submit__text > span { animation: none; }
+}
 
 /* --- Error ------------------------------------------- */
 .login-card .form-error {
@@ -408,5 +506,5 @@
 @media (prefers-reduced-motion: reduce) {
   .login-shell,
   .login-backdrop__aurora { animation: none !important; }
-  .login-card .connect-submit:hover:not(:disabled) svg:last-child { transform: none; }
+  .login-card .connect-submit:hover:not(:disabled) .connect-submit__arrow { transform: none; }
 }
