@@ -175,6 +175,11 @@
 
 /* ===========================================================================
    Phone (<= 760px): the shared table collapses to stacked cards.
+   Selectors are `.member-activity-workspace`-prefixed so they outrank the
+   shared `mobile.css` rule `.table-scroll > .data-table { width: max-content }`
+   (specificity 0,2,0) and `globals.css`'s `.data-table { min-width: 700px }`.
+   Without the prefix the table keeps its desktop width and the right-hand
+   columns are clipped off-screen.
    =========================================================================== */
 @media (max-width: 760px) {
   .mbs-stack { gap: 12px; }
@@ -191,27 +196,38 @@
   .mbs-sort-row::-webkit-scrollbar { display: none; }
   .mbs-sort-row button { flex: 0 0 auto; min-height: 34px; }
 
-  .mbs-review__table { display: block; width: 100%; min-width: 0; }
-  .mbs-review__table thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
-  .mbs-review__table tbody { display: flex; flex-direction: column; gap: 10px; }
-  .mbs-review__table tr {
+  /* Card-collapse: kill the horizontal scroll boundary and let the table flow. */
+  .member-activity-workspace .mbs-review__scroll { overflow: visible; }
+  .member-activity-workspace .table-scroll .mbs-review__table,
+  .member-activity-workspace .mbs-review__table {
+    display: block; width: 100%; min-width: 0; white-space: normal;
+  }
+  .member-activity-workspace .mbs-review__table thead {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0);
+  }
+  .member-activity-workspace .mbs-review__table tbody { display: flex; flex-direction: column; gap: 10px; }
+  .member-activity-workspace .mbs-review__table tr {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px;
     padding: 14px; border: 1px solid var(--border-strong); border-radius: 13px;
     background: linear-gradient(150deg, rgba(255, 255, 255, .022), transparent 45%), #10161a;
   }
-  .mbs-review__table tbody tr:hover { box-shadow: none; }
-  .mbs-review__table td {
+  .member-activity-workspace .mbs-review__table tbody tr:hover { box-shadow: none; }
+  .member-activity-workspace .mbs-review__table td {
     display: flex; flex-direction: column; gap: 3px; height: auto; min-height: 0; min-width: 0;
-    padding: 0; border: 0; white-space: normal; text-align: left !important;
+    padding: 0; border: 0; white-space: normal; text-align: left !important; overflow-wrap: anywhere;
   }
-  .mbs-review__table td::before {
+  .member-activity-workspace .mbs-review__table td::before {
     content: attr(data-label); color: var(--text-muted);
     font-size: 9px; font-weight: 720; letter-spacing: .6px; text-transform: uppercase;
   }
-  .mbs-review__table td[data-label="Member"] { grid-column: 1 / -1; }
-  .mbs-review__table td[data-label="Rank"] { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 7px; }
-  .mbs-review__table td[data-label="Actions"] { grid-column: 1 / -1; }
-  .mbs-review__table td[data-label="Actions"] .button { width: 100%; min-height: 42px; justify-content: center; }
-  .mbs-statcell { min-width: 0; }
-  .mbs-statcell__bar { width: 100%; max-width: none; }
+  .member-activity-workspace .mbs-review__table td[data-label="Member"] { grid-column: 1 / -1; }
+  .member-activity-workspace .mbs-review__table td[data-label="Rank"] { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 7px; }
+  .member-activity-workspace .mbs-review__table td[data-label="Rank"]::before { align-self: center; }
+  .member-activity-workspace .mbs-review__table td[data-label="Shared"] { grid-column: 1 / -1; }
+  .member-activity-workspace .mbs-review__table td[data-label="Actions"] { grid-column: 1 / -1; }
+  .member-activity-workspace .mbs-review__table td[data-label="Actions"] .button { width: 100%; min-height: 42px; justify-content: center; }
+  .member-activity-workspace .mbs-statcell { min-width: 0; }
+  .member-activity-workspace .mbs-statcell__bar { width: 100%; max-width: none; }
+  .member-activity-workspace .mbs-review__table td.mbs-num,
+  .member-activity-workspace .mbs-review__table td.mbs-rank { text-align: left; }
 }

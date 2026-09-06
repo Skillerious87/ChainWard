@@ -124,6 +124,10 @@
 
 /* ===========================================================================
    Phone (<= 760px): the table collapses to stacked cards.
+   Selectors are `.targets-workspace`-prefixed so they outrank the shared
+   `mobile.css` rule `.table-scroll > .data-table { width: max-content }`
+   (0,2,0) and `globals.css`'s `.data-table { min-width: 700px }`; without the
+   prefix the table keeps its desktop width and the right columns are clipped.
    =========================================================================== */
 @media (max-width: 760px) {
   .targets-kpis { grid-template-columns: 1fr 1fr; }
@@ -134,27 +138,34 @@
   .targets-sort::-webkit-scrollbar { display: none; }
   .targets-sort button { flex: 0 0 auto; min-height: 34px; }
 
-  .targets-table { display: block; width: 100%; min-width: 0; }
-  .targets-table thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
-  .targets-table tbody { display: flex; flex-direction: column; gap: 10px; }
-  .targets-table tr {
+  .targets-workspace .targets-table-scroll { overflow: visible; }
+  .targets-workspace .table-scroll .targets-table,
+  .targets-workspace .targets-table {
+    display: block; width: 100%; min-width: 0; white-space: normal;
+  }
+  .targets-workspace .targets-table thead {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0);
+  }
+  .targets-workspace .targets-table tbody { display: flex; flex-direction: column; gap: 10px; }
+  .targets-workspace .targets-table tr {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px;
     padding: 14px; border: 1px solid var(--border-strong); border-radius: 13px;
     background: linear-gradient(150deg, rgba(255, 255, 255, .022), transparent 45%), #10161a;
   }
-  .targets-row--attackable { border-color: rgba(103, 211, 145, .4); }
-  .targets-row--attackable td:first-child { box-shadow: none; }
-  .targets-table td {
+  .targets-workspace .targets-row--attackable { border-color: rgba(103, 211, 145, .4); }
+  .targets-workspace .targets-row--attackable td:first-child { box-shadow: none; }
+  .targets-workspace .targets-table td {
     display: flex; flex-direction: column; gap: 3px; height: auto; min-height: 0; min-width: 0;
-    padding: 0; border: 0; white-space: normal; text-align: left !important;
+    padding: 0; border: 0; white-space: normal; text-align: left !important; overflow-wrap: anywhere;
   }
-  .targets-table td::before {
+  .targets-workspace .targets-table td.targets-num { text-align: left; }
+  .targets-workspace .targets-table td::before {
     content: attr(data-label); color: var(--text-muted);
     font-size: 9px; font-weight: 720; letter-spacing: .6px; text-transform: uppercase;
   }
-  .targets-table td[data-label="Target"] { grid-column: 1 / -1; }
-  .targets-table td[data-label="Note"] { grid-column: 1 / -1; }
-  .targets-table td[data-label="Actions"] { grid-column: 1 / -1; flex-direction: row; }
-  .targets-note, .targets-note-input { max-width: none; width: 100%; }
-  .targets-life { min-width: 0; width: 100%; }
+  .targets-workspace .targets-table td[data-label="Target"] { grid-column: 1 / -1; }
+  .targets-workspace .targets-table td[data-label="Note"] { grid-column: 1 / -1; }
+  .targets-workspace .targets-table td[data-label="Actions"] { grid-column: 1 / -1; flex-direction: row; }
+  .targets-workspace .targets-note, .targets-workspace .targets-note-input { max-width: none; width: 100%; }
+  .targets-workspace .targets-life { min-width: 0; width: 100%; }
 }
