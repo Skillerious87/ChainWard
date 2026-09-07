@@ -8,13 +8,21 @@ import { z } from "zod";
  */
 
 export const MAX_TARGETS = 40;
+export const MAX_TAGS_PER_TARGET = 6;
+export const MAX_TAG_LENGTH = 24;
 /** A snapshot older than this is refreshed on the next page load. */
 export const TARGET_STALE_MS = 90_000;
+
+export const targetTagSchema = z.string().trim().toLowerCase().min(1).max(MAX_TAG_LENGTH).regex(/^[a-z0-9][a-z0-9 _-]*$/);
 
 export const targetEntrySchema = z.object({
   tornUserId: z.number().int().positive(),
   label: z.string().trim().max(60).default(""),
   note: z.string().trim().max(280).default(""),
+  /** Pinned targets sort to the top of every view. */
+  pinned: z.boolean().default(false),
+  /** Freeform organisation labels ("war", "farm", "watch"). */
+  tags: z.array(targetTagSchema).max(MAX_TAGS_PER_TARGET).default([]),
   addedAt: z.string().datetime(),
 });
 
@@ -23,6 +31,13 @@ export const targetStatusSchema = z.object({
   state: z.string().default(""),
   until: z.number().int().nonnegative().nullable().default(null),
   color: z.string().default(""),
+});
+
+/** The operator's most recent attack against this target, from their own log. */
+export const targetLastHitSchema = z.object({
+  at: z.number().int().nonnegative(),
+  result: z.string().default(""),
+  respect: z.number().default(0),
 });
 
 export const targetSnapshotSchema = z.object({
@@ -35,9 +50,14 @@ export const targetSnapshotSchema = z.object({
   status: targetStatusSchema,
   lastActionAt: z.number().int().nonnegative().default(0),
   lastActionRelative: z.string().default(""),
+  lastActionStatus: z.string().default(""),
   lifeCurrent: z.number().int().nonnegative().default(0),
   lifeMaximum: z.number().int().nonnegative().default(0),
   attackable: z.boolean().default(false),
+  /** The operator's last attack on this target, or null if none in the log. */
+  lastHit: targetLastHitSchema.nullable().default(null),
+  /** This target has attacked the operator more recently than the operator hit them. */
+  hitYouBack: z.boolean().default(false),
   fetchedAt: z.string().datetime(),
 });
 
@@ -48,7 +68,24 @@ export const targetListSchema = z.object({
 
 export type TargetEntry = z.infer<typeof targetEntrySchema>;
 export type TargetSnapshot = z.infer<typeof targetSnapshotSchema>;
+export type TargetLastHit = z.infer<typeof targetLastHitSchema>;
 export type TargetList = z.infer<typeof targetListSchema>;
+
+/** Normalises a raw tag string; returns null when nothing usable remains. */
+export function normaliseTag(raw: string): string | null {
+  const value = raw.trim().toLowerCase().replace(/[^a-z0-9 _-]/g, "").replace(/\s+/g, " ").slice(0, MAX_TAG_LENGTH).trim();
+  return value.length > 0 ? value : null;
+}
+
+/** Parses a block of pasted IDs / profile links into a de-duplicated id list. */
+export function parseTornUserIdList(raw: string): number[] {
+  const ids = new Set<number>();
+  for (const token of raw.split(/[\s,;]+/)) {
+    const id = parseTornUserId(token);
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
 
 /** A target is attackable only when they are in the "Okay" state. */
 export function isAttackableState(state: string): boolean {

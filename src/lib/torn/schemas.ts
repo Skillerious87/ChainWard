@@ -230,9 +230,33 @@ export const factionMembersResponseSchema = z.object({
 });
 
 export type KeyInfoResponse = z.infer<typeof keyInfoResponseSchema>;
+// `/user/attacks` — the operator's own recent attack log (attacker or defender).
+// `.loose()` throughout and every field defaulted: stealthed rows can null the
+// opposite party, and Torn keeps adding modifier keys.
+const attackParticipantSchema = z.object({
+  id: z.number().int().nonnegative().catch(0),
+  name: z.string().default(""),
+  faction: z.object({ id: z.number().int().nonnegative().catch(0), name: z.string().default("") }).loose().nullable().catch(null),
+}).loose().nullable().catch(null);
+
+export const userAttacksResponseSchema = z.object({
+  attacks: z.array(z.object({
+    id: z.union([z.number(), z.string()]).catch(0),
+    started: unixTimestamp.catch(0),
+    ended: unixTimestamp.catch(0),
+    attacker: attackParticipantSchema,
+    defender: attackParticipantSchema,
+    result: z.string().default(""),
+    respect_gain: z.number().catch(0),
+    respect_loss: z.number().catch(0),
+    chain: z.number().int().nonnegative().catch(0),
+  }).loose()).default([]),
+}).loose();
+
 export type UserBasicResponse = z.infer<typeof userBasicResponseSchema>;
 export type UserProfileResponse = z.infer<typeof userProfileResponseSchema>;
 export type UserProfileByIdResponse = z.infer<typeof userProfileByIdResponseSchema>;
+export type UserAttacksResponse = z.infer<typeof userAttacksResponseSchema>;
 export type FactionBasicResponse = z.infer<typeof factionBasicResponseSchema>;
 export type OngoingChainResponse = z.infer<typeof ongoingChainResponseSchema>;
 export type ChainsResponse = z.infer<typeof chainsResponseSchema>;

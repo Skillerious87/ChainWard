@@ -28,7 +28,15 @@ vi.mock("@/lib/targets/store", async () => {
   };
 });
 
-import { addTargetAction, refreshTargetsAction, removeTargetAction, updateTargetNoteAction } from "./actions";
+import {
+  addTargetAction,
+  importTargetsAction,
+  refreshTargetsAction,
+  removeTargetAction,
+  setTargetPinnedAction,
+  setTargetTagsAction,
+  updateTargetNoteAction,
+} from "./actions";
 
 const AUTH = { actor: { tornUserId: 555, name: "Me" }, faction: { id: 42, name: "Faction", tag: "F" }, role: "OWNER" as const };
 const CLIENT = { dataMode: "torn" as const };
@@ -159,5 +167,57 @@ describe("refreshTargetsAction", () => {
     const result = await refreshTargetsAction();
     expect(result).toEqual({ ok: true, message: "Your target list is empty." });
     expect(mocks.refreshTargets).not.toHaveBeenCalled();
+  });
+});
+
+function entry(tornUserId: number) {
+  return { tornUserId, label: `T${tornUserId}`, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() };
+}
+
+describe("setTargetPinnedAction", () => {
+  it("pins an existing target", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [entry(900)], snapshots: {} });
+    const result = await setTargetPinnedAction({ tornUserId: 900, pinned: true });
+    expect(result.ok).toBe(true);
+    const [, , written] = mocks.writeTargetList.mock.calls[0]!;
+    expect(written.entries[0].pinned).toBe(true);
+  });
+
+  it("rejects a target that is not on the list", async () => {
+    const result = await setTargetPinnedAction({ tornUserId: 900, pinned: true });
+    expect(result.ok).toBe(false);
+    expect(mocks.writeTargetList).not.toHaveBeenCalled();
+  });
+});
+
+describe("setTargetTagsAction", () => {
+  it("normalises, de-duplicates and caps tags", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [entry(900)], snapshots: {} });
+    const result = await setTargetTagsAction({ tornUserId: 900, tags: ["War ", "war", "Farm!!", "watch", "b", "c"] });
+    expect(result.ok).toBe(true);
+    const [, , written] = mocks.writeTargetList.mock.calls[0]!;
+    expect(written.entries[0].tags).toEqual(["war", "farm", "watch", "b", "c"]);
+  });
+});
+
+describe("importTargetsAction", () => {
+  it("adds every parseable id, skipping self and duplicates", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [entry(111)], snapshots: {} });
+    mocks.fetchTargetSnapshot.mockImplementation((_client: unknown, id: number) => Promise.resolve(snapshot(id)));
+
+    const result = await importTargetsAction({ text: "111\n222\nhttps://www.torn.com/profiles.php?XID=333\n555\nnot-an-id" });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 222);
+    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 333);
+    expect(mocks.fetchTargetSnapshot).not.toHaveBeenCalledWith(CLIENT, 555);
+    const [, , written] = mocks.writeTargetList.mock.calls[0]!;
+    expect(written.entries.map((e: { tornUserId: number }) => e.tornUserId).sort()).toEqual([111, 222, 333]);
+  });
+
+  it("rejects a blob with no ids", async () => {
+    const result = await importTargetsAction({ text: "nothing useful here" });
+    expect(result.ok).toBe(false);
+    expect(mocks.fetchTargetSnapshot).not.toHaveBeenCalled();
   });
 });

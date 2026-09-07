@@ -4,11 +4,14 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLocalDatabase } from "@/lib/data/local-database";
 import {
+  addTargetEntries,
   addTargetEntry,
   mergeSnapshots,
   readTargetList,
   removeTargetEntry,
   setTargetNote,
+  setTargetPinned,
+  setTargetTags,
   writeTargetList,
 } from "./store";
 import { MAX_TARGETS, type TargetEntry, type TargetList, type TargetSnapshot } from "./types";
@@ -17,15 +20,16 @@ const faction = { id: 51393, name: "Prive Cartel", tag: "PC" };
 const OPERATOR = 3_212_954;
 
 function entry(tornUserId: number): TargetEntry {
-  return { tornUserId, label: `Target ${tornUserId}`, note: "", addedAt: new Date().toISOString() };
+  return { tornUserId, label: `Target ${tornUserId}`, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() };
 }
 
 function snapshot(tornUserId: number): TargetSnapshot {
   return {
     tornUserId, name: `Target ${tornUserId}`, level: 30, factionId: null, factionName: "", position: "",
     status: { description: "Okay", state: "Okay", until: null, color: "green" },
-    lastActionAt: 1_700_000_000, lastActionRelative: "1 hour ago", lifeCurrent: 100, lifeMaximum: 100,
-    attackable: true, fetchedAt: new Date().toISOString(),
+    lastActionAt: 1_700_000_000, lastActionRelative: "1 hour ago", lastActionStatus: "Offline",
+    lifeCurrent: 100, lifeMaximum: 100, attackable: true, lastHit: null, hitYouBack: false,
+    fetchedAt: new Date().toISOString(),
   };
 }
 
@@ -92,5 +96,28 @@ describe.sequential("targets store", () => {
     for (let i = 1; i <= MAX_TARGETS; i += 1) list = addTargetEntry(list, entry(i));
     expect(list.entries).toHaveLength(MAX_TARGETS);
     expect(() => addTargetEntry(list, entry(MAX_TARGETS + 1))).toThrow(`at most ${MAX_TARGETS}`);
+  });
+
+  it("toggles pin state and edits tags in place", async () => {
+    useTempDatabase("targets-pin-tags");
+    await writeTargetList(faction, OPERATOR, { entries: [entry(11)], snapshots: {} });
+    let list = await readTargetList(faction.id, OPERATOR);
+    await writeTargetList(faction, OPERATOR, setTargetPinned(list, 11, true));
+    await writeTargetList(faction, OPERATOR, setTargetTags(await readTargetList(faction.id, OPERATOR), 11, ["war", "priority"]));
+
+    list = await readTargetList(faction.id, OPERATOR);
+    expect(list.entries[0]!.pinned).toBe(true);
+    expect(list.entries[0]!.tags).toEqual(["war", "priority"]);
+  });
+
+  it("bulk-adds up to the cap and reports skips", () => {
+    const start: TargetList = { entries: [entry(1), entry(2)], snapshots: {} };
+    const many = Array.from({ length: MAX_TARGETS }, (_, i) => entry(i + 1));
+    const result = addTargetEntries(start, many);
+    expect(result.added).toBe(MAX_TARGETS - 2);
+    expect(result.skipped).toBe(2);
+    expect(result.capped).toBe(0);
+    expect(result.list.entries).toHaveLength(MAX_TARGETS);
+    expect(addTargetEntries(result.list, [entry(999)]).capped).toBe(1);
   });
 });

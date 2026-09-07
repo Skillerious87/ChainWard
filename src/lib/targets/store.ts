@@ -94,11 +94,38 @@ export function removeTargetEntry(list: TargetList, tornUserId: number): TargetL
   return { entries: list.entries.filter((entry) => entry.tornUserId !== tornUserId), snapshots };
 }
 
-export function setTargetNote(list: TargetList, tornUserId: number, note: string): TargetList {
+function patchEntry(list: TargetList, tornUserId: number, patch: Partial<TargetEntry>): TargetList {
   return {
-    entries: list.entries.map((entry) => (entry.tornUserId === tornUserId ? { ...entry, note } : entry)),
+    entries: list.entries.map((entry) => (entry.tornUserId === tornUserId ? { ...entry, ...patch } : entry)),
     snapshots: { ...list.snapshots },
   };
+}
+
+export function setTargetNote(list: TargetList, tornUserId: number, note: string): TargetList {
+  return patchEntry(list, tornUserId, { note });
+}
+
+export function setTargetPinned(list: TargetList, tornUserId: number, pinned: boolean): TargetList {
+  return patchEntry(list, tornUserId, { pinned });
+}
+
+export function setTargetTags(list: TargetList, tornUserId: number, tags: string[]): TargetList {
+  return patchEntry(list, tornUserId, { tags });
+}
+
+/** Adds as many of the given entries as the cap allows, skipping duplicates. */
+export function addTargetEntries(list: TargetList, entries: TargetEntry[]): { list: TargetList; added: number; skipped: number; capped: number } {
+  const known = new Set(list.entries.map((entry) => entry.tornUserId));
+  const next = [...list.entries];
+  let added = 0, skipped = 0, capped = 0;
+  for (const entry of entries) {
+    if (known.has(entry.tornUserId)) { skipped += 1; continue; }
+    if (next.length >= MAX_TARGETS) { capped += 1; continue; }
+    next.push(entry);
+    known.add(entry.tornUserId);
+    added += 1;
+  }
+  return { list: { entries: next, snapshots: { ...list.snapshots } }, added, skipped, capped };
 }
 
 export function mergeSnapshots(list: TargetList, snapshots: TargetSnapshot[]): TargetList {

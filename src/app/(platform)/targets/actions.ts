@@ -8,15 +8,24 @@ import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { fetchTargetSnapshot, refreshTargets } from "@/lib/targets/data-service";
 import {
+  addTargetEntries,
   addTargetEntry,
   mergeSnapshots,
   readTargetList,
   removeTargetEntry,
   setTargetNote,
+  setTargetPinned,
+  setTargetTags,
   targetsStorageAvailable,
   writeTargetList,
 } from "@/lib/targets/store";
-import { parseTornUserId } from "@/lib/targets/types";
+import {
+  MAX_TAGS_PER_TARGET,
+  normaliseTag,
+  parseTornUserId,
+  parseTornUserIdList,
+  type TargetEntry,
+} from "@/lib/targets/types";
 
 export interface TargetsActionResult {
   ok: boolean;
@@ -27,8 +36,11 @@ const addSchema = z.object({
   reference: z.string().trim().min(1).max(120),
   note: z.string().trim().max(280).optional(),
 });
+const importSchema = z.object({ text: z.string().trim().min(1).max(4_000) });
 const removeSchema = z.object({ tornUserId: z.number().int().positive() });
 const noteSchema = z.object({ tornUserId: z.number().int().positive(), note: z.string().trim().max(280) });
+const pinnedSchema = z.object({ tornUserId: z.number().int().positive(), pinned: z.boolean() });
+const tagsSchema = z.object({ tornUserId: z.number().int().positive(), tags: z.array(z.string().max(40)).max(MAX_TAGS_PER_TARGET) });
 
 async function operatorContext() {
   const { actor } = await requireFactionPermission("faction:view");
@@ -64,6 +76,8 @@ export async function addTargetAction(input: unknown): Promise<TargetsActionResu
       tornUserId,
       label: snapshot.name,
       note: parsed.data.note?.trim() ?? "",
+      pinned: false,
+      tags: [],
       addedAt: new Date().toISOString(),
     });
     await writeTargetList(faction, operatorId, mergeSnapshots(withEntry, [snapshot]));
@@ -91,6 +105,45 @@ export async function removeTargetAction(input: unknown): Promise<TargetsActionR
   }
 }
 
+export async function importTargetsAction(input: unknown): Promise<TargetsActionResult> {
+  const parsed = importSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Paste some Torn player IDs or profile links first." };
+  const ids = parseTornUserIdList(parsed.data.text);
+  if (ids.length === 0) return { ok: false, message: "No recognisable Torn player IDs or profile links were found." };
+
+  try {
+    const { operatorId, faction, client } = await operatorContext();
+    const wanted = ids.filter((id) => id !== operatorId).slice(0, 60);
+    const list = await readTargetList(faction.id, operatorId);
+
+    const newEntries: TargetEntry[] = [];
+    const snapshots = [];
+    let failed = 0;
+    for (const id of wanted) {
+      if (list.entries.some((entry) => entry.tornUserId === id)) continue;
+      try {
+        const snapshot = await fetchTargetSnapshot(client, id);
+        newEntries.push({ tornUserId: id, label: snapshot.name, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() });
+        snapshots.push(snapshot);
+      } catch {
+        failed += 1;
+      }
+    }
+
+    const { list: withEntries, added, skipped, capped } = addTargetEntries(list, newEntries);
+    if (added > 0) await writeTargetList(faction, operatorId, mergeSnapshots(withEntries, snapshots));
+    revalidatePath("/targets");
+
+    const parts = [`Added ${added}`];
+    if (skipped > 0) parts.push(`${skipped} already listed`);
+    if (failed > 0) parts.push(`${failed} not found`);
+    if (capped > 0) parts.push(`${capped} over the ${40}-target cap`);
+    return { ok: added > 0, message: `${parts.join(", ")}.` };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
 export async function updateTargetNoteAction(input: unknown): Promise<TargetsActionResult> {
   const parsed = noteSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "A target note is limited to 280 characters." };
@@ -103,6 +156,41 @@ export async function updateTargetNoteAction(input: unknown): Promise<TargetsAct
     await writeTargetList(faction, operatorId, setTargetNote(list, parsed.data.tornUserId, parsed.data.note));
     revalidatePath("/targets");
     return { ok: true, message: "Note saved." };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
+export async function setTargetPinnedAction(input: unknown): Promise<TargetsActionResult> {
+  const parsed = pinnedSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "The target to pin was not identified." };
+  try {
+    const { operatorId, faction } = await operatorContext();
+    const list = await readTargetList(faction.id, operatorId);
+    if (!list.entries.some((entry) => entry.tornUserId === parsed.data.tornUserId)) {
+      return { ok: false, message: "That player is not on your target list." };
+    }
+    await writeTargetList(faction, operatorId, setTargetPinned(list, parsed.data.tornUserId, parsed.data.pinned));
+    revalidatePath("/targets");
+    return { ok: true, message: parsed.data.pinned ? "Pinned to the top." : "Unpinned." };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
+export async function setTargetTagsAction(input: unknown): Promise<TargetsActionResult> {
+  const parsed = tagsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: `Use up to ${MAX_TAGS_PER_TARGET} short tags.` };
+  const tags = [...new Set(parsed.data.tags.map(normaliseTag).filter((tag): tag is string => tag !== null))].slice(0, MAX_TAGS_PER_TARGET);
+  try {
+    const { operatorId, faction } = await operatorContext();
+    const list = await readTargetList(faction.id, operatorId);
+    if (!list.entries.some((entry) => entry.tornUserId === parsed.data.tornUserId)) {
+      return { ok: false, message: "That player is not on your target list." };
+    }
+    await writeTargetList(faction, operatorId, setTargetTags(list, parsed.data.tornUserId, tags));
+    revalidatePath("/targets");
+    return { ok: true, message: "Tags saved." };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }

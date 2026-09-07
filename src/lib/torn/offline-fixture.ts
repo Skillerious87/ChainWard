@@ -32,7 +32,7 @@ export function offlineConnection(identity: OfflineIdentity): ValidatedTornConne
     key: {
       accessType: "Offline test fixture",
       hasFactionPermission: true,
-      selections: ["basic", "chain", "chains", "chainreport", "members", "battlestats"],
+      selections: ["basic", "chain", "chains", "chainreport", "members", "battlestats", "attacks"],
     },
     capabilities: {
       identity: "verified",
@@ -60,13 +60,14 @@ export function createOfflineFixtureFetch(apiKey: string): typeof fetch {
 
     if (path.endsWith("/key/info")) return json({
       info: {
-        selections: { faction: ["basic", "chain", "chains", "chainreport", "members"], user: ["basic", "profile", "battlestats"], key: ["info"] },
+        selections: { faction: ["basic", "chain", "chains", "chainreport", "members"], user: ["basic", "profile", "battlestats", "attacks"], key: ["info"] },
         access: { level: 2, type: "Limited Access", faction: true, company: false },
         user: { id: actor.id, faction_id: OFFLINE_FACTION.id, company_id: null },
       },
     });
     if (path.endsWith("/user/basic")) return json({ profile: profileFor(actor.id, actor.name) });
     if (path.endsWith("/user/battlestats")) return json({ battlestats: battleStats(actor.id) });
+    if (path.endsWith("/user/attacks")) return json({ attacks: myAttacks(actor.id, actor.name, now), _metadata: { links: { next: null } } });
     if (path.endsWith("/user/profile")) return json({ profile: { id: actor.id, name: actor.name, image: null } });
     const targetMatch = path.match(/\/user\/(\d+)$/);
     if (targetMatch) return json({ profile: targetProfileFor(Number(targetMatch[1]), now) });
@@ -216,6 +217,21 @@ function targetProfileFor(id: number, now: number) {
       : { faction_id: 30_000 + (id % 900), faction_name: `Rival Faction ${id % 7}`, position: id % 4 === 0 ? "Leader" : "Member", days_in_faction: 40 + (id % 400) },
     life: { current: state === "Hospital" ? 120 + (id % 200) : 4_000 + (id % 3_000), maximum: 5_000 + (id % 3_000) },
   };
+}
+
+/** `/user/attacks` — a deterministic slice of the actor's recent log so the
+ *  Targets "last hit by me" and retaliation flags have something to show. */
+function myAttacks(actorId: number, actorName: string, now: number) {
+  const me = { id: actorId, name: actorName, faction: { id: OFFLINE_FACTION.id, name: OFFLINE_FACTION.name } };
+  const foe = (id: number) => ({ id, name: `Target ${id}`, faction: { id: 30_000 + (id % 900), name: `Rival Faction ${id % 7}` } });
+  return [
+    { id: 90_000_401, started: now - 5_400, ended: now - 5_340, attacker: me, defender: foe(2_000_010), result: "Mugged", respect_gain: 14.2, respect_loss: 0, chain: 41 },
+    { id: 90_000_402, started: now - 12_600, ended: now - 12_540, attacker: me, defender: foe(2_000_014), result: "Hospitalized", respect_gain: 9.8, respect_loss: 0, chain: 12 },
+    // 2000020 hit us back after our hit on them.
+    { id: 90_000_403, started: now - 60_000, ended: now - 59_900, attacker: me, defender: foe(2_000_020), result: "Attacked", respect_gain: 6.1, respect_loss: 0, chain: 0 },
+    { id: 90_000_404, started: now - 30_000, ended: now - 29_950, attacker: foe(2_000_020), defender: me, result: "Attacked", respect_gain: 0, respect_loss: 4.5, chain: 0 },
+    { id: 90_000_405, started: now - 172_800, ended: now - 172_700, attacker: me, defender: foe(2_000_021), result: "Lost", respect_gain: 0, respect_loss: 3.2, chain: 0 },
+  ];
 }
 
 function json(body: unknown, status = 200): Response {

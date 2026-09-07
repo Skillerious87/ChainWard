@@ -6,12 +6,17 @@ import { refreshTargets } from "@/lib/targets/data-service";
 import { mergeSnapshots, readTargetList, targetsStorageAvailable, writeTargetList } from "@/lib/targets/store";
 import type { TargetList } from "@/lib/targets/types";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
+import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 
 export const metadata: Metadata = { title: "Targets" };
 
 export default async function TargetsPage() {
   await requireLicensedPage();
-  const [actor, connection] = await Promise.all([getCurrentActor(), getConfiguredTornConnection()]);
+  const [actor, connection, telemetry] = await Promise.all([
+    getCurrentActor(),
+    getConfiguredTornConnection(),
+    getWorkspaceTelemetry(),
+  ]);
   const factionId = connection?.factionId ?? null;
   const storageAvailable = targetsStorageAvailable();
 
@@ -52,6 +57,9 @@ export default async function TargetsPage() {
       nowMs={nowMs}
       connected={Boolean(factionId && connection)}
       storageAvailable={storageAvailable}
+      chain={telemetry.chain}
+      chainDataAgeMs={telemetry.dataAgeMs ?? 0}
+      chainCheckedAt={telemetry.checkedAt}
     />
   );
 }

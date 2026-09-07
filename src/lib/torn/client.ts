@@ -14,6 +14,7 @@ import {
   keyInfoResponseSchema,
   ongoingChainResponseSchema,
   tornErrorSchema,
+  userAttacksResponseSchema,
   userBasicResponseSchema,
   userProfileByIdResponseSchema,
   userProfileResponseSchema,
@@ -23,6 +24,7 @@ import {
   type FactionMembersResponse,
   type KeyInfoResponse,
   type OngoingChainResponse,
+  type UserAttacksResponse,
   type UserBasicResponse,
   type UserProfileByIdResponse,
   type UserProfileResponse,
@@ -133,6 +135,14 @@ export class TornClient {
    */
   getUserProfileById(tornUserId: number): Promise<{ value: UserProfileByIdResponse; fetchedAt: number }> {
     return this.requestWithMeta(`/user/${tornUserId}`, userProfileByIdResponseSchema, 60_000, { selections: "profile" });
+  }
+
+  /**
+   * The operator's own recent attack log — powers the Targets "last hit by me"
+   * and retaliation flags. Cached briefly; the list only grows as they play.
+   */
+  getMyAttacks(): Promise<{ value: UserAttacksResponse; fetchedAt: number }> {
+    return this.requestWithMeta("/user/attacks", userAttacksResponseSchema, 45_000, { limit: "100", sort: "DESC" });
   }
 
   getMyProfileDetails(): Promise<UserProfileResponse> {
