@@ -12,10 +12,12 @@ import {
   KeyRound,
   LayoutDashboard,
   LayoutList,
+  Plane,
   RotateCcw,
   ScrollText,
   Settings2,
   ShieldCheck,
+  Swords,
   Trophy,
   UsersRound,
   type LucideIcon,
@@ -94,6 +96,19 @@ const accessOperations: WorkspaceSectionDefinition = {
     { id: "assignments", label: "Access", icon: KeyRound },
     { id: "roles", label: "Roles", icon: ShieldCheck },
     { id: "audit", label: "Audit", icon: ScrollText },
+  ],
+};
+
+const targetOperations: WorkspaceSectionDefinition = {
+  key: "targets",
+  label: "Targets workspace views",
+  tabPrefix: "targets",
+  mode: "local",
+  defaultView: "list",
+  items: [
+    { id: "list", label: "Watchlist", icon: LayoutList },
+    { id: "chain", label: "Chain queue", icon: Swords },
+    { id: "abroad", label: "Abroad", icon: Plane },
   ],
 };
 
@@ -240,6 +255,7 @@ function useWorkspaceSectionContext(): WorkspaceSectionContextValue {
 
 function definitionForPath(pathname: string): WorkspaceSectionDefinition | null {
   if (pathname === "/members") return memberOperations;
+  if (pathname === "/targets") return targetOperations;
   if (pathname === "/faction") return accessOperations;
   if (pathname === "/rewards" || pathname === "/payouts" || pathname.startsWith("/payouts/")) return rewardOperations;
   if (pathname === "/dashboard" || pathname === "/live-chain" || pathname === "/chain-watch" || pathname === "/chains" || pathname.startsWith("/chains/") || pathname === "/analytics") return chainOperations;

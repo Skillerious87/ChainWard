@@ -35,6 +35,14 @@ describe("WorkspaceSectionNavigation", () => {
     expect(markup).toContain('aria-controls="members-panel-controls"');
   });
 
+  it("gives the targets workspace its own local tab bar", () => {
+    const markup = renderNavigation("/targets");
+    expect(markup).toContain('aria-label="Targets workspace views"');
+    expect(markup).toContain('id="targets-tab-list"');
+    expect(markup).toContain('aria-controls="targets-panel-chain"');
+    expect(markup).toContain('aria-controls="targets-panel-abroad"');
+  });
+
   it("connects schemes and every payout child route in one reward bar", () => {
     const markup = renderNavigation("/payouts/recipients");
 
