@@ -78,7 +78,7 @@ export function AccessRequestTable({ initialRequests, databaseConfigured, messag
   return <>
     <section className="data-section admin-requests">
       <div className="section-heading admin-request-heading">
-        <div><h2>Faction access queue</h2><p>{databaseConfigured ? `${reviewCount} stored request${reviewCount === 1 ? "" : "s"} require review` : message}</p></div>
+        <div><h2>Faction licence requests</h2><p>{databaseConfigured ? `${reviewCount} stored request${reviewCount === 1 ? "" : "s"} require review` : message}</p></div>
         <div className="admin-request-tools">
           <div className="segmented-control" aria-label="Access request view">{(["Review", "Approved", "All"] as const).map((item) => <button key={item} className={view === item ? "segmented-control__active" : undefined} onClick={() => setView(item)}>{item}{item === "Review" && <span>{reviewCount}</span>}</button>)}</div>
           <label className="search-field"><Search size={15} /><span className="sr-only">Search requests</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Faction, player, or identifier" /></label>

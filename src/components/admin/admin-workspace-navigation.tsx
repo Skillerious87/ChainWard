@@ -29,7 +29,7 @@ interface AdminViewDefinition {
 
 const adminViews: readonly AdminViewDefinition[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "requests", label: "Requests", icon: ClipboardCheck },
+  { id: "requests", label: "Licence requests", icon: ClipboardCheck },
   { id: "members", label: "Members", icon: UsersRound },
   { id: "licences", label: "Licences", icon: CreditCard },
   { id: "system", label: "System", icon: Activity },
@@ -77,9 +77,10 @@ export function AdminWorkspaceNavigationProvider({ active, children }: { active:
   return <AdminWorkspaceNavigationContext.Provider value={value}>{children}</AdminWorkspaceNavigationContext.Provider>;
 }
 
-export function AdminWorkspaceNavigation() {
+export function AdminWorkspaceNavigation({ requestCount = 0, memberCount = 0 }: { requestCount?: number; memberCount?: number }) {
   const { active, view, selectView } = useAdminWorkspaceNavigation();
   if (!active) return null;
+  const badgeFor = (id: AdminWorkspaceView): number => id === "requests" ? requestCount : id === "members" ? memberCount : 0;
 
   function handleTabKey(event: ReactKeyboardEvent<HTMLButtonElement>, index: number): void {
     let nextIndex: number | null = null;
@@ -100,6 +101,7 @@ export function AdminWorkspaceNavigation() {
       <div className="workspace-view-nav__inner" role="tablist" aria-label="Access management sections">
         {adminViews.map(({ id, label, icon: Icon }, index) => {
           const selected = view === id;
+          const badge = badgeFor(id);
           return (
             <button
               id={`admin-tab-${id}`}
@@ -115,6 +117,7 @@ export function AdminWorkspaceNavigation() {
             >
               <span><Icon size={17} strokeWidth={1.8} /></span>
               <small>{label}</small>
+              {badge > 0 && <em>{badge}</em>}
             </button>
           );
         })}

@@ -253,6 +253,20 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.workspace-view-nav__item em {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid rgba(var(--accent-rgb), .3);
+  border-radius: 9px;
+  background: rgba(var(--accent-rgb), .12);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
 .workspace-view-nav__item:hover { background: rgba(255, 255, 255, .018); color: #aab5ae; }
 .workspace-view-nav__item--active {
   background: linear-gradient(180deg, rgba(var(--accent-rgb), .018), rgba(var(--accent-rgb), .075));

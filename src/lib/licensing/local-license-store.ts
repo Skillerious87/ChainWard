@@ -289,6 +289,20 @@ export function getLocalAccessRequestQueue(): AccessQueueResult {
   }
 }
 
+/** Cheap counterpart to {@link getLocalAccessRequestQueue} for the owner
+ *  shell's pending-review badge — no joins, just a count. */
+export function getLocalLicenceReviewCount(): number {
+  const database = requiredDatabase();
+  try {
+    const row = database.prepare(
+      "SELECT COUNT(*) AS count FROM licensing_access_requests WHERE status IN ('PENDING','INFORMATION_REQUESTED')",
+    ).get() as unknown as { count: number };
+    return row.count;
+  } finally {
+    database.close();
+  }
+}
+
 export function getLocalFactionAccessSummary(tornFactionId: number): FactionAccessSummary {
   const database = requiredDatabase();
   try {

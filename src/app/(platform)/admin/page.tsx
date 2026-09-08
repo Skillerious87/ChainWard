@@ -3,6 +3,7 @@ import { CreditCard, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AccessRequestTable } from "@/components/admin/access-request-table";
 import { AdminKpis } from "@/components/admin/admin-kpis";
+import { AdminReviewQueue } from "@/components/admin/admin-review-queue";
 import { AdminWorkspacePanels } from "@/components/admin/admin-workspace-navigation";
 import { MemberAccessControl } from "@/components/admin/member-access-control";
 import { ServiceHealthPanel } from "@/components/admin/service-health-panel";
@@ -49,6 +50,7 @@ export default async function AdminPage() {
             </div>
           </header>
           <AdminKpis factionCount={queue.factionCount} activeLicenseCount={queue.activeLicenseCount} licenceReviewCount={licenceReviewCount} memberReviewCount={memberReviewCount} telemetry={telemetry} />
+          <AdminReviewQueue licenceRequests={queue.requests} memberRequests={factionAccess.requests} />
         </>}
         requests={<AccessRequestTable initialRequests={queue.requests} databaseConfigured={queue.databaseConfigured} message={queue.message} />}
         members={<MemberAccessControl access={factionAccess} rosterResult={roster} faction={telemetry.faction} />}

@@ -5,10 +5,11 @@ import { Suspense } from "react";
 import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
 import { hasPermission } from "@/lib/auth/authorization";
 import { getCurrentActorWithProfileImage } from "@/lib/auth/current-actor";
-import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
+import { getFactionAccessAssignment, getFactionAccessWorkspace } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { getDatabaseStatus } from "@/lib/data/database-status";
 import { getFactionAccessSummary } from "@/lib/licensing/faction-access";
+import { getLicenceReviewCount, type PendingReviewSummary } from "@/lib/licensing/request-store";
 import { redactLockedTelemetry } from "@/lib/licensing/telemetry";
 import { buildMemberActivityAlert } from "@/lib/members/member-activity-intelligence";
 import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
@@ -48,6 +49,12 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
   const assignmentPromise = owner
     ? Promise.resolve(null)
     : getFactionAccessAssignment(connection.factionId, actor.tornUserId);
+  // Owner-only: what needs review right now, so the shell can badge/notify it
+  // everywhere rather than only inside /admin itself.
+  const pendingReviewPromise: Promise<PendingReviewSummary | null> = owner
+    ? Promise.all([getLicenceReviewCount(), getFactionAccessWorkspace(connection.factionId)])
+      .then(([licenceCount, factionAccess]) => ({ licenceCount, memberRequests: factionAccess.requests }))
+    : Promise.resolve(null);
   const authorizationDataPromise = Promise.all([accessPromise, assignmentPromise]).then(async ([access, assignment]) => {
     const assigned = access.state === "active" && Boolean(assignment);
     const provisionallyCanManageMembers = access.state === "active"
@@ -58,10 +65,11 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
     ]);
     return { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity };
   });
-  const [telemetry, database, authorizationData] = await Promise.all([
+  const [telemetry, database, authorizationData, pendingReview] = await Promise.all([
     telemetryPromise,
     databasePromise,
     authorizationDataPromise,
+    pendingReviewPromise,
   ]);
   if (telemetry.source !== "live" || !telemetry.faction || connection.factionId !== telemetry.faction.id) redirect("/connect");
   const factionId = telemetry.faction.id;
@@ -80,5 +88,5 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
       ...buildMemberActivityAlert(currentRoster.data, memberActivity, currentRoster.checkedAt),
     }
     : null;
-  return <AppShell currentUser={actor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert}>{children}</AppShell>;
+  return <AppShell currentUser={actor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}>{children}</AppShell>;
 }

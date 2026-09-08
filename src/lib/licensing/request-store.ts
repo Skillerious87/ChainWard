@@ -1,6 +1,15 @@
 import "server-only";
 
+import type { FactionAccessRequest } from "@/lib/auth/faction-access-store";
+
 export type AccessRequestViewStatus = "Pending" | "Information" | "Approved" | "Rejected" | "Cancelled";
+
+/** The owner-console-wide "does anything need my review" summary, cheap
+ *  enough to fetch on every route (unlike the full {@link getAccessRequestQueue}). */
+export interface PendingReviewSummary {
+  licenceCount: number;
+  memberRequests: FactionAccessRequest[];
+}
 
 export interface TornIdentityView {
   name: string;
@@ -99,6 +108,25 @@ export async function getAccessRequestQueue(): Promise<AccessQueueResult> {
     };
   } catch {
     return { databaseConfigured: true, requests: [], factionCount: 0, activeLicenseCount: 0, activeLicenses: [], auditEvents: [], message: "The configured database could not be queried." };
+  }
+}
+
+/** A cheap, indexed pending-count — safe to call on every navigation, unlike
+ *  {@link getAccessRequestQueue}'s full site-wide history fetch. */
+export async function getLicenceReviewCount(): Promise<number> {
+  if (!process.env.DATABASE_URL?.trim()) {
+    try {
+      const { getLocalLicenceReviewCount } = await import("./local-license-store");
+      return getLocalLicenceReviewCount();
+    } catch {
+      return 0;
+    }
+  }
+  try {
+    const { db } = await import("@/lib/db");
+    return await db.accessRequest.count({ where: { status: { in: ["PENDING", "INFORMATION_REQUESTED"] } } });
+  } catch {
+    return 0;
   }
 }
 

@@ -68,6 +68,7 @@ import { enqueueToast, notify, toastDurationMs, toastKey, type ToastDetail, type
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
+import type { PendingReviewSummary } from "@/lib/licensing/request-store";
 import type { MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
 import {
   ensureNotificationWorker,
@@ -132,7 +133,7 @@ const navigation: NavigationGroup[] = [
 
 type OpenPanel = "faction" | "notifications" | "user" | "health" | null;
 
-export function AppShell({ children, currentUser, telemetry, access, workspaceAuthorized, database, memberActivityAlert }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; workspaceAuthorized: boolean; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null }) {
+export function AppShell({ children, currentUser, telemetry, access, workspaceAuthorized, database, memberActivityAlert, pendingReview }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; workspaceAuthorized: boolean; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null; pendingReview: PendingReviewSummary | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const preferences = useAppearancePreferences();
@@ -175,7 +176,35 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     checkedAt: liveTelemetry.checkedAt,
     href: "/unlock",
   } : null;
-  const systemNotifications = [...buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, chainRemainingSeconds: chainSeconds, memberActivity: monitoredActivity }), ...(renewalNotification ? [renewalNotification] : [])]
+  // Owner-only — `pendingReview` is already null for anyone else, computed
+  // server-side in the platform layout, so no client-side owner check is
+  // needed here. There is no cheap per-request id at this layer for licence
+  // requests, so the notification is keyed on the count itself: a request
+  // being approved while a different one arrives in the same tick (net count
+  // unchanged) will keep its prior read/unread state, which is an acceptable
+  // trade-off for keeping this fetch cheap enough to run on every navigation.
+  const licenceReviewNotification: OperationalNotification | null = pendingReview && pendingReview.licenceCount > 0 ? {
+    id: `access:licence-queue:${pendingReview.licenceCount}`,
+    category: "access",
+    title: pendingReview.licenceCount === 1 ? "1 faction licence request awaiting review" : `${pendingReview.licenceCount} faction licence requests awaiting review`,
+    detail: "A faction has applied for, or is renewing, a Chainward licence.",
+    tone: "warning",
+    priority: 78,
+    checkedAt: liveTelemetry.checkedAt,
+    href: "/admin#requests",
+  } : null;
+  const pendingMemberNames = pendingReview?.memberRequests.map((request) => request.memberName) ?? [];
+  const memberReviewNotification: OperationalNotification | null = pendingReview && pendingMemberNames.length > 0 ? {
+    id: `access:member-queue:${pendingReview.memberRequests.map((request) => request.tornUserId).toSorted((left, right) => left - right).join(",")}`,
+    category: "access",
+    title: pendingMemberNames.length === 1 ? `${pendingMemberNames[0]} requested workspace access` : `${pendingMemberNames.length} members requested workspace access`,
+    detail: `${pendingMemberNames.slice(0, 3).join(", ")}${pendingMemberNames.length > 3 ? ` and ${pendingMemberNames.length - 3} more` : ""}.`,
+    tone: "warning",
+    priority: 78,
+    checkedAt: pendingReview?.memberRequests[0]?.requestedAt ?? liveTelemetry.checkedAt,
+    href: "/admin#members",
+  } : null;
+  const systemNotifications = [...buildOperationalNotifications({ telemetry: liveTelemetry, chainWarningSeconds: preferences.chainWarningSeconds, chainRemainingSeconds: chainSeconds, memberActivity: monitoredActivity }), ...(renewalNotification ? [renewalNotification] : []), ...(licenceReviewNotification ? [licenceReviewNotification] : []), ...(memberReviewNotification ? [memberReviewNotification] : [])]
     .toSorted((left, right) => right.priority - left.priority);
   const notifications = systemNotifications.map((item) => ({ ...item, unread: !readNotificationIds.includes(item.id) }));
   const activeNotificationIdsKey = JSON.stringify(systemNotifications.map((item) => item.id).toSorted());
@@ -702,7 +731,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           </div>
         </header>
 
-        {adminRoute ? <AdminWorkspaceNavigation /> : workspaceNavigationRoute ? <WorkspaceSectionNavigation pathname={pathname} /> : (
+        {adminRoute ? <AdminWorkspaceNavigation requestCount={pendingReview?.licenceCount ?? 0} memberCount={pendingReview?.memberRequests.length ?? 0} /> : workspaceNavigationRoute ? <WorkspaceSectionNavigation pathname={pathname} /> : (
           <div className={`data-source-banner data-source-banner--${liveTelemetry.mode === "offline" ? "offline" : liveTelemetry.source}`} role="status">
             <span className="data-source-banner__label">{liveTelemetry.mode === "offline" ? "Offline test data" : liveTelemetry.source === "live" ? "Verified Torn workspace" : "Connection required"}</span>
             <span className="data-source-banner__message" title={liveTelemetry.message}>{liveTelemetry.message}</span>

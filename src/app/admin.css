@@ -588,6 +588,11 @@
 .admin-member-approvals > em { display: inline-flex; align-items: center; gap: 7px; color: var(--warning); font-size: 11px; font-style: normal; font-weight: 650; white-space: nowrap; }
 .admin-member-approvals:hover > em { gap: 10px; }
 
+/* Overview's "needs your review" list reuses the approval-row look above —
+   stacked here since that row was previously only ever shown one at a time. */
+.admin-review-queue__list { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; }
+.admin-review-queue__list .admin-member-approvals { text-decoration: none; }
+
 /* Layout --------------------------------------------------------------------
    Panels in a row are stretched to a shared height, so no column ends early and
    leaves the band looking broken. The tall lists are capped and scroll inside

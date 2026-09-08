@@ -1166,6 +1166,10 @@
   .workspace-view-nav__item > span { width: 26px; height: 26px; }
   .workspace-view-nav__item small { max-width: 100%; font-size: 9.5px !important; line-height: 1.15 !important; }
   .workspace-view-nav__item::after { right: 24%; left: 24%; }
+  /* Too little room for a numeric pill in the column layout here — collapse to
+     the same small dot idiom already used for the collapsed sidebar, anchored
+     to the tab button itself (already `position: relative`). */
+  .workspace-view-nav__item em { position: absolute; top: 6px; right: 22%; width: 7px; height: 7px; min-width: 0; padding: 0; overflow: hidden; border: 1px solid #0a0d10; border-radius: 50%; background: var(--accent); color: transparent; font-size: 0; }
 
   .admin-view-panel { gap: 14px; }
   .admin-system-grid { gap: 14px; }

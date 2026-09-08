@@ -9,7 +9,7 @@ export interface OperationalNotification {
   tone: "warning" | "danger";
   priority: number;
   checkedAt: string;
-  href?: "/live-chain" | "/members" | "/connect" | "/unlock";
+  href?: "/live-chain" | "/members" | "/connect" | "/unlock" | "/admin" | "/admin#requests" | "/admin#members";
 }
 
 interface OperationalNotificationInput {
