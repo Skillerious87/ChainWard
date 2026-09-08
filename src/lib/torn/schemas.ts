@@ -229,6 +229,23 @@ export const factionMembersResponseSchema = z.object({
   ),
 });
 
+// `/user/{id}/bounties` — bounties placed on a specific player, public-key
+// access. Torn's exact v2 field names for this endpoint are not fully
+// documented, so every field is defaulted/`.loose()` like the other
+// player-facing schemas above: an unmodelled or renamed key must degrade to
+// "no bounty data" rather than invalidate the whole target snapshot.
+export const userBountiesResponseSchema = z.object({
+  bounties: z.array(z.object({
+    id: z.union([z.number(), z.string()]).catch(0),
+    target_id: z.number().int().nonnegative().catch(0),
+    lister_id: z.number().int().nonnegative().catch(0),
+    reward: z.number().nonnegative().catch(0),
+    quantity: z.number().int().positive().catch(1),
+    reason: z.string().default(""),
+  }).loose()).catch([]),
+}).loose();
+
+export type UserBountiesResponse = z.infer<typeof userBountiesResponseSchema>;
 export type KeyInfoResponse = z.infer<typeof keyInfoResponseSchema>;
 // `/user/attacks` — the operator's own recent attack log (attacker or defender).
 // `.loose()` throughout and every field defaulted: stealthed rows can null the

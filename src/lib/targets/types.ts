@@ -7,7 +7,7 @@ import { z } from "zod";
  * Torn key.
  */
 
-export const MAX_TARGETS = 40;
+export const MAX_TARGETS = 75;
 export const MAX_TAGS_PER_TARGET = 6;
 export const MAX_TAG_LENGTH = 24;
 /** A snapshot older than this is refreshed on the next page load. */
@@ -58,6 +58,9 @@ export const targetSnapshotSchema = z.object({
   lastHit: targetLastHitSchema.nullable().default(null),
   /** This target has attacked the operator more recently than the operator hit them. */
   hitYouBack: z.boolean().default(false),
+  /** Sum of active bounty rewards on this player, and how many are stacked. */
+  bountyTotal: z.number().nonnegative().default(0),
+  bountyCount: z.number().int().nonnegative().default(0),
   fetchedAt: z.string().datetime(),
 });
 
@@ -90,6 +93,17 @@ export function parseTornUserIdList(raw: string): number[] {
 /** A target is attackable only when they are in the "Okay" state. */
 export function isAttackableState(state: string): boolean {
   return state.trim().toLowerCase() === "okay";
+}
+
+export type FairFightDifficulty = "easy" | "moderate" | "difficult" | "extreme";
+
+/** Matches ffscouter.com's own difficulty bands. Lives here (not in the
+ *  server-only `ffscouter.ts`) so the client-rendered badge can call it too. */
+export function fairFightDifficulty(fairFight: number): FairFightDifficulty {
+  if (fairFight <= 2) return "easy";
+  if (fairFight <= 3.5) return "moderate";
+  if (fairFight <= 4.5) return "difficult";
+  return "extreme";
 }
 
 /**

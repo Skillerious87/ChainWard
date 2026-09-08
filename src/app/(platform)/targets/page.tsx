@@ -3,6 +3,8 @@ import { TargetsWorkspace } from "@/components/targets/targets-workspace";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { refreshTargets } from "@/lib/targets/data-service";
+import { enrichWithFairFight, type FairFightInfo } from "@/lib/targets/ffscouter";
+import { hasFfscouterKey } from "@/lib/targets/ffscouter-key-store";
 import { mergeSnapshots, readTargetList, targetsStorageAvailable, writeTargetList } from "@/lib/targets/store";
 import type { TargetList } from "@/lib/targets/types";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
@@ -24,6 +26,8 @@ export default async function TargetsPage() {
   let errors: Record<number, string> = {};
   let source = "Unavailable";
   let fetchedAt: string | null = null;
+  let fairFight: Record<string, FairFightInfo> = {};
+  let ffscouterConfigured = false;
 
   if (factionId && connection && storageAvailable) {
     list = await readTargetList(factionId, actor.tornUserId);
@@ -40,6 +44,14 @@ export default async function TargetsPage() {
           list,
         ).catch(() => undefined);
       }
+      const [ffMap, configured] = await Promise.all([
+        enrichWithFairFight(factionId, actor.tornUserId, list.entries.map((entry) => entry.tornUserId)),
+        hasFfscouterKey(factionId, actor.tornUserId),
+      ]);
+      fairFight = Object.fromEntries([...ffMap].map(([tornUserId, info]) => [String(tornUserId), info]));
+      ffscouterConfigured = configured;
+    } else {
+      ffscouterConfigured = await hasFfscouterKey(factionId, actor.tornUserId);
     }
   }
 
@@ -60,6 +72,8 @@ export default async function TargetsPage() {
       chain={telemetry.chain}
       chainDataAgeMs={telemetry.dataAgeMs ?? 0}
       chainCheckedAt={telemetry.checkedAt}
+      fairFight={fairFight}
+      ffscouterConfigured={ffscouterConfigured}
     />
   );
 }

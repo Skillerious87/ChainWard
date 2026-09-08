@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getConfiguredTornConnection: vi.fn(),
   getUserProfileById: vi.fn(),
   getMyAttacks: vi.fn(),
+  getUserBounties: vi.fn(),
 }));
 
 vi.mock("@/lib/torn/server-client", () => ({ getConfiguredTornConnection: mocks.getConfiguredTornConnection }));
@@ -38,16 +39,17 @@ function snapshot(tornUserId: number, over: Partial<TargetSnapshot> = {}): Targe
     tornUserId, name: "S", level: 10, factionId: null, factionName: "", position: "",
     status: { description: "Okay", state: "Okay", until: null, color: "green" },
     lastActionAt: 0, lastActionRelative: "", lastActionStatus: "", lifeCurrent: 0, lifeMaximum: 0,
-    attackable: true, lastHit: null, hitYouBack: false, fetchedAt: new Date().toISOString(), ...over,
+    attackable: true, lastHit: null, hitYouBack: false, bountyTotal: 0, bountyCount: 0, fetchedAt: new Date().toISOString(), ...over,
   };
 }
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.getMyAttacks.mockResolvedValue({ value: { attacks: [] } });
+  mocks.getUserBounties.mockResolvedValue({ value: { bounties: [] } });
   mocks.getConfiguredTornConnection.mockResolvedValue({
     tornUserId: 999,
-    client: { dataMode: "torn", getUserProfileById: mocks.getUserProfileById, getMyAttacks: mocks.getMyAttacks },
+    client: { dataMode: "torn", getUserProfileById: mocks.getUserProfileById, getMyAttacks: mocks.getMyAttacks, getUserBounties: mocks.getUserBounties },
   });
 });
 

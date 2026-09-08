@@ -16,6 +16,7 @@ import {
   tornErrorSchema,
   userAttacksResponseSchema,
   userBasicResponseSchema,
+  userBountiesResponseSchema,
   userProfileByIdResponseSchema,
   userProfileResponseSchema,
   type ChainReportResponse,
@@ -26,6 +27,7 @@ import {
   type OngoingChainResponse,
   type UserAttacksResponse,
   type UserBasicResponse,
+  type UserBountiesResponse,
   type UserProfileByIdResponse,
   type UserProfileResponse,
 } from "./schemas";
@@ -143,6 +145,16 @@ export class TornClient {
    */
   getMyAttacks(): Promise<{ value: UserAttacksResponse; fetchedAt: number }> {
     return this.requestWithMeta("/user/attacks", userAttacksResponseSchema, 45_000, { limit: "100", sort: "DESC" });
+  }
+
+  /**
+   * Bounties placed on an arbitrary player — powers the Targets bounty badge.
+   * Cached far longer than a profile read: bounties change much less often
+   * than hospital/travel status, and Torn documents this as a globally
+   * cached selection on its own side.
+   */
+  getUserBounties(tornUserId: number): Promise<{ value: UserBountiesResponse; fetchedAt: number }> {
+    return this.requestWithMeta(`/user/${tornUserId}/bounties`, userBountiesResponseSchema, 10 * 60_000);
   }
 
   getMyProfileDetails(): Promise<UserProfileResponse> {

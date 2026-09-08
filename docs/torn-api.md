@@ -35,6 +35,14 @@ Official sources:
 | Specific chain report | `GET /faction/{chainId}/chainreport` | Public | `chainreport` |
 | Own faction members | `GET /faction/members` | Public | `members` |
 | Specific faction members | `GET /faction/{id}/members` | Public | `members` |
+| Bounties on a specific player | `GET /user/{id}/bounties` | Public | `bounties` |
+
+Torn documents the bounties endpoint as a "globally cached selection" but does
+not publish the exact field names for a bounty object at the time of writing.
+Chainward's schema (`userBountiesResponseSchema`) is therefore deliberately
+defensive — every field is `.loose()`/`.catch()`-guarded, and the whole array
+degrades to empty on any shape it doesn't recognise, the same tolerance
+already applied to `/user/attacks` above.
 
 An ongoing chain currently contains exactly `id`, `current`, `max`, `timeout`,
 `modifier`, `cooldown`, `start`, and `end`. The service must not invent a target

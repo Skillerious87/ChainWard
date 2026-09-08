@@ -7,7 +7,8 @@ import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { consumePartitionRateLimit } from "@/lib/security/rate-limit";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
-import { fetchTargetSnapshot, refreshTargets } from "@/lib/targets/data-service";
+import { fetchTargetSnapshot, fetchTargetSnapshots, loadHitIndex, refreshTargets, snapshotFromFactionMember } from "@/lib/targets/data-service";
+import { clearFfscouterKey, saveFfscouterKey } from "@/lib/targets/ffscouter-key-store";
 import {
   addTargetEntries,
   addTargetEntry,
@@ -71,9 +72,10 @@ export async function addTargetAction(input: unknown): Promise<TargetsActionResu
     const addError = targetAddError(list, tornUserId);
     if (addError) return { ok: false, message: addError };
 
+    const hitIndex = await loadHitIndex(client, operatorId);
     let snapshot;
     try {
-      snapshot = await fetchTargetSnapshot(client, tornUserId);
+      snapshot = await fetchTargetSnapshot(client, tornUserId, hitIndex.get(tornUserId));
     } catch {
       return { ok: false, message: "Torn did not return a profile for that player. Check the ID and try again." };
     }
@@ -119,30 +121,72 @@ export async function importTargetsAction(input: unknown): Promise<TargetsAction
 
   try {
     const { operatorId, faction, client } = await operatorContext();
-    const wanted = ids.filter((id) => id !== operatorId).slice(0, 60);
+    const wanted = ids.filter((id) => id !== operatorId).slice(0, 100);
     const list = await readTargetList(faction.id, operatorId);
+    const known = new Set(list.entries.map((entry) => entry.tornUserId));
+    const toFetch = wanted.filter((id) => !known.has(id));
+    const alreadyListed = wanted.length - toFetch.length;
 
-    const newEntries: TargetEntry[] = [];
-    const snapshots = [];
-    let failed = 0;
-    for (const id of wanted) {
-      if (list.entries.some((entry) => entry.tornUserId === id)) continue;
-      try {
-        const snapshot = await fetchTargetSnapshot(client, id);
-        newEntries.push({ tornUserId: id, label: snapshot.name, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() });
-        snapshots.push(snapshot);
-      } catch {
-        failed += 1;
-      }
-    }
+    const hitIndex = await loadHitIndex(client, operatorId);
+    const { snapshots, errors } = await fetchTargetSnapshots(client, toFetch, hitIndex, operatorId);
+    const snapshotById = new Map(snapshots.map((snapshot) => [snapshot.tornUserId, snapshot]));
+    const newEntries: TargetEntry[] = toFetch
+      .filter((id) => snapshotById.has(id))
+      .map((id) => ({ tornUserId: id, label: snapshotById.get(id)!.name, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() }));
 
     const { list: withEntries, added, skipped, capped } = addTargetEntries(list, newEntries);
     if (added > 0) await writeTargetList(faction, operatorId, mergeSnapshots(withEntries, snapshots));
     revalidatePath("/targets");
 
+    const failed = Object.keys(errors).length;
     const parts = [`Added ${added}`];
-    if (skipped > 0) parts.push(`${skipped} already listed`);
+    if (skipped + alreadyListed > 0) parts.push(`${skipped + alreadyListed} already listed`);
     if (failed > 0) parts.push(`${failed} not found`);
+    if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
+    return { ok: added > 0, message: `${parts.join(", ")}.` };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
+const importFactionSchema = z.object({ factionId: z.number().int().positive() });
+
+/**
+ * Bulk-adds an entire (arbitrary) Torn faction's current roster as targets —
+ * exactly two Torn calls regardless of roster size, since every added member
+ * is snapshotted straight from the roster read (see snapshotFromFactionMember)
+ * rather than fetched individually; the next ordinary refresh backfills real
+ * life/status/bounty data for each of them through the normal bounded path.
+ */
+export async function importFactionTargetsAction(input: unknown): Promise<TargetsActionResult> {
+  const parsed = importFactionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter a numeric Torn faction ID." };
+
+  try {
+    const { operatorId, faction, client } = await operatorContext();
+    if (parsed.data.factionId === faction.id) return { ok: false, message: "That is your own faction." };
+    const limit = consumePartitionRateLimit("targets-import-faction:actor", operatorId, { limit: 5, windowMs: 60_000 });
+    if (!limit.allowed) return { ok: false, message: `You're importing factions too often. Try again in ${limit.retryAfterSeconds}s.` };
+
+    const [basic, roster] = await Promise.all([
+      client.getFactionBasic(parsed.data.factionId),
+      client.getFactionMembers(parsed.data.factionId),
+    ]);
+    const fetchedAtMs = Date.now();
+    const list = await readTargetList(faction.id, operatorId);
+    const known = new Set(list.entries.map((entry) => entry.tornUserId));
+    const members = roster.members.filter((member) => member.id !== operatorId && !known.has(member.id));
+
+    const newEntries: TargetEntry[] = members.map((member) => ({ tornUserId: member.id, label: member.name, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() }));
+    const snapshots = members.map((member) => snapshotFromFactionMember(basic.basic.id, basic.basic.name, member, fetchedAtMs));
+
+    const { list: withEntries, added, skipped, capped } = addTargetEntries(list, newEntries);
+    if (added > 0) await writeTargetList(faction, operatorId, mergeSnapshots(withEntries, snapshots));
+    revalidatePath("/targets");
+
+    const alreadyListed = roster.members.length - members.length;
+    const parts = [`Added ${added} from ${basic.basic.name}`];
+    if (skipped + alreadyListed > 0) parts.push(`${skipped + alreadyListed} already listed`);
     if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
     return { ok: added > 0, message: `${parts.join(", ")}.` };
   } catch (error) {
@@ -226,6 +270,34 @@ export async function refreshTargetsAction(): Promise<TargetsActionResult> {
         ? `Refreshed ${result.snapshots.length} target${result.snapshots.length === 1 ? "" : "s"} from ${result.source}.`
         : `Refreshed ${result.snapshots.length}, but ${failed} target${failed === 1 ? "" : "s"} could not be read.`,
     };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
+const ffscouterKeySchema = z.object({ apiKey: z.string().trim().min(1).max(64) });
+
+/** ffscouter.com — an independent, free Fair Fight estimation service. This
+ *  key is unrelated to the operator's Torn API key. */
+export async function saveFfscouterKeyAction(input: unknown): Promise<TargetsActionResult> {
+  const parsed = ffscouterKeySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter your FFScouter API key." };
+  try {
+    const { operatorId, faction } = await operatorContext();
+    const lastFour = await saveFfscouterKey(faction, operatorId, parsed.data.apiKey);
+    revalidatePath("/targets");
+    return { ok: true, message: `FFScouter key saved (ending ${lastFour}). Fair Fight estimates will appear on the next refresh.` };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
+export async function removeFfscouterKeyAction(): Promise<TargetsActionResult> {
+  try {
+    const { operatorId, faction } = await operatorContext();
+    await clearFfscouterKey(faction, operatorId);
+    revalidatePath("/targets");
+    return { ok: true, message: "FFScouter key removed. Fair Fight estimates are hidden until you add one again." };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }

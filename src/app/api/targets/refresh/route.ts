@@ -2,6 +2,7 @@ import { AuthorizationError } from "@/lib/auth/authorization";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { refreshTargets } from "@/lib/targets/data-service";
+import { enrichWithFairFight } from "@/lib/targets/ffscouter";
 import { mergeSnapshots, readTargetList, targetsStorageAvailable, writeTargetList } from "@/lib/targets/store";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
@@ -38,6 +39,9 @@ export async function GET(request: Request): Promise<Response> {
     if (refresh.snapshots.length > 0) {
       await writeTargetList(faction, actor.tornUserId, mergeSnapshots(list, refresh.snapshots)).catch(() => undefined);
     }
+    const ffMap = list.entries.length > 0
+      ? await enrichWithFairFight(faction.id, actor.tornUserId, list.entries.map((entry) => entry.tornUserId))
+      : new Map();
 
     return Response.json({
       snapshots: refresh.snapshots,
@@ -47,6 +51,7 @@ export async function GET(request: Request): Promise<Response> {
       chain: telemetry.chain,
       dataAgeMs: telemetry.dataAgeMs ?? 0,
       checkedAt: telemetry.checkedAt,
+      fairFight: Object.fromEntries([...ffMap].map(([tornUserId, info]) => [String(tornUserId), info])),
     }, { headers: noStore });
   } catch (error) {
     const denied = error instanceof AuthorizationError;

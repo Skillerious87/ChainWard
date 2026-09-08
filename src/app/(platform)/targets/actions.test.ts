@@ -7,7 +7,12 @@ const mocks = vi.hoisted(() => ({
   readTargetList: vi.fn(),
   writeTargetList: vi.fn(),
   fetchTargetSnapshot: vi.fn(),
+  fetchTargetSnapshots: vi.fn(),
+  loadHitIndex: vi.fn(),
+  snapshotFromFactionMember: vi.fn(),
   refreshTargets: vi.fn(),
+  saveFfscouterKey: vi.fn(),
+  clearFfscouterKey: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -16,7 +21,14 @@ vi.mock("@/lib/auth/faction-authorization", () => ({ requireFactionPermission: m
 vi.mock("@/lib/torn/server-client", () => ({ getConfiguredTornConnection: mocks.getConfiguredTornConnection }));
 vi.mock("@/lib/targets/data-service", () => ({
   fetchTargetSnapshot: mocks.fetchTargetSnapshot,
+  fetchTargetSnapshots: mocks.fetchTargetSnapshots,
+  loadHitIndex: mocks.loadHitIndex,
+  snapshotFromFactionMember: mocks.snapshotFromFactionMember,
   refreshTargets: mocks.refreshTargets,
+}));
+vi.mock("@/lib/targets/ffscouter-key-store", () => ({
+  saveFfscouterKey: mocks.saveFfscouterKey,
+  clearFfscouterKey: mocks.clearFfscouterKey,
 }));
 vi.mock("@/lib/targets/store", async () => {
   const actual = await vi.importActual<typeof import("@/lib/targets/store")>("@/lib/targets/store");
@@ -30,16 +42,23 @@ vi.mock("@/lib/targets/store", async () => {
 
 import {
   addTargetAction,
+  importFactionTargetsAction,
   importTargetsAction,
   refreshTargetsAction,
   removeTargetAction,
+  removeFfscouterKeyAction,
+  saveFfscouterKeyAction,
   setTargetPinnedAction,
   setTargetTagsAction,
   updateTargetNoteAction,
 } from "./actions";
 
 const AUTH = { actor: { tornUserId: 555, name: "Me" }, faction: { id: 42, name: "Faction", tag: "F" }, role: "OWNER" as const };
-const CLIENT = { dataMode: "torn" as const };
+const CLIENT = {
+  dataMode: "torn" as const,
+  getFactionBasic: vi.fn(),
+  getFactionMembers: vi.fn(),
+};
 
 function snapshot(tornUserId: number, name = `Target ${tornUserId}`) {
   return {
@@ -52,11 +71,14 @@ function snapshot(tornUserId: number, name = `Target ${tornUserId}`) {
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
+  CLIENT.getFactionBasic.mockReset();
+  CLIENT.getFactionMembers.mockReset();
   mocks.requireFactionPermission.mockResolvedValue(AUTH);
   mocks.getConfiguredTornConnection.mockResolvedValue({ factionId: 42, factionName: "Faction", factionTag: "F", client: CLIENT });
   mocks.targetsStorageAvailable.mockReturnValue(true);
   mocks.readTargetList.mockResolvedValue({ entries: [], snapshots: {} });
   mocks.writeTargetList.mockResolvedValue(undefined);
+  mocks.loadHitIndex.mockResolvedValue(new Map());
 });
 
 describe("addTargetAction", () => {
@@ -66,7 +88,7 @@ describe("addTargetAction", () => {
     const result = await addTargetAction({ reference: "https://www.torn.com/profiles.php?XID=900", note: "war target" });
 
     expect(result.ok).toBe(true);
-    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 900);
+    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 900, undefined);
     const [, , written] = mocks.writeTargetList.mock.calls[0]!;
     expect(written.entries).toEqual([expect.objectContaining({ tornUserId: 900, note: "war target" })]);
     expect(written.snapshots["900"].name).toBe("Rival");
@@ -76,7 +98,15 @@ describe("addTargetAction", () => {
     mocks.fetchTargetSnapshot.mockResolvedValue(snapshot(1234567));
     const result = await addTargetAction({ reference: "1234567" });
     expect(result.ok).toBe(true);
-    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 1234567);
+    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 1234567, undefined);
+  });
+
+  it("passes the operator's existing hit history on this target through to the snapshot", async () => {
+    const hit = { lastHit: { at: 100, result: "Mugged", respect: 5 }, hitYouBack: false };
+    mocks.loadHitIndex.mockResolvedValue(new Map([[900, hit]]));
+    mocks.fetchTargetSnapshot.mockResolvedValue(snapshot(900, "Rival"));
+    await addTargetAction({ reference: "900" });
+    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 900, hit);
   });
 
   it("rejects an unparseable reference before touching Torn", async () => {
@@ -203,14 +233,16 @@ describe("setTargetTagsAction", () => {
 describe("importTargetsAction", () => {
   it("adds every parseable id, skipping self and duplicates", async () => {
     mocks.readTargetList.mockResolvedValue({ entries: [entry(111)], snapshots: {} });
-    mocks.fetchTargetSnapshot.mockImplementation((_client: unknown, id: number) => Promise.resolve(snapshot(id)));
+    mocks.fetchTargetSnapshots.mockImplementation((_client: unknown, ids: number[]) => Promise.resolve({
+      snapshots: ids.map((id) => snapshot(id)),
+      errors: {},
+    }));
 
     const result = await importTargetsAction({ text: "111\n222\nhttps://www.torn.com/profiles.php?XID=333\n555\nnot-an-id" });
 
     expect(result.ok).toBe(true);
-    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 222);
-    expect(mocks.fetchTargetSnapshot).toHaveBeenCalledWith(CLIENT, 333);
-    expect(mocks.fetchTargetSnapshot).not.toHaveBeenCalledWith(CLIENT, 555);
+    const [, fetchedIds] = mocks.fetchTargetSnapshots.mock.calls[0]!;
+    expect(fetchedIds.sort()).toEqual([222, 333]); // 111 already listed, 555 is the operator
     const [, , written] = mocks.writeTargetList.mock.calls[0]!;
     expect(written.entries.map((e: { tornUserId: number }) => e.tornUserId).sort()).toEqual([111, 222, 333]);
   });
@@ -218,6 +250,62 @@ describe("importTargetsAction", () => {
   it("rejects a blob with no ids", async () => {
     const result = await importTargetsAction({ text: "nothing useful here" });
     expect(result.ok).toBe(false);
-    expect(mocks.fetchTargetSnapshot).not.toHaveBeenCalled();
+    expect(mocks.fetchTargetSnapshots).not.toHaveBeenCalled();
+  });
+});
+
+describe("importFactionTargetsAction", () => {
+  function member(id: number, name: string) {
+    return {
+      id, name, position: "Member", level: 30, days_in_faction: 10,
+      is_revivable: true, is_on_wall: false, is_in_oc: false, has_early_discharge: false,
+      last_action: { status: "Offline", timestamp: 1_700_000_000, relative: "1 hour ago" },
+      status: { description: "Okay", details: null, state: "Okay", until: null, color: "green" },
+      revive_setting: "Everyone",
+    };
+  }
+
+  it("imports every member of another faction in one action", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [], snapshots: {} });
+    CLIENT.getFactionBasic.mockResolvedValue({ basic: { id: 77, name: "Rival Faction" } });
+    CLIENT.getFactionMembers.mockResolvedValue({ members: [member(900, "Rival One"), member(901, "Rival Two")] });
+    mocks.snapshotFromFactionMember.mockImplementation((_factionId: number, _factionName: string, roster: { id: number }) => snapshot(roster.id));
+
+    const result = await importFactionTargetsAction({ factionId: 77 });
+
+    expect(result.ok).toBe(true);
+    expect(CLIENT.getFactionBasic).toHaveBeenCalledWith(77);
+    expect(CLIENT.getFactionMembers).toHaveBeenCalledWith(77);
+    const [, , written] = mocks.writeTargetList.mock.calls[0]!;
+    expect(written.entries.map((e: { tornUserId: number }) => e.tornUserId).sort()).toEqual([900, 901]);
+  });
+
+  it("refuses to import the operator's own faction", async () => {
+    const result = await importFactionTargetsAction({ factionId: 42 });
+    expect(result.ok).toBe(false);
+    expect(CLIENT.getFactionMembers).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveFfscouterKeyAction", () => {
+  it("saves a valid-looking key", async () => {
+    mocks.saveFfscouterKey.mockResolvedValue("abcd");
+    const result = await saveFfscouterKeyAction({ apiKey: "abcdef0123456789" });
+    expect(result.ok).toBe(true);
+    expect(mocks.saveFfscouterKey).toHaveBeenCalledWith(AUTH.faction, AUTH.actor.tornUserId, "abcdef0123456789");
+  });
+
+  it("rejects an empty key before touching storage", async () => {
+    const result = await saveFfscouterKeyAction({ apiKey: "" });
+    expect(result.ok).toBe(false);
+    expect(mocks.saveFfscouterKey).not.toHaveBeenCalled();
+  });
+});
+
+describe("removeFfscouterKeyAction", () => {
+  it("clears the stored key", async () => {
+    const result = await removeFfscouterKeyAction();
+    expect(result.ok).toBe(true);
+    expect(mocks.clearFfscouterKey).toHaveBeenCalledWith(AUTH.faction, AUTH.actor.tornUserId);
   });
 });

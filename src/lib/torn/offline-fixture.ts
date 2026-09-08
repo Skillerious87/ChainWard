@@ -69,6 +69,8 @@ export function createOfflineFixtureFetch(apiKey: string): typeof fetch {
     if (path.endsWith("/user/battlestats")) return json({ battlestats: battleStats(actor.id) });
     if (path.endsWith("/user/attacks")) return json({ attacks: myAttacks(actor.id, actor.name, now), _metadata: { links: { next: null } } });
     if (path.endsWith("/user/profile")) return json({ profile: { id: actor.id, name: actor.name, image: null } });
+    const bountyMatch = path.match(/\/user\/(\d+)\/bounties$/);
+    if (bountyMatch) return json({ bounties: bountiesFor(Number(bountyMatch[1])) });
     const targetMatch = path.match(/\/user\/(\d+)$/);
     if (targetMatch) return json({ profile: targetProfileFor(Number(targetMatch[1]), now) });
     if (/\/faction(?:\/\d+)?\/basic$/.test(path)) return json({
@@ -217,6 +219,13 @@ function targetProfileFor(id: number, now: number) {
       : { faction_id: 30_000 + (id % 900), faction_name: `Rival Faction ${id % 7}`, position: id % 4 === 0 ? "Leader" : "Member", days_in_faction: 40 + (id % 400) },
     life: { current: state === "Hospital" ? 120 + (id % 200) : 4_000 + (id % 3_000), maximum: 5_000 + (id % 3_000) },
   };
+}
+
+/** `/user/{id}/bounties` — every third fixture target has one active bounty,
+ *  so the Targets bounty badge/KPI/filter has something to render offline. */
+function bountiesFor(id: number) {
+  if (id % 3 !== 0) return [];
+  return [{ id: id * 7, target_id: id, lister_id: 9_000_005, reward: 500_000 + (id % 10) * 250_000, quantity: 1 + (id % 3), reason: "Offline fixture bounty" }];
 }
 
 /** `/user/attacks` — a deterministic slice of the actor's recent log so the

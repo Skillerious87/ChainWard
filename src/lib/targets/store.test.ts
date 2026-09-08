@@ -29,6 +29,7 @@ function snapshot(tornUserId: number): TargetSnapshot {
     status: { description: "Okay", state: "Okay", until: null, color: "green" },
     lastActionAt: 1_700_000_000, lastActionRelative: "1 hour ago", lastActionStatus: "Offline",
     lifeCurrent: 100, lifeMaximum: 100, attackable: true, lastHit: null, hitYouBack: false,
+    bountyTotal: 0, bountyCount: 0,
     fetchedAt: new Date().toISOString(),
   };
 }
