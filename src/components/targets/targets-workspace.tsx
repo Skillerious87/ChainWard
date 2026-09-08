@@ -100,8 +100,10 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const [sort, setSort] = useState<SortKey>("readiness");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [hitYouBackOnly, setHitYouBackOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<Row | null>(null);
   const [live, setLive] = useState(() => {
     try { return window.localStorage.getItem(LIVE_KEY) !== "0"; } catch { return true; }
   });
@@ -113,6 +115,24 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const attackableRef = useRef<Set<number>>(new Set(
     Object.values(snapshots).filter((s) => s.attackable).map((s) => s.tornUserId),
   ));
+
+  // The ref above only seeds once at mount. A server round-trip (add/remove, a
+  // manual refresh, a plain navigation) hands back a fresh `snapshots` prop
+  // without re-running that initializer, so without this the *next* live poll
+  // would misread an already-attackable target as having just changed state
+  // and fire a spurious "attackable" notification. Resync per-id, mirroring
+  // exactly how applyPoll itself mutates the ref, just triggered by the
+  // server-sourced prop instead of a poll response.
+  useEffect(() => {
+    const known = new Set(Object.values(snapshots).map((s) => s.tornUserId));
+    for (const id of attackableRef.current) {
+      if (!known.has(id)) attackableRef.current.delete(id);
+    }
+    for (const s of Object.values(snapshots)) {
+      if (s.attackable) attackableRef.current.add(s.tornUserId);
+      else attackableRef.current.delete(s.tornUserId);
+    }
+  }, [snapshots]);
 
   // Second-resolution clock for countdowns; first render uses the server nowMs.
   useEffect(() => {
@@ -243,7 +263,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const allTags = useMemo(() => [...new Set(entries.flatMap((entry) => entry.tags))].sort(), [entries]);
 
   const counts = useMemo(() => {
-    let attackable = 0, hospital = 0, abroad = 0, other = 0, stale = 0, pinned = 0;
+    let attackable = 0, hospital = 0, abroad = 0, other = 0, stale = 0, pinned = 0, hitYouBack = 0;
     for (const row of rows) {
       const bucket = statusBucket(row.snapshot?.status.state ?? "");
       if (bucket === "attackable") attackable += 1;
@@ -251,19 +271,21 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       else if (bucket === "abroad") abroad += 1;
       else other += 1;
       if (row.entry.pinned) pinned += 1;
+      if (row.snapshot?.hitYouBack) hitYouBack += 1;
       const age = row.snapshot ? now - Date.parse(row.snapshot.fetchedAt) : Number.POSITIVE_INFINITY;
       if (!row.snapshot || !Number.isFinite(age) || age > STALE_MS) stale += 1;
     }
-    return { total: rows.length, attackable, hospital, abroad, other, stale, pinned };
+    return { total: rows.length, attackable, hospital, abroad, other, stale, pinned, hitYouBack };
   }, [rows, now]);
 
   const query = search.trim().toLowerCase();
   const matches = useCallback((row: Row) => {
     if (tagFilter.length > 0 && !tagFilter.some((tag) => row.entry.tags.includes(tag))) return false;
+    if (hitYouBackOnly && !row.snapshot?.hitYouBack) return false;
     if (!query) return true;
     return `${row.snapshot?.name ?? row.entry.label} ${row.entry.tornUserId} ${row.snapshot?.factionName ?? ""} ${row.entry.note} ${row.entry.tags.join(" ")}`
       .toLowerCase().includes(query);
-  }, [query, tagFilter]);
+  }, [query, tagFilter, hitYouBackOnly]);
 
   const watchlistRows = useMemo(() => rows
     .filter(matches)
@@ -278,13 +300,16 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       if (bucket === "attackable") return true;
       return (bucket === "hospital" || bucket === "jail") && futureUntil(row.snapshot, now);
     })
-    .sort((a, b) => pinnedFirst(a, b) || chainOrder(a, now) - chainOrder(b, now) || untilMs(a.snapshot, now) - untilMs(b.snapshot, now)),
+    // Readiness/timing first — this view exists to answer "who do I hit next,"
+    // so a pinned target sitting in hospital must not outrank one that's
+    // actually ready. Pin still breaks ties among equally-ready targets.
+    .sort((a, b) => chainOrder(a, now) - chainOrder(b, now) || untilMs(a.snapshot, now) - untilMs(b.snapshot, now) || pinnedFirst(a, b)),
     [rows, matches, now]);
 
   const abroadRows = useMemo(() => rows
     .filter(matches)
     .filter((row) => statusBucket(row.snapshot?.status.state ?? "") === "abroad")
-    .sort((a, b) => pinnedFirst(a, b) || untilMs(a.snapshot, now) - untilMs(b.snapshot, now)),
+    .sort((a, b) => untilMs(a.snapshot, now) - untilMs(b.snapshot, now) || pinnedFirst(a, b)),
     [rows, matches, now]);
 
   const nextReady = chainRows.find((row) => row.snapshot?.attackable) ?? null;
@@ -323,6 +348,14 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     router.refresh();
   }
 
+  async function confirmRemoveTarget(): Promise<void> {
+    if (!removeTarget) return;
+    const result = await removeTargetAction({ tornUserId: removeTarget.entry.tornUserId });
+    notify({ title: result.message, tone: result.ok ? "success" : "warning" });
+    if (!result.ok) throw new Error(result.message);
+    router.refresh();
+  }
+
   // Keyboard: / focuses search, r refreshes, a opens the next attack.
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
@@ -340,6 +373,17 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   }, [pending, connected, entries.length, nextReady, runAction]);
 
   const canAdd = connected && storageAvailable && entries.length < MAX_TARGETS;
+  // Chain/Abroad never read statusFilter (see chainRows/abroadRows above), so
+  // their own "clear filters" prompt only needs to watch the filters that
+  // actually narrow them.
+  const hasActiveFilters = Boolean(query) || statusFilter !== "all" || tagFilter.length > 0 || hitYouBackOnly;
+  const hasActiveNarrowingFilters = Boolean(query) || tagFilter.length > 0 || hitYouBackOnly;
+  function clearFilters(): void {
+    setSearch("");
+    setStatusFilter("all");
+    setTagFilter([]);
+    setHitYouBackOnly(false);
+  }
 
   const cardProps = (row: Row) => ({
     row,
@@ -348,7 +392,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     busy: busyId === row.entry.tornUserId && pending,
     disabled: pending,
     onToggle: () => setExpandedId((current) => (current === row.entry.tornUserId ? null : row.entry.tornUserId)),
-    onRemove: () => runAction(row.entry.tornUserId, () => removeTargetAction({ tornUserId: row.entry.tornUserId })),
+    onRemove: () => setRemoveTarget(row),
     onPin: () => runAction(row.entry.tornUserId, () => setTargetPinnedAction({ tornUserId: row.entry.tornUserId, pinned: !row.entry.pinned })),
     onSaveNote: (note: string) => runAction(row.entry.tornUserId, () => updateTargetNoteAction({ tornUserId: row.entry.tornUserId, note })),
     onSaveTags: (tags: string[]) => runAction(row.entry.tornUserId, () => setTargetTagsAction({ tornUserId: row.entry.tornUserId, tags })),
@@ -417,6 +461,33 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
         </section>
       ) : (
         <>
+          {/* Search and tag filtering apply to all three tabs below (see
+              `matches`), so the controls live here once instead of being
+              reachable only from whichever tab happens to render them. */}
+          <div className="panel targets-tools targets-tools--shared">
+            <label className="search-field">
+              <Search size={15} /><span className="sr-only">Search targets</span>
+              <input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, ID, faction, tag, note" />
+            </label>
+            {allTags.length > 0 && (
+              <div className="targets-tagfilter" role="group" aria-label="Filter by tag">
+                <Tag size={12} />
+                {allTags.map((tag) => (
+                  <button
+                    type="button"
+                    key={tag}
+                    aria-pressed={tagFilter.includes(tag)}
+                    className={tagFilter.includes(tag) ? "targets-tagchip targets-tagchip--active" : "targets-tagchip"}
+                    onClick={() => setTagFilter((current) => current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag])}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {tagFilter.length > 0 && <button type="button" className="targets-tagclear" onClick={() => setTagFilter([])}>Clear</button>}
+              </div>
+            )}
+          </div>
+
           {/* ------------------------------------------------------- Watchlist */}
           <section id="targets-panel-list" role="tabpanel" aria-labelledby="targets-tab-list" hidden={view !== "list"}>
             <section className="targets-kpis" aria-label="Target list summary">
@@ -424,6 +495,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
               <Kpi label="Attackable" value={counts.attackable} tone={counts.attackable ? "ok" : undefined} sub="Status is Okay" />
               <Kpi label="In hospital" value={counts.hospital} tone={counts.hospital ? "warn" : undefined} sub="Waiting to clear" />
               <Kpi label="Abroad" value={counts.abroad} sub="Travelling or overseas" />
+              <Kpi label="Hit you back" value={counts.hitYouBack} tone={counts.hitYouBack ? "warn" : undefined} sub="Since your last hit" />
             </section>
 
             <section className="panel targets-panel">
@@ -433,10 +505,6 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
               </div>
               <div className="targets-panel__body">
                 <div className="targets-tools">
-                  <label className="search-field">
-                    <Search size={15} /><span className="sr-only">Search targets</span>
-                    <input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, ID, faction, tag, note" />
-                  </label>
                   <div className="targets-chips" role="group" aria-label="Filter by status">
                     {([
                       ["all", "All", counts.total],
@@ -449,6 +517,9 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                         {label}<span>{count}</span>
                       </button>
                     ))}
+                    <button type="button" aria-pressed={hitYouBackOnly} className={hitYouBackOnly ? "targets-chip targets-chip--active" : "targets-chip"} onClick={() => setHitYouBackOnly((current) => !current)}>
+                      Hit you back<span>{counts.hitYouBack}</span>
+                    </button>
                   </div>
                   <label className="targets-sortselect">
                     <span className="sr-only">Sort targets</span>
@@ -463,28 +534,15 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                   </label>
                 </div>
 
-                {allTags.length > 0 && (
-                  <div className="targets-tagfilter" role="group" aria-label="Filter by tag">
-                    <Tag size={12} />
-                    {allTags.map((tag) => (
-                      <button
-                        type="button"
-                        key={tag}
-                        aria-pressed={tagFilter.includes(tag)}
-                        className={tagFilter.includes(tag) ? "targets-tagchip targets-tagchip--active" : "targets-tagchip"}
-                        onClick={() => setTagFilter((current) => current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag])}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                    {tagFilter.length > 0 && <button type="button" className="targets-tagclear" onClick={() => setTagFilter([])}>Clear</button>}
-                  </div>
-                )}
-
                 <ul className="targets-list">
                   {watchlistRows.map((row) => <TargetCard key={row.entry.tornUserId} {...cardProps(row)} />)}
                 </ul>
-                {watchlistRows.length === 0 && <p className="targets-blank">No targets match this view.</p>}
+                {watchlistRows.length === 0 && (
+                  <div className="targets-blank">
+                    <p>No targets match this view.</p>
+                    {hasActiveFilters && <button type="button" className="button button--quiet" onClick={clearFilters}>Clear filters</button>}
+                  </div>
+                )}
               </div>
             </section>
           </section>
@@ -505,7 +563,12 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                 <ul className="targets-list">
                   {chainRows.map((row) => <TargetCard key={row.entry.tornUserId} {...cardProps(row)} chainMode />)}
                 </ul>
-                {chainRows.length === 0 && <p className="targets-blank">Nobody on your list is attackable or clearing soon.</p>}
+                {chainRows.length === 0 && (
+                  <div className="targets-blank">
+                    <p>Nobody on your list is attackable or clearing soon.</p>
+                    {hasActiveNarrowingFilters && <button type="button" className="button button--quiet" onClick={clearFilters}>Clear filters</button>}
+                  </div>
+                )}
               </div>
             </section>
           </section>
@@ -522,7 +585,12 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                 <ul className="targets-list">
                   {abroadRows.map((row) => <TargetCard key={row.entry.tornUserId} {...cardProps(row)} chainMode />)}
                 </ul>
-                {abroadRows.length === 0 && <p className="targets-blank">No targets are abroad right now.</p>}
+                {abroadRows.length === 0 && (
+                  <div className="targets-blank">
+                    <p>No targets are abroad right now.</p>
+                    {hasActiveNarrowingFilters && <button type="button" className="button button--quiet" onClick={clearFilters}>Clear filters</button>}
+                  </div>
+                )}
               </div>
             </section>
           </section>
@@ -577,6 +645,17 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
           <p className="targets-add-hint"><Info size={12} /> Snapshots are read once now with your key; Live keeps them current after that.</p>
         </div>
       </Dialog>
+
+      <Dialog
+        open={removeTarget !== null}
+        className="dialog--targets-remove"
+        title={removeTarget ? `Remove ${removeTarget.snapshot?.name || removeTarget.entry.label || `player ${removeTarget.entry.tornUserId}`}?` : "Remove target?"}
+        description="Their note, tags, and pin are discarded. You can add them back later, but this doesn't restore what's removed."
+        confirmLabel="Remove target"
+        destructive
+        onConfirm={confirmRemoveTarget}
+        onClose={() => setRemoveTarget(null)}
+      />
     </div>
   );
 }

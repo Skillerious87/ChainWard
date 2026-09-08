@@ -78,13 +78,21 @@ export async function writeTargetList(faction: Faction, operatorId: number, list
   }
 }
 
-export function addTargetEntry(list: TargetList, entry: TargetEntry): TargetList {
-  if (list.entries.some((existing) => existing.tornUserId === entry.tornUserId)) {
-    throw new Error("That player is already on your target list.");
+/** Validates an add before any Torn call is spent on it. Returns `null` when
+ *  the player can be added, or the user-facing reason when they can't. */
+export function targetAddError(list: TargetList, tornUserId: number): string | null {
+  if (list.entries.some((existing) => existing.tornUserId === tornUserId)) {
+    return "That player is already on your target list.";
   }
   if (list.entries.length >= MAX_TARGETS) {
-    throw new Error(`A target list holds at most ${MAX_TARGETS} players. Remove one before adding another.`);
+    return `A target list holds at most ${MAX_TARGETS} players. Remove one before adding another.`;
   }
+  return null;
+}
+
+export function addTargetEntry(list: TargetList, entry: TargetEntry): TargetList {
+  const error = targetAddError(list, entry.tornUserId);
+  if (error) throw new Error(error);
   return { entries: [...list.entries, entry], snapshots: { ...list.snapshots } };
 }
 

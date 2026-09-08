@@ -93,9 +93,10 @@ export function isAttackableState(state: string): boolean {
 }
 
 /**
- * Accepts a bare numeric ID or a Torn profile URL / query fragment
- * (`profiles.php?XID=123`, `https://www.torn.com/profiles.php?XID=123`) and
- * returns the Torn user ID, or null when nothing usable is present.
+ * Accepts a bare numeric ID, a Torn profile URL / query fragment
+ * (`profiles.php?XID=123`), or an attack-loader link (`loader.php?sid=attack&
+ * user2ID=123` — the same format this feature's own Attack buttons generate)
+ * and returns the Torn user ID, or null when nothing usable is present.
  */
 export function parseTornUserId(raw: string): number | null {
   const trimmed = raw.trim();
@@ -103,7 +104,7 @@ export function parseTornUserId(raw: string): number | null {
     const value = Number(trimmed);
     return Number.isSafeInteger(value) && value > 0 ? value : null;
   }
-  const match = trimmed.match(/[?&]xid=(\d+)/i) ?? trimmed.match(/profiles\.php\D+(\d+)/i);
+  const match = trimmed.match(/[?&]xid=(\d+)/i) ?? trimmed.match(/[?&]user2id=(\d+)/i) ?? trimmed.match(/profiles\.php\D+(\d+)/i);
   if (match) {
     const value = Number(match[1]);
     return Number.isSafeInteger(value) && value > 0 ? value : null;

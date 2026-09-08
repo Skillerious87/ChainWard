@@ -5,6 +5,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
+import { consumePartitionRateLimit } from "@/lib/security/rate-limit";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { fetchTargetSnapshot, refreshTargets } from "@/lib/targets/data-service";
 import {
@@ -16,11 +17,13 @@ import {
   setTargetNote,
   setTargetPinned,
   setTargetTags,
+  targetAddError,
   targetsStorageAvailable,
   writeTargetList,
 } from "@/lib/targets/store";
 import {
   MAX_TAGS_PER_TARGET,
+  MAX_TARGETS,
   normaliseTag,
   parseTornUserId,
   parseTornUserIdList,
@@ -65,6 +68,9 @@ export async function addTargetAction(input: unknown): Promise<TargetsActionResu
     if (tornUserId === operatorId) return { ok: false, message: "You cannot add yourself as a target." };
 
     const list = await readTargetList(faction.id, operatorId);
+    const addError = targetAddError(list, tornUserId);
+    if (addError) return { ok: false, message: addError };
+
     let snapshot;
     try {
       snapshot = await fetchTargetSnapshot(client, tornUserId);
@@ -137,7 +143,7 @@ export async function importTargetsAction(input: unknown): Promise<TargetsAction
     const parts = [`Added ${added}`];
     if (skipped > 0) parts.push(`${skipped} already listed`);
     if (failed > 0) parts.push(`${failed} not found`);
-    if (capped > 0) parts.push(`${capped} over the ${40}-target cap`);
+    if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
     return { ok: added > 0, message: `${parts.join(", ")}.` };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
@@ -199,6 +205,12 @@ export async function setTargetTagsAction(input: unknown): Promise<TargetsAction
 export async function refreshTargetsAction(): Promise<TargetsActionResult> {
   try {
     const { operatorId, faction } = await operatorContext();
+    // Shares its bucket with the GET /api/targets/refresh poll (same scope
+    // string, same cost) so alternating between the two can't double the
+    // effective budget of forced, up-to-40-target Torn refreshes per minute.
+    const limit = consumePartitionRateLimit("targets-refresh:actor", operatorId, { limit: 30, windowMs: 60_000 });
+    if (!limit.allowed) return { ok: false, message: `You're refreshing too often. Try again in ${limit.retryAfterSeconds}s.` };
+
     const list = await readTargetList(faction.id, operatorId);
     if (list.entries.length === 0) return { ok: true, message: "Your target list is empty." };
 
