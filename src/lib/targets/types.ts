@@ -40,6 +40,32 @@ export const targetLastHitSchema = z.object({
   respect: z.number().default(0),
 });
 
+/**
+ * Rolled up from every attack in the operator's recent log that involves this
+ * target — how many times they've hit them, how it tends to go, and how often
+ * the target has hit back. Today this is aggregated fresh each refresh from the
+ * one `/user/attacks` window Torn returns (~100 attacks); the shape is a
+ * self-contained sub-object so a persisted, longer-history source can populate
+ * the same field later without any UI change. Every field is defaulted so a
+ * snapshot stored before this existed still parses.
+ */
+export const targetHitStatsSchema = z.object({
+  /** Attacks the operator landed on this target within the window. */
+  hitCount: z.number().int().nonnegative().default(0),
+  respectTotal: z.number().default(0),
+  respectAvg: z.number().default(0),
+  /** Successful outcomes (hit connected — hospitalised, mugged, left, …). */
+  winCount: z.number().int().nonnegative().default(0),
+  /** Failed outcomes (lost, stalemate, escaped, timed out). */
+  lossCount: z.number().int().nonnegative().default(0),
+  /** Times this target attacked the operator within the same window. */
+  hitBackCount: z.number().int().nonnegative().default(0),
+  /** Result string of the operator's most recent hit on them. */
+  lastResult: z.string().default(""),
+  /** Unix seconds of the oldest attack the window covers, for a "last N days" label. */
+  windowStartAt: z.number().int().nonnegative().default(0),
+});
+
 export const targetSnapshotSchema = z.object({
   tornUserId: z.number().int().positive(),
   name: z.string().default(""),
@@ -58,6 +84,8 @@ export const targetSnapshotSchema = z.object({
   lastHit: targetLastHitSchema.nullable().default(null),
   /** This target has attacked the operator more recently than the operator hit them. */
   hitYouBack: z.boolean().default(false),
+  /** Aggregate of the operator's recent history against this target, or null when none. */
+  hitStats: targetHitStatsSchema.nullable().default(null),
   /** Sum of active bounty rewards on this player, and how many are stacked. */
   bountyTotal: z.number().nonnegative().default(0),
   bountyCount: z.number().int().nonnegative().default(0),
@@ -72,6 +100,7 @@ export const targetListSchema = z.object({
 export type TargetEntry = z.infer<typeof targetEntrySchema>;
 export type TargetSnapshot = z.infer<typeof targetSnapshotSchema>;
 export type TargetLastHit = z.infer<typeof targetLastHitSchema>;
+export type TargetHitStats = z.infer<typeof targetHitStatsSchema>;
 export type TargetList = z.infer<typeof targetListSchema>;
 
 /** Normalises a raw tag string; returns null when nothing usable remains. */
@@ -108,9 +137,10 @@ export function fairFightDifficulty(fairFight: number): FairFightDifficulty {
 
 /**
  * Accepts a bare numeric ID, a Torn profile URL / query fragment
- * (`profiles.php?XID=123`), or an attack-loader link (`loader.php?sid=attack&
- * user2ID=123` — the same format this feature's own Attack buttons generate)
- * and returns the Torn user ID, or null when nothing usable is present.
+ * (`profiles.php?XID=123`), or an attack link (`page.php?sid=attack&user2ID=123`,
+ * the format this feature's own Attack buttons generate — the older
+ * `loader.php?sid=attack&...` form is still accepted too) and returns the Torn
+ * user ID, or null when nothing usable is present.
  */
 export function parseTornUserId(raw: string): number | null {
   const trimmed = raw.trim();

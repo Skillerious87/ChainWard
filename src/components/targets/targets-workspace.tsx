@@ -47,21 +47,24 @@ import { useWorkspaceSectionNavigation } from "@/components/shell/workspace-sect
 import { notify } from "@/lib/client-actions";
 import { getBrowserNotificationPermission, showWindowsNotification } from "@/lib/member-notification-preferences";
 import type { FairFightInfo } from "@/lib/targets/ffscouter";
+import { scoreTarget, type PriorityResult } from "@/lib/targets/priority";
 import { fairFightDifficulty, isAttackableState, MAX_TAGS_PER_TARGET, MAX_TARGETS, normaliseTag, type TargetEntry, type TargetSnapshot } from "@/lib/targets/types";
 import type { SafeChainTelemetry } from "@/lib/torn/telemetry-types";
 
-type SortKey = "readiness" | "lastAction" | "lastHit" | "level" | "name" | "added" | "fairFight";
+type SortKey = "priority" | "readiness" | "lastAction" | "lastHit" | "level" | "name" | "added" | "fairFight";
 type StatusFilter = "all" | "attackable" | "hospital" | "abroad" | "other";
 type View = "list" | "chain" | "abroad";
 type AddMode = "single" | "paste" | "faction";
 const VIEWS: readonly View[] = ["list", "chain", "abroad"];
 const STALE_MS = 5 * 60_000;
 const POLL_MS = 60_000;
+/** Tighter cadence used while a target is within ~2 min of clearing hospital/jail. */
+const POLL_FAST_MS = 25_000;
 const LIVE_KEY = "chainward:targets-live:v1";
 /** Matches ffscouter.com's own difficulty bands. */
 const WINNABLE_FF_CEILING = 3.5;
 
-const attackUrl = (id: number) => `https://www.torn.com/loader.php?sid=attack&user2ID=${id}`;
+const attackUrl = (id: number) => `https://www.torn.com/page.php?sid=attack&user2ID=${id}`;
 const profileUrl = (id: number) => `https://www.torn.com/profiles.php?XID=${id}`;
 
 interface TargetsWorkspaceProps {
@@ -112,7 +115,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const [addMode, setAddMode] = useState<AddMode>("single");
   const [factionId, setFactionId] = useState("");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortKey>("readiness");
+  const [sort, setSort] = useState<SortKey>("priority");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [hitYouBackOnly, setHitYouBackOnly] = useState(false);
@@ -134,6 +137,10 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const attackableRef = useRef<Set<number>>(new Set(
     Object.values(snapshots).filter((s) => s.attackable).map((s) => s.tornUserId),
   ));
+  /** Ids we've already fired a "clears soon" pre-alert for, cleared once they clear. */
+  const preAlertedRef = useRef<Set<number>>(new Set());
+  /** Chain id + highest risk tier already alerted, so escalation fires once per chain. */
+  const chainAlertRef = useRef<{ id: number; tier: number }>({ id: 0, tier: 0 });
 
   // The ref above only seeds once at mount. A server round-trip (add/remove, a
   // manual refresh, a plain navigation) hands back a fresh `snapshots` prop
@@ -177,24 +184,24 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       else attackableRef.current.delete(snapshot.tornUserId);
     }
     if (freshlyUp.length > 0) {
-      // Lead with the easiest known fight, so the headline itself names the
-      // best pick rather than whichever order Torn happened to return.
-      const ranked = [...freshlyUp].sort((a, b) => {
-        const af = payload.fairFight?.[String(a.tornUserId)]?.fairFight ?? Number.POSITIVE_INFINITY;
-        const bf = payload.fairFight?.[String(b.tornUserId)]?.fairFight ?? Number.POSITIVE_INFINITY;
-        return af - bf;
-      });
+      // Lead with the best pick by the full priority score, so the headline
+      // itself names who to hit rather than whichever order Torn returned.
+      const nowMs = Date.now();
+      const scored = new Map(freshlyUp.map((s) => [s.tornUserId, scoreTarget({
+        snapshot: s, fairFight: payload.fairFight?.[String(s.tornUserId)]?.fairFight ?? null, pinned: false, now: nowMs,
+      })]));
+      const ranked = [...freshlyUp].sort((a, b) => (scored.get(b.tornUserId)!.score - scored.get(a.tornUserId)!.score));
       const names = ranked.map((s) => s.name || `Player ${s.tornUserId}`);
-      const leadFf = payload.fairFight?.[String(ranked[0]!.tornUserId)]?.fairFight;
-      const difficultySuffix = ranked.length === 1 && leadFf != null ? ` — ${difficultyLabel(fairFightDifficulty(leadFf))}` : "";
+      const leadReasons = scored.get(ranked[0]!.tornUserId)!.reasons.filter((r) => r !== "Ready");
+      const reasonSuffix = ranked.length === 1 && leadReasons.length > 0 ? ` — ${leadReasons.slice(0, 3).join(" · ")}` : "";
       notify({
-        title: (ranked.length === 1 ? `${names[0]} is attackable` : `${ranked.length} targets are now attackable`) + difficultySuffix,
+        title: (ranked.length === 1 ? `${names[0]} is attackable` : `${ranked.length} targets are now attackable`) + reasonSuffix,
         description: names.slice(0, 3).join(", "),
         tone: "success",
       });
       if (getBrowserNotificationPermission() === "granted") {
         void showWindowsNotification(
-          (ranked.length === 1 ? `${names[0]} is out of hospital` : `${ranked.length} targets are attackable`) + difficultySuffix,
+          (ranked.length === 1 ? `${names[0]} is out of hospital` : `${ranked.length} targets are attackable`) + reasonSuffix,
           { body: names.slice(0, 4).join(", "), icon: "/icons/android-chrome-192x192.png", tag: "chainward-targets", data: { url: "/targets?section=chain" } },
         );
       }
@@ -221,39 +228,6 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       };
     });
   }, []);
-
-  // Live poll: refresh stale snapshots + chain while the tab is visible.
-  useEffect(() => {
-    if (!live || !connected || entries.length === 0) return;
-    let stopped = false;
-    let lastPoll = Date.parse(fetchedAt ?? "") || Date.now();
-
-    async function poll(): Promise<void> {
-      if (stopped || !navigator.onLine || document.visibilityState !== "visible") return;
-      lastPoll = Date.now();
-      try {
-        const response = await fetch("/api/targets/refresh", { headers: { accept: "application/json" }, cache: "no-store" });
-        if (!response.ok || stopped) return;
-        const payload = await response.json();
-        if (payload && Array.isArray(payload.snapshots)) applyPoll(payload);
-      } catch { /* keep the last good reading */ }
-    }
-
-    function resume(): void {
-      if (document.visibilityState !== "visible" || !navigator.onLine) return;
-      if (Date.now() - lastPoll >= POLL_MS) void poll();
-    }
-
-    const timer = window.setInterval(() => void poll(), POLL_MS);
-    document.addEventListener("visibilitychange", resume);
-    window.addEventListener("online", resume);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", resume);
-      window.removeEventListener("online", resume);
-    };
-  }, [live, connected, entries.length, fetchedAt, applyPoll]);
 
   function toggleLive(): void {
     setLive((value) => {
@@ -293,6 +267,24 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     fairFight: mergedFairFight[String(entry.tornUserId)] ?? null,
   })), [entries, mergedSnapshots, mergedErrors, mergedFairFight]);
 
+  // One "hit next" score per target, shared by the watchlist sort, the chain
+  // queue's tiebreak, and each card's badge. `now` is in the deps so a hospital
+  // timer ticking down keeps the ranking honest — the same cadence the sort
+  // already re-runs at.
+  const priority = useMemo(() => {
+    const map = new Map<number, PriorityResult>();
+    for (const row of rows) {
+      map.set(row.entry.tornUserId, scoreTarget({
+        snapshot: row.snapshot,
+        fairFight: row.fairFight?.fairFight ?? null,
+        pinned: row.entry.pinned,
+        now,
+      }));
+    }
+    return map;
+  }, [rows, now]);
+  const priorityScore = useCallback((row: Row) => priority.get(row.entry.tornUserId)?.score ?? 0, [priority]);
+
   const allTags = useMemo(() => [...new Set(entries.flatMap((entry) => entry.tags))].sort(), [entries]);
 
   const counts = useMemo(() => {
@@ -327,8 +319,11 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const watchlistRows = useMemo(() => rows
     .filter(matches)
     .filter((row) => statusFilter === "all" || statusBucket(row.snapshot?.status.state ?? "") === statusFilter)
-    .sort((a, b) => pinnedFirst(a, b) || compareRows(a, b, sort, now)),
-    [rows, matches, statusFilter, sort, now]);
+    // Every other sort still floats pinned targets to the top outright; the
+    // smart-priority sort folds the pin in as a weighted bonus instead (see
+    // scoreTarget), so a pinned target in hospital can't outrank a ready one.
+    .sort((a, b) => (sort === "priority" ? 0 : pinnedFirst(a, b)) || compareRows(a, b, sort, now, priorityScore)),
+    [rows, matches, statusFilter, sort, now, priorityScore]);
 
   const chainRows = useMemo(() => rows
     .filter(matches)
@@ -340,18 +335,17 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     // Readiness/timing first — this view exists to answer "who do I hit next,"
     // so a pinned target sitting in hospital must not outrank one that's
     // actually ready. Among targets that are *both* attackable right now,
-    // `untilMs` is meaningless (neither has a clear time), so this used to
-    // fall through to pin as the only real tiebreak. Prefer the easier fight
-    // when Fair Fight is known instead — that's the one dimension that
-    // actually distinguishes two equally-ready targets — with pin still
-    // breaking a genuine tie. Hospital/jail rows keep soonest-to-clear first.
+    // `untilMs` is meaningless (neither has a clear time), so order them by the
+    // full smart-priority score (which already folds in Fair Fight, bounty,
+    // freshness and the pin) rather than any single dimension. Hospital/jail
+    // rows keep soonest-to-clear first, pin breaking a genuine tie.
     .sort((a, b) => {
       const order = chainOrder(a, now) - chainOrder(b, now);
       if (order !== 0) return order;
-      if (chainOrder(a, now) === 0) return fairFightRank(a) - fairFightRank(b) || pinnedFirst(a, b);
+      if (chainOrder(a, now) === 0) return priorityScore(b) - priorityScore(a) || pinnedFirst(a, b);
       return untilMs(a.snapshot, now) - untilMs(b.snapshot, now) || pinnedFirst(a, b);
     }),
-    [rows, matches, now]);
+    [rows, matches, now, priorityScore]);
 
   const abroadRows = useMemo(() => rows
     .filter(matches)
@@ -364,19 +358,133 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   // behind it is old enough that a poll may have silently stopped working.
   const nextReadyStale = Boolean(nextReady?.snapshot && now - Date.parse(nextReady.snapshot.fetchedAt) > STALE_MS);
 
-  const exportRows = useMemo(() => rows.map((row) => ({
-    name: row.snapshot?.name ?? row.entry.label ?? `Player ${row.entry.tornUserId}`,
-    tornUserId: row.entry.tornUserId,
-    status: row.snapshot?.status.description ?? "Unknown",
-    state: row.snapshot?.status.state ?? "Unknown",
-    lastAction: row.snapshot?.lastActionRelative ?? "Unknown",
-    level: row.snapshot?.level ?? 0,
-    faction: row.snapshot?.factionName ?? "",
-    tags: row.entry.tags.join("|"),
-    pinned: row.entry.pinned ? "yes" : "",
-    lastHitByMe: row.snapshot?.lastHit ? `${row.snapshot.lastHit.result} @ ${new Date(row.snapshot.lastHit.at * 1_000).toISOString()}` : "",
-    note: row.entry.note,
-  })), [rows]);
+  // --- Predictive readiness ---------------------------------------------------
+  // Targets in hospital/jail with a real clear time, soonest first — drives the
+  // pre-alert, the Chain queue's "imminent" strip and the adaptive poll cadence.
+  const clearingRows = useMemo(() => rows
+    .filter((row) => {
+      const bucket = statusBucket(row.snapshot?.status.state ?? "");
+      return (bucket === "hospital" || bucket === "jail") && futureUntil(row.snapshot, now);
+    })
+    .sort((a, b) => untilMs(a.snapshot, now) - untilMs(b.snapshot, now)),
+    [rows, now]);
+  const soonestClearMs = clearingRows.length > 0 ? untilMs(clearingRows[0]!.snapshot, now) : Number.POSITIVE_INFINITY;
+  const imminentRows = useMemo(() => clearingRows.filter((row) => untilMs(row.snapshot, now) <= 120_000), [clearingRows, now]);
+  const imminentClear = soonestClearMs < 120_000;
+
+  // Fire one quiet toast per target as it enters the last ~90s before clearing,
+  // so a hit can be queued. Reconciled against the live list exactly like
+  // `attackableRef`, so a cleared/removed target can pre-alert again next time.
+  useEffect(() => {
+    if (!connected || clearingRows.length === 0) return;
+    const stillPending = new Set<number>();
+    for (const row of clearingRows) {
+      const id = row.entry.tornUserId;
+      const ms = untilMs(row.snapshot, now);
+      if (!Number.isFinite(ms)) continue;
+      stillPending.add(id);
+      if (ms > 15_000 && ms <= 90_000 && !preAlertedRef.current.has(id)) {
+        preAlertedRef.current.add(id);
+        notify({
+          title: `${row.snapshot?.name || row.entry.label || `Player ${id}`} clears in ~${Math.max(1, Math.round(ms / 60_000))}m`,
+          description: "Get ready to hit.",
+          tone: "info",
+          dedupeKey: `targets:pre-alert:${id}`,
+        });
+      }
+    }
+    for (const id of preAlertedRef.current) if (!stillPending.has(id)) preAlertedRef.current.delete(id);
+  }, [clearingRows, now, connected]);
+
+  // Live poll: refresh stale snapshots + chain while the tab is visible. The
+  // cadence tightens to POLL_FAST_MS while a target is within ~2 min of
+  // clearing, so the "attackable" alert lands promptly; it relaxes again once
+  // nothing is imminent. Well within the refresh route's 30-req/min actor cap.
+  const pollIntervalMs = imminentClear ? POLL_FAST_MS : POLL_MS;
+  useEffect(() => {
+    if (!live || !connected || entries.length === 0) return;
+    let stopped = false;
+    let lastPoll = Date.parse(fetchedAt ?? "") || Date.now();
+
+    async function poll(): Promise<void> {
+      if (stopped || !navigator.onLine || document.visibilityState !== "visible") return;
+      lastPoll = Date.now();
+      try {
+        const response = await fetch("/api/targets/refresh", { headers: { accept: "application/json" }, cache: "no-store" });
+        if (!response.ok || stopped) return;
+        const payload = await response.json();
+        if (payload && Array.isArray(payload.snapshots)) applyPoll(payload);
+      } catch { /* keep the last good reading */ }
+    }
+
+    function resume(): void {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      if (Date.now() - lastPoll >= pollIntervalMs) void poll();
+    }
+
+    const timer = window.setInterval(() => void poll(), pollIntervalMs);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", resume);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("online", resume);
+    };
+  }, [live, connected, entries.length, fetchedAt, applyPoll, pollIntervalMs]);
+
+  // --- Chain assistant -----------------------------------------------------
+  const chainActive = Boolean(chain && chain.state === "active" && chain.current > 0);
+  const chainTimeoutMs = chainActive ? Math.max(0, chain!.timeoutSeconds * 1_000 - (now - chainAnchorMs)) : 0;
+  const chainCooldownMs = chain?.state === "cooldown" ? Math.max(0, chain.cooldownSeconds * 1_000 - (now - chainAnchorMs)) : 0;
+  // 0 = safe · 1 = warn (<5m — toast) · 2 = danger (<2m — Windows notification).
+  const chainDangerTier = !chainActive || chainTimeoutMs <= 0 ? 0 : chainTimeoutMs < 120_000 ? 2 : chainTimeoutMs < 300_000 ? 1 : 0;
+
+  // Escalate once per chain as its timer falls, never re-firing the same tier.
+  useEffect(() => {
+    if (!chain || !chainActive) { chainAlertRef.current = { id: chain?.id ?? 0, tier: 0 }; return; }
+    const ref = chainAlertRef.current;
+    if (ref.id !== chain.id) { ref.id = chain.id; ref.tier = 0; }
+    if (chainDangerTier === 0) { ref.tier = 0; return; }
+    if (chainDangerTier <= ref.tier) return;
+    ref.tier = chainDangerTier;
+    const readyName = nextReady?.snapshot?.name || nextReady?.entry.label || (nextReady ? `Player ${nextReady.entry.tornUserId}` : null);
+    const body = readyName ? `Hit ${readyName} now` : "Nobody on your list is ready to hit";
+    notify({
+      title: `Chain drops in ${formatCountdown(chainTimeoutMs)}${chain.modifier > 1 ? ` · ×${chain.modifier.toFixed(2)}` : ""}`,
+      description: body,
+      tone: chainDangerTier === 2 ? "danger" : "warning",
+      dedupeKey: `targets:chain-risk:${chain.id}`,
+    });
+    if (chainDangerTier === 2 && getBrowserNotificationPermission() === "granted") {
+      void showWindowsNotification("Chain at risk — drops in under 2m", {
+        body, icon: "/icons/android-chrome-192x192.png", tag: "chainward-chain-risk", data: { url: "/targets?section=chain" },
+      });
+    }
+  }, [chain, chainActive, chainDangerTier, chainTimeoutMs, nextReady]);
+
+  const exportRows = useMemo(() => rows.map((row) => {
+    const stats = row.snapshot?.hitStats ?? null;
+    const decided = stats ? stats.winCount + stats.lossCount : 0;
+    return {
+      name: row.snapshot?.name ?? row.entry.label ?? `Player ${row.entry.tornUserId}`,
+      tornUserId: row.entry.tornUserId,
+      priority: priority.get(row.entry.tornUserId)?.score ?? 0,
+      status: row.snapshot?.status.description ?? "Unknown",
+      state: row.snapshot?.status.state ?? "Unknown",
+      lastAction: row.snapshot?.lastActionRelative ?? "Unknown",
+      level: row.snapshot?.level ?? 0,
+      faction: row.snapshot?.factionName ?? "",
+      tags: row.entry.tags.join("|"),
+      pinned: row.entry.pinned ? "yes" : "",
+      lastHitByMe: row.snapshot?.lastHit ? `${row.snapshot.lastHit.result} @ ${new Date(row.snapshot.lastHit.at * 1_000).toISOString()}` : "",
+      hits: stats?.hitCount ?? 0,
+      respectAvg: stats && stats.respectAvg > 0 ? Number(stats.respectAvg.toFixed(2)) : 0,
+      winRate: decided > 0 ? Math.round((stats!.winCount / decided) * 100) : "",
+      hitBackCount: stats?.hitBackCount ?? 0,
+      note: row.entry.note,
+    };
+  }), [rows, priority]);
 
   const runAction = useCallback((id: number | null, action: () => Promise<{ ok: boolean; message: string }>): void => {
     setBusyId(id);
@@ -425,7 +533,10 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       else if (event.key.toLowerCase() === "r" && !pending && connected && entries.length > 0) {
         runAction(null, refreshTargetsAction);
       } else if (event.key.toLowerCase() === "a" && nextReady) {
-        window.open(attackUrl(nextReady.entry.tornUserId), "_blank", "noopener");
+        // No "noopener" here deliberately — Torn's attack window depends on
+        // window.opener (see the Cross-Origin-Opener-Policy comment in
+        // next.config.ts) and renders a black screen without it.
+        window.open(attackUrl(nextReady.entry.tornUserId), "_blank");
       }
     }
     window.addEventListener("keydown", onKey);
@@ -450,6 +561,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const cardProps = (row: Row) => ({
     row,
     now,
+    priority: priority.get(row.entry.tornUserId) ?? null,
     open: expandedId === row.entry.tornUserId,
     busy: busyId === row.entry.tornUserId && pending,
     disabled: pending,
@@ -491,7 +603,15 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
         </>}
       />
 
-      {connected && chain && <ChainStrip chain={chain} anchorMs={chainAnchorMs} now={now} />}
+      {connected && chain && (
+        <ChainStrip
+          chain={chain}
+          timeoutMs={chainTimeoutMs}
+          cooldownMs={chainCooldownMs}
+          bestPick={nextReady}
+          readyCount={counts.attackable}
+        />
+      )}
 
       {!connected ? (
         <section className="panel targets-empty">
@@ -605,6 +725,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                   <label className="targets-sortselect">
                     <span className="sr-only">Sort targets</span>
                     <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)}>
+                      <option value="priority">Sort: smart priority</option>
                       <option value="readiness">Sort: readiness</option>
                       <option value="lastHit">Sort: least recently hit</option>
                       <option value="lastAction">Sort: last action</option>
@@ -639,7 +760,6 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                     className="button button--primary targets-next"
                     href={attackUrl(nextReady.entry.tornUserId)}
                     target="_blank"
-                    rel="noreferrer"
                     title={nextReadyStale ? `Last checked ${formatAgo(now - Date.parse(nextReady.snapshot!.fetchedAt))} ago — double-check they're still attackable before committing` : undefined}
                   >
                     <Swords size={14} /> Attack next{nextReadyStale && <TriangleAlert size={12} className="targets-next__stale" />}
@@ -647,7 +767,16 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
                 )}
               </div>
               <div className="targets-panel__body">
-                <p className="targets-hint"><Info size={13} /> Attackable first — easiest known fight ahead of harder ones when Fair Fight is available — then anyone in hospital or jail ordered by who clears soonest. Countdowns are live{live ? " and auto-refreshing" : ""}.</p>
+                <p className="targets-hint"><Info size={13} /> Highest hit-priority first — readiness, then the easier fight, bounty and freshness — then anyone in hospital or jail ordered by who clears soonest. Countdowns are live{live ? " and auto-refreshing" : ""}.</p>
+                {imminentRows.length > 0 && (
+                  <div className="targets-imminent" role="status">
+                    <Clock3 size={13} />
+                    <span><strong>{imminentRows.length}</strong> clearing in the next 2 min</span>
+                    <span className="targets-imminent__lead">
+                      {(imminentRows[0]!.snapshot?.name || imminentRows[0]!.entry.label || `Player ${imminentRows[0]!.entry.tornUserId}`)} in {formatCountdown(untilMs(imminentRows[0]!.snapshot, now))}
+                    </span>
+                  </div>
+                )}
                 <ul className="targets-list">
                   {chainRows.map((row) => <TargetCard key={row.entry.tornUserId} {...cardProps(row)} chainMode bestPick={nextReady?.entry.tornUserId === row.entry.tornUserId} />)}
                 </ul>
@@ -783,11 +912,17 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
 
 /* ----------------------------------------------------------------- chain === */
 
-function ChainStrip({ chain, anchorMs, now }: { chain: SafeChainTelemetry; anchorMs: number; now: number }) {
+function ChainStrip({ chain, timeoutMs, cooldownMs, bestPick, readyCount }: {
+  chain: SafeChainTelemetry;
+  timeoutMs: number;
+  cooldownMs: number;
+  bestPick: Row | null;
+  readyCount: number;
+}) {
   const active = chain.state === "active" && chain.current > 0;
-  const timeoutRemaining = active ? Math.max(0, chain.timeoutSeconds * 1_000 - (now - anchorMs)) : 0;
-  const cooldownRemaining = chain.state === "cooldown" ? Math.max(0, chain.cooldownSeconds * 1_000 - (now - anchorMs)) : 0;
-  const tone = !active ? "idle" : timeoutRemaining <= 60_000 ? "danger" : timeoutRemaining <= 180_000 ? "warn" : "ok";
+  const tone = !active ? "idle" : timeoutMs <= 60_000 ? "danger" : timeoutMs <= 300_000 ? "warn" : "ok";
+  const bestName = bestPick ? (bestPick.snapshot?.name || bestPick.entry.label || `Player ${bestPick.entry.tornUserId}`) : null;
+  const atRisk = active && tone !== "ok";
 
   return (
     <section className={`targets-chainbar targets-chainbar--${tone}`} aria-label="Faction chain status">
@@ -796,10 +931,22 @@ function ChainStrip({ chain, anchorMs, now }: { chain: SafeChainTelemetry; ancho
         <>
           <span className="targets-chainbar__count"><strong>{chain.current.toLocaleString()}</strong> hits</span>
           {chain.modifier > 1 && <span className="targets-chainbar__mod">×{chain.modifier.toFixed(2)}</span>}
-          <span className="targets-chainbar__timer"><Clock3 size={13} /> {formatCountdown(timeoutRemaining)} to timeout</span>
+          <span className="targets-chainbar__timer"><Clock3 size={13} /> {formatCountdown(timeoutMs)} to timeout</span>
+          {atRisk && (readyCount === 0 || !bestPick) && (
+            <span className="targets-chainbar__risk"><TriangleAlert size={12} /> nobody ready</span>
+          )}
+          {bestPick && bestName && (
+            <a
+              className={`targets-chainbar__hit${atRisk ? " targets-chainbar__hit--urgent" : ""}`}
+              href={attackUrl(bestPick.entry.tornUserId)}
+              target="_blank"
+            >
+              <Swords size={12} /> {atRisk ? `Hit ${bestName} now` : `Next: ${bestName}`}
+            </a>
+          )}
         </>
       ) : chain.state === "cooldown" ? (
-        <span className="targets-chainbar__count">Chain cooldown · {formatCountdown(cooldownRemaining)} left</span>
+        <span className="targets-chainbar__count">Chain cooldown · {formatCountdown(cooldownMs)} left</span>
       ) : (
         <span className="targets-chainbar__count">No chain running</span>
       )}
@@ -809,9 +956,10 @@ function ChainStrip({ chain, anchorMs, now }: { chain: SafeChainTelemetry; ancho
 
 /* -------------------------------------------------------------------- card === */
 
-function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPick = false, onToggle, onRemove, onPin, onSaveNote, onSaveTags }: {
+function TargetCard({ row, now, priority, open, busy, disabled, chainMode = false, bestPick = false, onToggle, onRemove, onPin, onSaveNote, onSaveTags }: {
   row: Row;
   now: number;
+  priority: PriorityResult | null;
   open: boolean;
   busy: boolean;
   disabled: boolean;
@@ -842,6 +990,12 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
   const bountied = Boolean(snapshot && snapshot.bountyCount > 0);
   const ff = fairFight?.fairFight ?? null;
   const difficulty = ff != null ? fairFightDifficulty(ff) : null;
+  const stats = snapshot?.hitStats ?? null;
+  const decidedHits = stats ? stats.winCount + stats.lossCount : 0;
+  const winRate = decidedHits > 0 ? stats!.winCount / decidedHits : null;
+  const reliableFarm = Boolean(stats && stats.hitCount >= 3 && winRate !== null && winRate >= 0.8 && stats.respectAvg > 0);
+  const hitsBackOften = Boolean(stats && stats.hitBackCount >= 2);
+  const priorityTone = !priority ? "" : priority.score >= 70 ? "high" : priority.score >= 40 ? "mid" : "low";
 
   function startEditing(): void { setDraft(entry.note); setEditing(true); }
   function commitNote(): void {
@@ -866,7 +1020,15 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
             <span className="targets-card__l1">
               <span className="targets-card__namegroup">
                 <span className="targets-card__name">{entry.pinned && <Pin size={11} className="targets-card__pinmark" />}{name}</span>
-                {bestPick && <span className="targets-card__bestpick" title="The easiest ready target on your list right now"><Swords size={9} /> Best pick</span>}
+                {priority && snapshot && (
+                  <span
+                    className={`targets-card__prio targets-card__prio--${priorityTone}`}
+                    title={priority.reasons.length > 0 ? `Hit priority ${priority.score} — ${priority.reasons.join(" · ")}` : `Hit priority ${priority.score}`}
+                  >
+                    {priority.score}
+                  </span>
+                )}
+                {bestPick && <span className="targets-card__bestpick" title="Highest-priority ready target on your list right now"><Swords size={9} /> Best pick</span>}
               </span>
               <span className={`targets-card__state targets-card__state--${tone}`}>
                 <i />
@@ -880,7 +1042,7 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
               {snapshot?.factionName && <><i>·</i><span className="targets-card__faction">{snapshot.factionName}</span></>}
               {!chainMode && remaining > 0 && <><i>·</i><span className="targets-card__timer"><Clock3 size={10} /> {formatCountdown(remaining)}</span></>}
             </span>
-            {(snapshot?.lastHit || snapshot?.hitYouBack || bountied || difficulty || entry.tags.length > 0) && (
+            {(snapshot?.lastHit || snapshot?.hitYouBack || bountied || difficulty || entry.tags.length > 0 || (stats && stats.hitCount > 1) || reliableFarm) && (
               <span className="targets-card__l3">
                 {snapshot?.lastHit && (
                   <span className="targets-card__hit" title={`You: ${snapshot.lastHit.result}, ${new Date(snapshot.lastHit.at * 1_000).toLocaleString()}`}>
@@ -888,7 +1050,18 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
                     {snapshot.lastHit.respect > 0 && ` · +${snapshot.lastHit.respect.toFixed(1)}`}
                   </span>
                 )}
-                {snapshot?.hitYouBack && <span className="targets-card__retal" title="This target has attacked you since your last hit"><TriangleAlert size={9} /> hit back</span>}
+                {stats && stats.hitCount > 1 && (
+                  <span
+                    className="targets-card__hist"
+                    title={`${stats.winCount}/${decidedHits || stats.hitCount} landed${winRate !== null ? ` (${Math.round(winRate * 100)}%)` : ""}${stats.windowStartAt ? ` · over the last ${formatAgo(now - stats.windowStartAt * 1_000).replace(" ago", "")}` : ""}`}
+                  >
+                    <Swords size={9} /> {stats.hitCount} hits{stats.respectAvg > 0 ? ` · +${stats.respectAvg.toFixed(1)} avg` : ""}
+                  </span>
+                )}
+                {reliableFarm && <span className="targets-card__farm" title="You've hit this target 3+ times, winning ≥80% for positive respect"><ShieldCheck size={9} /> farm</span>}
+                {hitsBackOften
+                  ? <span className="targets-card__retal" title={`This target has hit you back ${stats!.hitBackCount} times recently`}><TriangleAlert size={9} /> hits back ×{stats!.hitBackCount}</span>
+                  : snapshot?.hitYouBack && <span className="targets-card__retal" title="This target has attacked you since your last hit"><TriangleAlert size={9} /> hit back</span>}
                 {difficulty && ff !== null && (
                   <span className={`targets-card__ff targets-card__ff--${difficulty}`} title={`Estimated Fair Fight ~${ff.toFixed(2)} (${difficultyLabel(difficulty)}) — via ffscouter.com, updated ${formatAgo(now - (fairFight!.lastUpdated * 1_000))}`}>
                     <Gauge size={9} /> FF {ff.toFixed(2)}
@@ -915,7 +1088,7 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
           <Pin size={14} />
         </button>
         {attackable && (
-          <a className="targets-card__attack" href={attackUrl(entry.tornUserId)} target="_blank" rel="noreferrer" aria-label={`Attack ${name}`}>
+          <a className="targets-card__attack" href={attackUrl(entry.tornUserId)} target="_blank" aria-label={`Attack ${name}`}>
             <Swords size={15} />
           </a>
         )}
@@ -929,8 +1102,20 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
             {snapshot?.factionName && <div><dt>Faction</dt><dd>{snapshot.factionName}{snapshot.position ? ` · ${snapshot.position}` : ""}</dd></div>}
             {lifePct !== null && <div><dt>Life</dt><dd>{snapshot!.lifeCurrent.toLocaleString()} / {snapshot!.lifeMaximum.toLocaleString()}</dd></div>}
             {snapshot?.lastHit && <div><dt>Your last hit</dt><dd>{snapshot.lastHit.result || "Hit"} · {formatAgo(now - snapshot.lastHit.at * 1_000)}{snapshot.lastHit.respect > 0 ? ` · +${snapshot.lastHit.respect.toFixed(2)}` : ""}</dd></div>}
+            {stats && stats.hitCount > 0 && (
+              <div>
+                <dt>Your record</dt>
+                <dd>
+                  {stats.hitCount} hit{stats.hitCount === 1 ? "" : "s"}
+                  {decidedHits > 0 ? ` · ${stats.winCount}/${decidedHits} landed` : ""}
+                  {stats.respectAvg > 0 ? ` · +${stats.respectAvg.toFixed(2)} avg respect` : ""}
+                  {stats.hitBackCount > 0 ? ` · hit back ${stats.hitBackCount}×` : ""}
+                </dd>
+              </div>
+            )}
             {difficulty && ff !== null && <div><dt>Fair Fight</dt><dd>~{ff.toFixed(2)} · {difficultyLabel(difficulty)}</dd></div>}
             {bountied && <div><dt>Bounty</dt><dd>{formatMoney(snapshot!.bountyTotal)}{snapshot!.bountyCount > 1 ? ` (×${snapshot!.bountyCount})` : ""}</dd></div>}
+            {priority && priority.reasons.length > 0 && <div><dt>Hit priority</dt><dd>{priority.score} · {priority.reasons.join(", ")}</dd></div>}
             <div><dt>Torn ID</dt><dd>{entry.tornUserId}</dd></div>
             <div><dt>Added</dt><dd>{formatDate(entry.addedAt)}</dd></div>
           </dl>
@@ -981,7 +1166,7 @@ function TargetCard({ row, now, open, busy, disabled, chainMode = false, bestPic
           </div>
 
           <div className="targets-card__actions">
-            <a className="button button--primary" href={attackUrl(entry.tornUserId)} target="_blank" rel="noreferrer"><Swords size={14} /> Attack</a>
+            <a className="button button--primary" href={attackUrl(entry.tornUserId)} target="_blank"><Swords size={14} /> Attack</a>
             <a className="button button--secondary" href={profileUrl(entry.tornUserId)} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Profile</a>
             <button type="button" className="button button--quiet" disabled={disabled} onClick={onPin}><Pin size={13} /> {entry.pinned ? "Unpin" : "Pin"}</button>
             <button type="button" className="button button--quiet" disabled={disabled} onClick={onRemove}>
@@ -1047,9 +1232,10 @@ function fairFightRank(row: Row): number {
   return row.fairFight?.fairFight ?? Number.POSITIVE_INFINITY;
 }
 
-function compareRows(a: Row, b: Row, sort: SortKey, now: number): number {
+function compareRows(a: Row, b: Row, sort: SortKey, now: number, priorityScore: (row: Row) => number): number {
   const an = a.snapshot?.name || a.entry.label || `Player ${a.entry.tornUserId}`;
   const bn = b.snapshot?.name || b.entry.label || `Player ${b.entry.tornUserId}`;
+  if (sort === "priority") return priorityScore(b) - priorityScore(a) || an.localeCompare(bn);
   if (sort === "name") return an.localeCompare(bn);
   if (sort === "level") return (b.snapshot?.level ?? -1) - (a.snapshot?.level ?? -1) || an.localeCompare(bn);
   if (sort === "added") return Date.parse(b.entry.addedAt) - Date.parse(a.entry.addedAt);

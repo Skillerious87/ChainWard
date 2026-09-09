@@ -5,7 +5,7 @@ import { acquireConcurrencySlot } from "@/lib/security/rate-limit";
 import type { TornClient } from "@/lib/torn/client";
 import type { FactionMembersResponse, UserAttacksResponse, UserBountiesResponse } from "@/lib/torn/schemas";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
-import { isAttackableState, TARGET_STALE_MS, type TargetEntry, type TargetLastHit, type TargetSnapshot } from "./types";
+import { isAttackableState, TARGET_STALE_MS, type TargetEntry, type TargetHitStats, type TargetLastHit, type TargetSnapshot } from "./types";
 
 export interface TargetRefreshResult {
   snapshots: TargetSnapshot[];
@@ -25,9 +25,21 @@ interface RefreshOptions {
 export interface HitInfo {
   lastHit: TargetLastHit | null;
   hitYouBack: boolean;
+  /** Rolled-up history against this target, or null when the log holds nothing. */
+  stats: TargetHitStats | null;
 }
 
-const NO_HIT: HitInfo = { lastHit: null, hitYouBack: false };
+const NO_HIT: HitInfo = { lastHit: null, hitYouBack: false, stats: null };
+
+/** Result strings that mean the operator's hit connected / failed. Torn keeps
+ *  adding outcome types, so anything unrecognised (and `respect_gain <= 0`)
+ *  counts as neither rather than being force-fit into a bucket. */
+const WIN_RESULTS = new Set(["attacked", "mugged", "hospitalized", "looted", "arrested"]);
+const LOSS_RESULTS = new Set(["lost", "stalemate", "escape", "timeout"]);
+
+function emptyHitStats(): TargetHitStats {
+  return { hitCount: 0, respectTotal: 0, respectAvg: 0, winCount: 0, lossCount: 0, hitBackCount: 0, lastResult: "", windowStartAt: 0 };
+}
 
 /** Every target profile fetch also asks Torn for that player's bounties (a
  *  separate endpoint), so this bounds both calls against one shared budget. */
@@ -65,6 +77,7 @@ function snapshotFromProfile(
     attackable: isAttackableState(state),
     lastHit: hit.lastHit,
     hitYouBack: hit.hitYouBack,
+    hitStats: hit.stats,
     bountyTotal: bounty.bountyTotal,
     bountyCount: bounty.bountyCount,
     fetchedAt: new Date(fetchedAtMs).toISOString(),
@@ -83,42 +96,62 @@ function summarizeBounties(bounties: UserBountiesResponse | null | undefined): {
 }
 
 /**
- * From the operator's attack log, the most recent hit they landed on each
- * player and whether that player has since hit them back.
+ * From the operator's attack log, per player: the most recent hit they landed,
+ * whether that player has since hit them back, and a roll-up of the whole
+ * window (count, respect, win/loss, times hit back) for the workspace's history
+ * badges and priority score. Torn returns the log DESC (newest first), so the
+ * first attacker-side row we see for a player is their most recent hit.
  */
-export function buildHitIndex(response: UserAttacksResponse, operatorId: number): Map<number, HitInfo> {
+export function buildHitStats(response: UserAttacksResponse, operatorId: number): Map<number, HitInfo> {
   const index = new Map<number, HitInfo>();
-  // Torn returns DESC (newest first); the first entry we see per player wins.
+  const ensure = (id: number): HitInfo => {
+    let info = index.get(id);
+    if (!info) { info = { lastHit: null, hitYouBack: false, stats: null }; index.set(id, info); }
+    return info;
+  };
+
   for (const attack of response.attacks) {
     const attackerId = attack.attacker?.id ?? 0;
     const defenderId = attack.defender?.id ?? 0;
     const ended = attack.ended || attack.started;
 
     if (attackerId === operatorId && defenderId > 0) {
-      const current = index.get(defenderId);
-      if (!current || !current.lastHit) {
-        index.set(defenderId, {
-          lastHit: { at: ended, result: attack.result, respect: attack.respect_gain },
-          hitYouBack: current?.hitYouBack ?? false,
-        });
+      const info = ensure(defenderId);
+      const stats = info.stats ?? (info.stats = emptyHitStats());
+      if (!info.lastHit) {
+        info.lastHit = { at: ended, result: attack.result, respect: attack.respect_gain };
+        stats.lastResult = attack.result;
       }
+      stats.hitCount += 1;
+      stats.respectTotal += attack.respect_gain;
+      const result = attack.result.toLowerCase();
+      if (attack.respect_gain > 0 || WIN_RESULTS.has(result)) stats.winCount += 1;
+      else if (LOSS_RESULTS.has(result)) stats.lossCount += 1;
+      stats.windowStartAt = stats.windowStartAt === 0 ? ended : Math.min(stats.windowStartAt, ended);
     } else if (defenderId === operatorId && attackerId > 0) {
-      const current = index.get(attackerId) ?? NO_HIT;
+      const info = ensure(attackerId);
+      const stats = info.stats ?? (info.stats = emptyHitStats());
+      stats.hitBackCount += 1;
       // Only a "hit back" if it happened after our most recent hit on them.
-      if (!current.lastHit || ended > current.lastHit.at) {
-        index.set(attackerId, { ...current, hitYouBack: true });
-      }
+      if (!info.lastHit || ended > info.lastHit.at) info.hitYouBack = true;
     }
+  }
+
+  for (const info of index.values()) {
+    if (info.stats && info.stats.hitCount > 0) info.stats.respectAvg = info.stats.respectTotal / info.stats.hitCount;
   }
   return index;
 }
+
+/** @deprecated Use {@link buildHitStats}. Kept as a name-only alias for existing callers. */
+export const buildHitIndex = buildHitStats;
 
 /** Builds the hit index once per batch — every caller that fetches one or
  *  more target profiles shares this instead of re-reading the attack log. */
 export async function loadHitIndex(client: TornClient, operatorId: number): Promise<Map<number, HitInfo>> {
   try {
     const { value } = await client.getMyAttacks();
-    return buildHitIndex(value, operatorId);
+    return buildHitStats(value, operatorId);
   } catch {
     // Attack history is enrichment only — a missing selection or a transient
     // failure must never block a status refresh.
@@ -238,6 +271,7 @@ export function snapshotFromFactionMember(
     attackable: isAttackableState(state),
     lastHit: null,
     hitYouBack: false,
+    hitStats: null,
     bountyTotal: 0,
     bountyCount: 0,
     fetchedAt: new Date(fetchedAtMs - TARGET_STALE_MS - 1_000).toISOString(),

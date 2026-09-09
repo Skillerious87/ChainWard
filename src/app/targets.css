@@ -28,12 +28,21 @@
 .targets-chainbar__timer { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-weight: 640; }
 .targets-chainbar--ok { border-left-color: var(--success); }
 .targets-chainbar--ok .targets-chainbar__icon, .targets-chainbar--ok .targets-chainbar__timer { color: var(--success); }
-.targets-chainbar--warn { border-left-color: var(--warning); }
+.targets-chainbar--warn { border-left-color: var(--warning); background: rgba(245, 185, 76, .05); }
 .targets-chainbar--warn .targets-chainbar__icon, .targets-chainbar--warn .targets-chainbar__timer { color: var(--warning); }
 .targets-chainbar--danger { border-left-color: var(--danger); background: rgba(233, 120, 120, .06); }
 .targets-chainbar--danger .targets-chainbar__icon, .targets-chainbar--danger .targets-chainbar__timer { color: var(--danger); }
 .targets-chainbar--idle { border-left-color: var(--border-strong); }
 .targets-chainbar--idle .targets-chainbar__count { color: var(--text-muted); }
+.targets-chainbar__risk { display: inline-flex; align-items: center; gap: 4px; color: var(--danger); font-weight: 680; }
+.targets-chainbar__hit {
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border-strong);
+  color: var(--text-secondary); font-weight: 660; text-decoration: none; white-space: nowrap;
+}
+.targets-chainbar__hit:hover { color: #eef2f0; background: rgba(255, 255, 255, .04); }
+.targets-chainbar__hit--urgent { border-color: transparent; background: var(--danger); color: #fff; }
+.targets-chainbar__hit--urgent:hover { background: var(--danger); color: #fff; filter: brightness(1.08); }
 
 /* --- Empty / connect / storage states --------------------------------- */
 .targets-empty { display: flex; align-items: flex-start; gap: 15px; padding: 26px 24px; }
@@ -80,6 +89,16 @@
 .targets-hint svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent); }
 .targets-blank { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 6px 0 2px; color: var(--text-muted); font-size: 12px; text-align: center; }
 .targets-blank p { margin: 0; }
+
+/* "N clearing in the next 2 min" — sits above the chain queue list. */
+.targets-imminent {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  padding: 7px 11px; border: 1px solid var(--border); border-left: 3px solid var(--warning); border-radius: 9px;
+  background: rgba(245, 185, 76, .05); color: var(--text-secondary); font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+.targets-imminent svg { flex: 0 0 auto; color: var(--warning); }
+.targets-imminent strong { color: #eef2f0; font-weight: 700; }
+.targets-imminent__lead { margin-left: auto; color: var(--text-muted); }
 
 .targets-next { flex: 0 0 auto; white-space: nowrap; }
 .targets-next__stale { margin-left: 2px; color: var(--warning); }
@@ -165,6 +184,11 @@
 .targets-card__namegroup { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
 .targets-card__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #eef2f0; font-size: 13.5px; font-weight: 620; }
 .targets-card__bestpick { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; background: rgba(var(--accent-rgb), .16); color: var(--accent); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+/* Composite "hit next" score — high (ready & winnable) down to low. */
+.targets-card__prio { display: inline-flex; flex: 0 0 auto; align-items: center; min-width: 20px; justify-content: center; padding: 1px 6px; border-radius: 999px; font-size: 9.5px; font-weight: 750; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .06); color: var(--text-secondary); cursor: help; }
+.targets-card__prio--high { background: rgba(103, 211, 145, .16); color: var(--success); }
+.targets-card__prio--mid { background: rgba(var(--accent-rgb), .14); color: var(--accent); }
+.targets-card__prio--low { background: rgba(255, 255, 255, .05); color: var(--text-muted); }
 .targets-card__state { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 640; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .targets-card__state i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
 .targets-card__state--ok { color: var(--success); }
@@ -181,6 +205,9 @@
 .targets-card__hit { display: inline-flex; align-items: center; gap: 3px; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
 .targets-card__hit svg { color: var(--text-muted); }
 .targets-card__retal { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; border-radius: 999px; background: rgba(233, 120, 120, .12); color: var(--danger); font-size: 9px; font-weight: 700; }
+.targets-card__hist { display: inline-flex; align-items: center; gap: 3px; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; cursor: help; }
+.targets-card__hist svg { color: var(--text-muted); }
+.targets-card__farm { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; border-radius: 999px; background: rgba(103, 211, 145, .14); color: var(--success); font-size: 9px; font-weight: 700; }
 .targets-card__tag { padding: 1px 6px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-muted); font-size: 9px; font-weight: 600; }
 .targets-card__bounty { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; border-radius: 999px; background: rgba(245, 185, 76, .14); color: var(--warning); font-size: 9px; font-weight: 700; font-variant-numeric: tabular-nums; }
 /* Fair Fight difficulty — colour bands match ffscouter.com's own thresholds

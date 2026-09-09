@@ -48,7 +48,15 @@ const nextConfig: NextConfig = {
       source: "/(.*)",
       headers: [
         { key: "Content-Security-Policy", value: contentSecurityPolicy },
-        { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+        // `same-origin` (the stricter default) severs `window.opener` for
+        // *every* cross-origin popup this page opens, regardless of the
+        // link's own `rel` attribute — including Torn's own attack window,
+        // which appears to depend on that reference and renders a black
+        // screen without it. `same-origin-allow-popups` keeps COOP's
+        // protection against a hostile page reaching back into Chainward,
+        // while still letting Chainward's own popups (Torn, a trusted first
+        // party this whole app authenticates against) retain the relationship.
+        { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
         { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

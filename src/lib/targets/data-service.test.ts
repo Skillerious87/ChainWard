@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/torn/server-client", () => ({ getConfiguredTornConnection: mocks.getConfiguredTornConnection }));
 
-import { buildHitIndex, refreshTargets } from "./data-service";
+import { buildHitStats, refreshTargets } from "./data-service";
 import type { TargetEntry, TargetSnapshot } from "./types";
 
 function profile(id: number, overrides: Record<string, unknown> = {}) {
@@ -39,7 +39,7 @@ function snapshot(tornUserId: number, over: Partial<TargetSnapshot> = {}): Targe
     tornUserId, name: "S", level: 10, factionId: null, factionName: "", position: "",
     status: { description: "Okay", state: "Okay", until: null, color: "green" },
     lastActionAt: 0, lastActionRelative: "", lastActionStatus: "", lifeCurrent: 0, lifeMaximum: 0,
-    attackable: true, lastHit: null, hitYouBack: false, bountyTotal: 0, bountyCount: 0, fetchedAt: new Date().toISOString(), ...over,
+    attackable: true, lastHit: null, hitYouBack: false, hitStats: null, bountyTotal: 0, bountyCount: 0, fetchedAt: new Date().toISOString(), ...over,
   };
 }
 
@@ -53,7 +53,7 @@ beforeEach(() => {
   });
 });
 
-describe("buildHitIndex", () => {
+describe("buildHitStats", () => {
   it("records the operator's most recent hit per target and flags a hit back", () => {
     const response = {
       attacks: [
@@ -62,11 +62,32 @@ describe("buildHitIndex", () => {
         { id: 3, started: 90, ended: 150, attacker: { id: 999 }, defender: { id: 21 }, result: "Hospitalized", respect_gain: 8, respect_loss: 0, chain: 1 },
       ],
     };
-    const index = buildHitIndex(response as never, 999);
+    const index = buildHitStats(response as never, 999);
     expect(index.get(20)?.lastHit).toEqual({ at: 160, result: "Mugged", respect: 12.5 });
     expect(index.get(20)?.hitYouBack).toBe(true);
     expect(index.get(21)?.lastHit?.result).toBe("Hospitalized");
     expect(index.get(21)?.hitYouBack).toBe(false);
+  });
+
+  it("rolls up count, respect average, win/loss and hit-back count across the window", () => {
+    const response = {
+      attacks: [
+        { id: 5, started: 500, ended: 560, attacker: { id: 999 }, defender: { id: 30 }, result: "Hospitalized", respect_gain: 6, respect_loss: 0, chain: 0 },
+        { id: 4, started: 400, ended: 460, attacker: { id: 999 }, defender: { id: 30 }, result: "Lost", respect_gain: 0, respect_loss: 2, chain: 0 },
+        { id: 3, started: 300, ended: 360, attacker: { id: 999 }, defender: { id: 30 }, result: "Mugged", respect_gain: 3, respect_loss: 0, chain: 0 },
+        { id: 2, started: 200, ended: 260, attacker: { id: 30 }, defender: { id: 999 }, result: "Attacked", respect_gain: 0, respect_loss: 4, chain: 0 },
+        { id: 1, started: 100, ended: 160, attacker: { id: 30 }, defender: { id: 999 }, result: "Hospitalized", respect_gain: 9, respect_loss: 0, chain: 0 },
+      ],
+    };
+    const stats = buildHitStats(response as never, 999).get(30)?.stats;
+    expect(stats).toMatchObject({ hitCount: 3, winCount: 2, lossCount: 1, hitBackCount: 2, lastResult: "Hospitalized", windowStartAt: 360 });
+    expect(stats?.respectTotal).toBeCloseTo(9);
+    expect(stats?.respectAvg).toBeCloseTo(3);
+  });
+
+  it("leaves stats null for a player with no attacker-side history", () => {
+    const response = { attacks: [] };
+    expect(buildHitStats(response as never, 999).size).toBe(0);
   });
 });
 
