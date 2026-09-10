@@ -31,7 +31,6 @@ import {
   addTargetAction,
   importFactionTargetsAction,
   importTargetsAction,
-  refreshTargetsAction,
   removeTargetAction,
   saveFfscouterKeyAction,
   setTargetPinnedAction,
@@ -60,7 +59,17 @@ const STALE_MS = 5 * 60_000;
 const POLL_MS = 60_000;
 /** Tighter cadence used while a target is within ~2 min of clearing hospital/jail. */
 const POLL_FAST_MS = 25_000;
+/** Backlog-drain / full-sweep loop: targets per request, and the pause between
+ *  requests. ~15 per 7s paces a 300-target sweep to roughly Torn's shared
+ *  per-key limit (its client caches profiles 60s / bounties 10min and honours
+ *  Retry-After if the very first sweep briefly overshoots). */
+const CATCHUP_BUDGET = 15;
+const CATCHUP_GAP_MS = 7_000;
+/** Stale-count on load past which the workspace auto-runs one catch-up sweep. */
+const CATCHUP_AUTO_THRESHOLD = 25;
 const LIVE_KEY = "chainward:targets-live:v1";
+
+const sleep = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
 /** Matches ffscouter.com's own difficulty bands. */
 const WINNABLE_FF_CEILING = 3.5;
 
@@ -129,6 +138,9 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const [live, setLive] = useState(() => {
     try { return window.localStorage.getItem(LIVE_KEY) !== "0"; } catch { return true; }
   });
+  /** Non-null while the client is draining the refresh backlog (big import, or
+   *  a manual "refresh everything"), so the UI can show an accurate bar. */
+  const [catchUp, setCatchUp] = useState<{ done: number; total: number } | null>(null);
   const [liveState, setLiveState] = useState<LiveState>(() => ({
     snapshots: {}, errors: {}, clearedErrors: [], fairFight: {}, chain: null, chainAnchorMs: 0, syncedAt: 0,
   }));
@@ -141,6 +153,10 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const preAlertedRef = useRef<Set<number>>(new Set());
   /** Chain id + highest risk tier already alerted, so escalation fires once per chain. */
   const chainAlertRef = useRef<{ id: number; tier: number }>({ id: 0, tier: 0 });
+  /** Guards the catch-up loop against overlapping runs; survives re-renders. */
+  const catchUpRef = useRef(false);
+  /** One automatic catch-up per mount when the list lands with a big backlog. */
+  const autoCatchUpDoneRef = useRef(false);
 
   // The ref above only seeds once at mount. A server round-trip (add/remove, a
   // manual refresh, a plain navigation) hands back a fresh `snapshots` prop
@@ -396,13 +412,80 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     for (const id of preAlertedRef.current) if (!stillPending.has(id)) preAlertedRef.current.delete(id);
   }, [clearingRows, now, connected]);
 
+  // Drains the refresh backlog in bounded chunks (a big import, or a manual
+  // "refresh everything"), driving an accurate progress bar. `dueTotal` from
+  // each response is the pre-budget backlog, so `total - remaining` is honest
+  // progress. Safe to call repeatedly — `catchUpRef` collapses overlap.
+  //  • no args  → drain the freshness backlog (placeholders from a big import,
+  //    or a long time away): loop the budgeted endpoint until `dueTotal` is 0.
+  //  • { full } → the "Refresh all" sweep: walk every entry in deterministic
+  //    id-chunks so progress is exact and it always terminates.
+  const catchingUp = catchUp !== null;
+  const postRefresh = useCallback(async (query: string): Promise<{ fetched: number; dueTotal: number } | null> => {
+    try {
+      const response = await fetch(`/api/targets/refresh?${query}`, { headers: { accept: "application/json" }, cache: "no-store" });
+      if (!response.ok) return null;
+      const payload = await response.json();
+      if (!payload || !Array.isArray(payload.snapshots)) return null;
+      applyPoll(payload);
+      return { fetched: payload.snapshots.length, dueTotal: typeof payload.dueTotal === "number" ? payload.dueTotal : 0 };
+    } catch {
+      return null;
+    }
+  }, [applyPoll]);
+
+  const runCatchUp = useCallback(async ({ full = false }: { full?: boolean } = {}) => {
+    if (catchUpRef.current || !connected) return;
+    catchUpRef.current = true;
+    try {
+      if (full) {
+        const ids = entries.map((entry) => entry.tornUserId);
+        if (ids.length === 0) return;
+        setCatchUp({ done: 0, total: ids.length });
+        let idleWaits = 0;
+        for (let i = 0; i < ids.length;) {
+          if (document.visibilityState !== "visible" || !navigator.onLine) {
+            if (++idleWaits > 150) break; // ~5 min backgrounded — give up, the trickle poll takes over
+            await sleep(2_000);
+            continue;
+          }
+          idleWaits = 0;
+          if (i > 0) await sleep(CATCHUP_GAP_MS);
+          const chunk = ids.slice(i, i + CATCHUP_BUDGET);
+          const step = await postRefresh(`ids=${chunk.join(",")}`);
+          i += chunk.length;
+          setCatchUp({ done: Math.min(ids.length, i), total: ids.length });
+          if (!step) break;
+        }
+        return;
+      }
+
+      const first = await postRefresh(`budget=${CATCHUP_BUDGET}`);
+      if (!first || first.dueTotal <= first.fetched) return; // nothing waiting beyond this batch
+      const total = first.dueTotal;
+      setCatchUp({ done: Math.min(total, first.fetched), total });
+      let guard = 0;
+      while (guard++ < 80) {
+        if (document.visibilityState !== "visible" || !navigator.onLine) { await sleep(2_000); continue; }
+        await sleep(CATCHUP_GAP_MS);
+        const next = await postRefresh(`budget=${CATCHUP_BUDGET}`);
+        if (!next) break;
+        setCatchUp({ done: Math.max(0, Math.min(total, total - next.dueTotal + next.fetched)), total });
+        if (next.dueTotal <= next.fetched || next.fetched === 0) break;
+      }
+    } finally {
+      catchUpRef.current = false;
+      setCatchUp(null);
+    }
+  }, [connected, entries, postRefresh]);
+
   // Live poll: refresh stale snapshots + chain while the tab is visible. The
   // cadence tightens to POLL_FAST_MS while a target is within ~2 min of
   // clearing, so the "attackable" alert lands promptly; it relaxes again once
-  // nothing is imminent. Well within the refresh route's 30-req/min actor cap.
+  // nothing is imminent. Paused while the catch-up loop owns the refresh path.
   const pollIntervalMs = imminentClear ? POLL_FAST_MS : POLL_MS;
   useEffect(() => {
-    if (!live || !connected || entries.length === 0) return;
+    if (!live || !connected || entries.length === 0 || catchingUp) return;
     let stopped = false;
     let lastPoll = Date.parse(fetchedAt ?? "") || Date.now();
 
@@ -431,7 +514,17 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);
     };
-  }, [live, connected, entries.length, fetchedAt, applyPoll, pollIntervalMs]);
+  }, [live, connected, entries.length, fetchedAt, applyPoll, pollIntervalMs, catchingUp]);
+
+  // One automatic sweep when the list lands with a large backlog (a fresh
+  // import, or a long time away) — after that it's manual or the trickle poll.
+  useEffect(() => {
+    if (autoCatchUpDoneRef.current || !connected || !live || entries.length === 0) return;
+    if (counts.stale >= CATCHUP_AUTO_THRESHOLD) {
+      autoCatchUpDoneRef.current = true;
+      void runCatchUp();
+    }
+  }, [connected, live, entries.length, counts.stale, runCatchUp]);
 
   // --- Chain assistant -----------------------------------------------------
   const chainActive = Boolean(chain && chain.state === "active" && chain.current > 0);
@@ -506,6 +599,11 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     if (!result.ok) throw new Error(result.message);
     setReference(""); setAddNote(""); setImportText(""); setFactionId("");
     router.refresh();
+    // Bulk imports land as placeholders — pull their live data straight away.
+    if ((result.added ?? 0) > 0) {
+      autoCatchUpDoneRef.current = true; // the manual sweep pre-empts the auto one
+      void runCatchUp();
+    }
   }
 
   async function saveFfscouterKey(): Promise<void> {
@@ -530,8 +628,8 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (event.key === "/") { event.preventDefault(); searchRef.current?.focus(); }
-      else if (event.key.toLowerCase() === "r" && !pending && connected && entries.length > 0) {
-        runAction(null, refreshTargetsAction);
+      else if (event.key.toLowerCase() === "r" && !catchingUp && connected && entries.length > 0) {
+        void runCatchUp({ full: true });
       } else if (event.key.toLowerCase() === "a" && nextReady) {
         // No "noopener" here deliberately — Torn's attack window depends on
         // window.opener (see the Cross-Origin-Opener-Policy comment in
@@ -541,7 +639,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pending, connected, entries.length, nextReady, runAction]);
+  }, [catchingUp, connected, entries.length, nextReady, runCatchUp]);
 
   const canAdd = connected && storageAvailable && entries.length < MAX_TARGETS;
   // Chain/Abroad never read statusFilter (see chainRows/abroadRows above), so
@@ -590,11 +688,12 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
           </button>
           <button
             className="button button--secondary"
-            disabled={pending || !connected || entries.length === 0}
-            onClick={() => runAction(null, refreshTargetsAction)}
+            disabled={catchingUp || !connected || entries.length === 0}
+            onClick={() => void runCatchUp({ full: true })}
+            title="Re-read every target from Torn, most-important first"
           >
-            {busyId === null && pending ? <Spinner size={15} label="Refreshing targets" tone="muted" /> : <RefreshCw size={15} />}
-            {busyId === null && pending ? "Refreshing…" : "Refresh"}
+            {catchingUp ? <Spinner size={15} label="Refreshing targets" tone="muted" /> : <RefreshCw size={15} />}
+            {catchingUp ? "Refreshing…" : "Refresh all"}
           </button>
           <ExportButton filename="chainward-targets.csv" label="Export" rows={exportRows} />
           <button className="button button--primary" disabled={!canAdd} onClick={() => { setAddMode("single"); setAddOpen(true); }}>
@@ -602,6 +701,21 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
           </button>
         </>}
       />
+
+      {catchUp && (
+        <div className="targets-catchup" role="status" aria-live="polite">
+          <div className="targets-catchup__track">
+            <div
+              className="targets-catchup__fill"
+              style={{ width: `${catchUp.total > 0 ? Math.min(100, Math.round((catchUp.done / catchUp.total) * 100)) : 0}%` }}
+            />
+          </div>
+          <span className="targets-catchup__label">
+            <RefreshCw size={13} className="targets-catchup__spin" />
+            Fetching live data — {Math.min(catchUp.done, catchUp.total)} / {catchUp.total}
+          </span>
+        </div>
+      )}
 
       {connected && chain && (
         <ChainStrip
@@ -854,7 +968,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
           {addMode === "paste" ? (
             <label>
               <span>Player IDs or profile links <small>up to the {MAX_TARGETS}-target cap</small></span>
-              <textarea value={importText} maxLength={4_000} onChange={(event) => setImportText(event.target.value)} placeholder={"1234567\n2345678\nhttps://www.torn.com/profiles.php?XID=3456789"} rows={6} />
+              <textarea value={importText} maxLength={20_000} onChange={(event) => setImportText(event.target.value)} placeholder={"1234567\n2345678\nhttps://www.torn.com/profiles.php?XID=3456789"} rows={6} />
             </label>
           ) : addMode === "faction" ? (
             <label>
@@ -873,7 +987,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
               </label>
             </>
           )}
-          <p className="targets-add-hint"><Info size={12} /> {addMode === "faction" ? "Full status and life are read on the next refresh — importing itself only costs two Torn calls." : "Snapshots are read once now with your key; Live keeps them current after that."}</p>
+          <p className="targets-add-hint"><Info size={12} /> {addMode === "faction" ? "Full status and life are read on the next refresh — importing itself only costs two Torn calls." : addMode === "paste" ? "Big lists add instantly — live status, life, bounties and history stream in over the next minute or two, with a progress bar." : "Snapshots are read once now with your key; Live keeps them current after that."}</p>
         </div>
       </Dialog>
 

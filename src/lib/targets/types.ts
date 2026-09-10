@@ -7,7 +7,7 @@ import { z } from "zod";
  * Torn key.
  */
 
-export const MAX_TARGETS = 75;
+export const MAX_TARGETS = 300;
 export const MAX_TAGS_PER_TARGET = 6;
 export const MAX_TAG_LENGTH = 24;
 /** A snapshot older than this is refreshed on the next page load. */

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   fetchTargetSnapshots: vi.fn(),
   loadHitIndex: vi.fn(),
   snapshotFromFactionMember: vi.fn(),
+  placeholderSnapshot: vi.fn(),
   refreshTargets: vi.fn(),
   saveFfscouterKey: vi.fn(),
   clearFfscouterKey: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/lib/targets/data-service", () => ({
   fetchTargetSnapshots: mocks.fetchTargetSnapshots,
   loadHitIndex: mocks.loadHitIndex,
   snapshotFromFactionMember: mocks.snapshotFromFactionMember,
+  placeholderSnapshot: mocks.placeholderSnapshot,
   refreshTargets: mocks.refreshTargets,
 }));
 vi.mock("@/lib/targets/ffscouter-key-store", () => ({
@@ -79,6 +81,7 @@ beforeEach(() => {
   mocks.readTargetList.mockResolvedValue({ entries: [], snapshots: {} });
   mocks.writeTargetList.mockResolvedValue(undefined);
   mocks.loadHitIndex.mockResolvedValue(new Map());
+  mocks.placeholderSnapshot.mockImplementation((tornUserId: number) => snapshot(tornUserId, ""));
 });
 
 describe("addTargetAction", () => {
@@ -175,18 +178,18 @@ describe("updateTargetNoteAction", () => {
 describe("refreshTargetsAction", () => {
   it("force-refreshes and persists the returned snapshots", async () => {
     mocks.readTargetList.mockResolvedValue({ entries: [{ tornUserId: 900, label: "R", note: "", addedAt: new Date().toISOString() }], snapshots: {} });
-    mocks.refreshTargets.mockResolvedValue({ snapshots: [snapshot(900)], errors: {}, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false });
+    mocks.refreshTargets.mockResolvedValue({ snapshots: [snapshot(900)], errors: {}, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false, dueTotal: 1 });
 
     const result = await refreshTargetsAction();
 
-    expect(mocks.refreshTargets).toHaveBeenCalledWith(expect.any(Array), expect.any(Object), { force: true });
+    expect(mocks.refreshTargets).toHaveBeenCalledWith(expect.any(Array), expect.any(Object), { force: true, budget: 60 });
     expect(mocks.writeTargetList).toHaveBeenCalled();
     expect(result.ok).toBe(true);
   });
 
   it("reports partial failure without claiming success", async () => {
     mocks.readTargetList.mockResolvedValue({ entries: [{ tornUserId: 900, label: "R", note: "", addedAt: new Date().toISOString() }], snapshots: {} });
-    mocks.refreshTargets.mockResolvedValue({ snapshots: [], errors: { 900: "boom" }, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false });
+    mocks.refreshTargets.mockResolvedValue({ snapshots: [], errors: { 900: "boom" }, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false, dueTotal: 1 });
 
     const result = await refreshTargetsAction();
     expect(result.ok).toBe(false);
@@ -231,26 +234,25 @@ describe("setTargetTagsAction", () => {
 });
 
 describe("importTargetsAction", () => {
-  it("adds every parseable id, skipping self and duplicates", async () => {
+  it("adds every parseable id as a placeholder with no Torn calls, skipping self and duplicates", async () => {
     mocks.readTargetList.mockResolvedValue({ entries: [entry(111)], snapshots: {} });
-    mocks.fetchTargetSnapshots.mockImplementation((_client: unknown, ids: number[]) => Promise.resolve({
-      snapshots: ids.map((id) => snapshot(id)),
-      errors: {},
-    }));
 
     const result = await importTargetsAction({ text: "111\n222\nhttps://www.torn.com/profiles.php?XID=333\n555\nnot-an-id" });
 
     expect(result.ok).toBe(true);
-    const [, fetchedIds] = mocks.fetchTargetSnapshots.mock.calls[0]!;
-    expect(fetchedIds.sort()).toEqual([222, 333]); // 111 already listed, 555 is the operator
+    expect(result.added).toBe(2);
+    expect(mocks.fetchTargetSnapshots).not.toHaveBeenCalled();
+    expect(mocks.loadHitIndex).not.toHaveBeenCalled();
     const [, , written] = mocks.writeTargetList.mock.calls[0]!;
     expect(written.entries.map((e: { tornUserId: number }) => e.tornUserId).sort()).toEqual([111, 222, 333]);
+    // 222 and 333 are stored with a placeholder snapshot each
+    expect(Object.keys(written.snapshots).sort()).toEqual(["222", "333"]);
   });
 
   it("rejects a blob with no ids", async () => {
     const result = await importTargetsAction({ text: "nothing useful here" });
     expect(result.ok).toBe(false);
-    expect(mocks.fetchTargetSnapshots).not.toHaveBeenCalled();
+    expect(mocks.writeTargetList).not.toHaveBeenCalled();
   });
 });
 

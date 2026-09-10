@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/torn/server-client", () => ({ getConfiguredTornConnection: mocks.getConfiguredTornConnection }));
 
-import { buildHitStats, refreshTargets } from "./data-service";
+import { buildHitStats, placeholderSnapshot, refreshTargets } from "./data-service";
 import type { TargetEntry, TargetSnapshot } from "./types";
 
 function profile(id: number, overrides: Record<string, unknown> = {}) {
@@ -144,5 +144,54 @@ describe("refreshTargets", () => {
     mocks.getMyAttacks.mockRejectedValue(new Error("no selection"));
     const result = await refreshTargets([entry(1)], {}, { force: true });
     expect(result.snapshots[0]!.lastHit).toBeNull();
+  });
+
+  it("leaves a long hospital timer alone but re-reads one about to clear", async () => {
+    mocks.getUserProfileById.mockImplementation((id: number) => Promise.resolve(profile(id)));
+    const nowSec = Math.floor(Date.now() / 1_000);
+    const longHosp = snapshot(1, {
+      status: { description: "In hospital", state: "Hospital", until: nowSec + 40 * 60, color: "red" },
+      attackable: false, fetchedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    });
+    const soonHosp = snapshot(2, {
+      status: { description: "In hospital", state: "Hospital", until: nowSec + 90, color: "red" },
+      attackable: false, fetchedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    });
+    const result = await refreshTargets([entry(1), entry(2)], { "1": longHosp, "2": soonHosp });
+    expect(result.snapshots.map((s) => s.tornUserId)).toEqual([2]);
+    expect(result.dueTotal).toBe(1);
+  });
+
+  it("caps a single call to the budget, most-in-need first, and reports the backlog", async () => {
+    mocks.getUserProfileById.mockImplementation((id: number) => Promise.resolve(profile(id)));
+    const entries = [entry(1), entry(2), entry(3), entry(4)];
+    entries[1]!.pinned = true; // id 2 pinned
+    const stale = new Date(Date.now() - 30 * 60_000).toISOString();
+    const snapshots: Record<string, TargetSnapshot> = {
+      "1": snapshot(1, { fetchedAt: stale }),
+      "2": snapshot(2, { fetchedAt: stale }),
+      "3": snapshot(3, { fetchedAt: stale, bountyTotal: 5_000_000 }), // bountied
+      "4": snapshot(4, { fetchedAt: stale }),
+    };
+    const result = await refreshTargets(entries, snapshots, { budget: 2 });
+    expect(result.dueTotal).toBe(4);
+    expect(result.snapshots).toHaveLength(2);
+    // pinned (id 2) and bountied (id 3) outrank the two plain entries.
+    expect(result.snapshots.map((s) => s.tornUserId).sort()).toEqual([2, 3]);
+  });
+});
+
+describe("placeholderSnapshot", () => {
+  it("is content-free and backdated so the next refresh always treats it as due", async () => {
+    const now = Date.now();
+    const placeholder = placeholderSnapshot(4242, now);
+    expect(placeholder.tornUserId).toBe(4242);
+    expect(placeholder.status.state).toBe("");
+    expect(placeholder.attackable).toBe(false);
+    expect(now - Date.parse(placeholder.fetchedAt)).toBeGreaterThan(60 * 60_000);
+
+    mocks.getUserProfileById.mockImplementation((id: number) => Promise.resolve(profile(id)));
+    const result = await refreshTargets([entry(4242)], { "4242": placeholder });
+    expect(result.snapshots.map((s) => s.tornUserId)).toEqual([4242]);
   });
 });

@@ -14,6 +14,17 @@
 .targets-livebtn__on { color: var(--success); animation: targets-pulse 2s ease-in-out infinite; }
 @keyframes targets-pulse { 50% { opacity: .45; } }
 
+/* --- Backlog catch-up progress (big import / refresh-all) ------------- */
+.targets-catchup { display: flex; flex-direction: column; gap: 6px; }
+.targets-catchup__track { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.targets-catchup__fill {
+  height: 100%; border-radius: 999px; background: var(--accent);
+  transition: width .5s cubic-bezier(.4, 0, .2, 1);
+}
+.targets-catchup__label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.targets-catchup__spin { color: var(--accent); animation: targets-catchup-spin 1s linear infinite; }
+@keyframes targets-catchup-spin { to { transform: rotate(360deg); } }
+
 /* --- Chain status strip --------------------------------------------------- */
 .targets-chainbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;

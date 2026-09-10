@@ -32,7 +32,9 @@ export default async function TargetsPage() {
   if (factionId && connection && storageAvailable) {
     list = await readTargetList(factionId, actor.tornUserId);
     if (list.entries.length > 0) {
-      const refresh = await refreshTargets(list.entries, list.snapshots);
+      // First paint only needs the most-in-need handful up to date; the client
+      // then drains the rest through the budgeted /api/targets/refresh loop.
+      const refresh = await refreshTargets(list.entries, list.snapshots, { budget: 24 });
       errors = refresh.errors;
       source = refresh.source;
       fetchedAt = refresh.fetchedAt;

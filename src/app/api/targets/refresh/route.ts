@@ -24,7 +24,16 @@ export async function GET(request: Request): Promise<Response> {
     if (!connection) return Response.json({ error: "No Torn connection." }, { status: 409, headers: noStore });
     if (!targetsStorageAvailable()) return Response.json({ error: "Workspace storage is unavailable." }, { status: 409, headers: noStore });
 
-    const force = new URL(request.url).searchParams.get("force") === "1";
+    const params = new URL(request.url).searchParams;
+    const force = params.get("force") === "1";
+    // A single poll fetches at most this many due targets, most-in-need first;
+    // the client loops until `dueTotal` hits zero. Keeps a 300-target list from
+    // firing hundreds of Torn calls in one request.
+    const budgetParam = Number.parseInt(params.get("budget") ?? "", 10);
+    const budget = Number.isFinite(budgetParam) ? Math.min(60, Math.max(1, budgetParam)) : 30;
+    // `?ids=1,2,3` — force-refresh exactly these targets (the "Refresh all"
+    // sweep walks the whole list in deterministic client-sized chunks).
+    const ids = [...new Set((params.get("ids") ?? "").split(",").map((s) => Number.parseInt(s, 10)).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 60);
     const faction = { id: connection.factionId, name: connection.factionName ?? "", tag: connection.factionTag ?? "" };
 
     const [list, telemetry] = await Promise.all([
@@ -32,15 +41,17 @@ export async function GET(request: Request): Promise<Response> {
       getWorkspaceTelemetry(),
     ]);
 
-    const refresh = list.entries.length > 0
-      ? await refreshTargets(list.entries, list.snapshots, force ? { force: true } : { maxAgeMs: 50_000 })
-      : { snapshots: [], errors: {}, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false };
+    const scoped = ids.length > 0 ? list.entries.filter((entry) => ids.includes(entry.tornUserId)) : list.entries;
+    const refresh = scoped.length > 0
+      ? await refreshTargets(scoped, list.snapshots, ids.length > 0 ? { force: true } : { force, budget })
+      : { snapshots: [], errors: {}, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false, dueTotal: 0 };
 
     if (refresh.snapshots.length > 0) {
       await writeTargetList(faction, actor.tornUserId, mergeSnapshots(list, refresh.snapshots)).catch(() => undefined);
     }
-    const ffMap = list.entries.length > 0
-      ? await enrichWithFairFight(faction.id, actor.tornUserId, list.entries.map((entry) => entry.tornUserId))
+    const ffTargets = (ids.length > 0 ? scoped : list.entries).map((entry) => entry.tornUserId);
+    const ffMap = ffTargets.length > 0
+      ? await enrichWithFairFight(faction.id, actor.tornUserId, ffTargets)
       : new Map();
 
     return Response.json({
@@ -48,6 +59,7 @@ export async function GET(request: Request): Promise<Response> {
       errors: refresh.errors,
       fetchedAt: refresh.fetchedAt,
       source: refresh.source,
+      dueTotal: refresh.dueTotal,
       chain: telemetry.chain,
       dataAgeMs: telemetry.dataAgeMs ?? 0,
       checkedAt: telemetry.checkedAt,

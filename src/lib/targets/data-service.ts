@@ -15,11 +15,66 @@ export interface TargetRefreshResult {
   source: string;
   /** True when no Torn connection is configured. */
   disconnected: boolean;
+  /** How many targets were due before `budget` was applied — lets a caller
+   *  loop until the backlog is drained and drive a progress bar. */
+  dueTotal: number;
 }
 
 interface RefreshOptions {
+  /** Ignore per-state freshness and treat every target as due. */
   force?: boolean;
+  /** Uniform freshness override. When set it is used as a ceiling on top of the
+   *  per-state cadence (nothing is considered fresh for longer than this). */
   maxAgeMs?: number;
+  /** Fetch at most this many of the due targets, the most-in-need first. The
+   *  rest wait for the next call — this is what keeps a 300-target list from
+   *  firing 300 Torn requests at once. */
+  budget?: number;
+}
+
+/** Longest a snapshot in any state is trusted before a refresh is due. */
+const MAX_TIER_MS = 10 * 60_000;
+
+/**
+ * How long this target's last reading stays "fresh enough" — the heart of the
+ * intelligent refresh. A target you can hit right now, or one about to clear
+ * hospital, is re-read aggressively; someone sitting on a long hospital timer
+ * or stranded abroad is left alone until shortly before their state can change.
+ */
+function tierMaxAgeMs(snapshot: TargetSnapshot | undefined, nowMs: number): number {
+  if (!snapshot || snapshot.status.state === "") return 0; // never read / placeholder → always due
+  const state = snapshot.status.state.toLowerCase();
+  const untilMs = snapshot.status.until ? snapshot.status.until * 1_000 : 0;
+  const toClearMs = untilMs > nowMs ? untilMs - nowMs : 0;
+
+  if (isAttackableState(snapshot.status.state)) return 45_000;
+  if (state.includes("hospital") || state.includes("jail") || state.includes("federal")) {
+    if (toClearMs <= 0) return 30_000; // timer elapsed or unknown — poll for the flip
+    if (toClearMs <= 3 * 60_000) return 30_000; // about to clear — catch it promptly
+    return Math.min(MAX_TIER_MS, Math.max(60_000, toClearMs - 60_000));
+  }
+  if (state.includes("travel") || state.includes("abroad")) {
+    return toClearMs > 0 && toClearMs <= 3 * 60_000 ? 30_000 : MAX_TIER_MS;
+  }
+  return 5 * 60_000;
+}
+
+interface DueEntry { entry: TargetEntry; snapshot: TargetSnapshot | undefined; ratio: number }
+
+/** Ranks due targets so a bounded refresh spends its budget where it matters:
+ *  never-read placeholders first, then the more overdue, weighted up for
+ *  pinned / attackable / bountied / imminently-clearing targets. */
+function needScore({ entry, snapshot, ratio }: DueEntry, nowMs: number): number {
+  if (!snapshot || snapshot.status.state === "") return Number.MAX_SAFE_INTEGER;
+  let score = Number.isFinite(ratio) ? ratio : 1_000;
+  if (entry.pinned) score *= 1.4;
+  if (snapshot.attackable) score *= 1.5;
+  if (snapshot.bountyTotal > 0) score *= 1.25;
+  const state = snapshot.status.state.toLowerCase();
+  const untilMs = snapshot.status.until ? snapshot.status.until * 1_000 : 0;
+  const toClearMs = untilMs > nowMs ? untilMs - nowMs : 0;
+  if ((state.includes("hospital") || state.includes("jail")) && toClearMs > 0 && toClearMs <= 3 * 60_000) score *= 2;
+  return score;
 }
 
 export interface HitInfo {
@@ -243,6 +298,37 @@ export async function fetchTargetSnapshots(
  * cheap (two Torn calls, regardless of roster size) precisely because it
  * never tries to read each member's live status up front.
  */
+/**
+ * A "not read yet" snapshot for a target added by ID (e.g. a big pasted list).
+ * Carries nothing but the id and a deliberately ancient `fetchedAt`, so the
+ * import itself costs zero Torn calls and the next bounded refresh treats every
+ * new target as top-priority due. Mirrors `snapshotFromFactionMember`, just
+ * with no roster data to seed from.
+ */
+export function placeholderSnapshot(tornUserId: number, fetchedAtMs: number): TargetSnapshot {
+  return {
+    tornUserId,
+    name: "",
+    level: 0,
+    factionId: null,
+    factionName: "",
+    position: "",
+    status: { description: "", state: "", until: null, color: "" },
+    lastActionAt: 0,
+    lastActionRelative: "",
+    lastActionStatus: "",
+    lifeCurrent: 0,
+    lifeMaximum: 0,
+    attackable: false,
+    lastHit: null,
+    hitYouBack: false,
+    hitStats: null,
+    bountyTotal: 0,
+    bountyCount: 0,
+    fetchedAt: new Date(fetchedAtMs - 24 * 60 * 60_000).toISOString(),
+  };
+}
+
 export function snapshotFromFactionMember(
   factionId: number,
   factionName: string,
@@ -279,40 +365,53 @@ export function snapshotFromFactionMember(
 }
 
 /**
- * Refreshes the snapshots that are missing or stale (or every one when
- * `force`), enriched with the operator's own recent attacks and bounties on
- * each target. Individual target failures are tolerated — the stale snapshot
- * is kept and the reason recorded in `errors`. Bounded concurrency (see
- * `fetchTargetSnapshots`) keeps a large forced refresh fast without exceeding
- * Torn's shared per-user rate limit.
+ * Refreshes target snapshots that are due, enriched with the operator's own
+ * recent attacks and bounties. "Due" is per-state (see `tierMaxAgeMs`): an
+ * attackable or about-to-clear target is re-read within a minute, a long
+ * hospital timer or an abroad target only every ~10 minutes — so a 300-target
+ * list settles into a small steady trickle of Torn calls. `budget` then caps a
+ * single call, spending it on the most-in-need targets first (`needScore`);
+ * `dueTotal` reports the pre-budget backlog so a caller can loop. Individual
+ * failures are tolerated — the stale snapshot is kept, the reason goes in
+ * `errors`.
  */
 export async function refreshTargets(
   entries: TargetEntry[],
   existingSnapshots: Record<string, TargetSnapshot>,
-  { force = false, maxAgeMs = TARGET_STALE_MS }: RefreshOptions = {},
+  { force = false, maxAgeMs, budget }: RefreshOptions = {},
 ): Promise<TargetRefreshResult> {
   const connection = await getConfiguredTornConnection();
   const nowMs = Date.now();
   if (!connection) {
-    return { snapshots: [], errors: {}, fetchedAt: new Date(nowMs).toISOString(), source: "Unavailable", disconnected: true };
+    return { snapshots: [], errors: {}, fetchedAt: new Date(nowMs).toISOString(), source: "Unavailable", disconnected: true, dueTotal: 0 };
   }
 
   const source = connection.client.dataMode === "offline" ? "Offline fixture" : "Torn API v2";
 
-  const due = entries.filter((entry) => {
-    if (force) return true;
-    const current = existingSnapshots[String(entry.tornUserId)];
-    if (!current) return true;
-    const age = nowMs - Date.parse(current.fetchedAt);
-    return !Number.isFinite(age) || age < 0 || age >= maxAgeMs;
-  });
-
-  if (due.length === 0) {
-    return { snapshots: [], errors: {}, fetchedAt: new Date(nowMs).toISOString(), source, disconnected: false };
+  const dueEntries: DueEntry[] = [];
+  for (const entry of entries) {
+    const snapshot = existingSnapshots[String(entry.tornUserId)];
+    const age = snapshot ? nowMs - Date.parse(snapshot.fetchedAt) : Number.POSITIVE_INFINITY;
+    const threshold = force
+      ? 0
+      : Math.min(tierMaxAgeMs(snapshot, nowMs), maxAgeMs ?? Number.POSITIVE_INFINITY);
+    const overdue = threshold <= 0 || !Number.isFinite(age) || age < 0 || age >= threshold;
+    if (overdue) {
+      dueEntries.push({ entry, snapshot, ratio: threshold > 0 && Number.isFinite(age) ? age / threshold : Number.POSITIVE_INFINITY });
+    }
   }
 
-  const hitIndex = await loadHitIndex(connection.client, connection.tornUserId);
-  const { snapshots, errors } = await fetchTargetSnapshots(connection.client, due.map((entry) => entry.tornUserId), hitIndex, connection.tornUserId);
+  const dueTotal = dueEntries.length;
+  if (dueTotal === 0) {
+    return { snapshots: [], errors: {}, fetchedAt: new Date(nowMs).toISOString(), source, disconnected: false, dueTotal: 0 };
+  }
 
-  return { snapshots, errors, fetchedAt: new Date(nowMs).toISOString(), source, disconnected: false };
+  const picked = budget && budget > 0 && dueTotal > budget
+    ? [...dueEntries].sort((a, b) => needScore(b, nowMs) - needScore(a, nowMs)).slice(0, budget)
+    : dueEntries;
+
+  const hitIndex = await loadHitIndex(connection.client, connection.tornUserId);
+  const { snapshots, errors } = await fetchTargetSnapshots(connection.client, picked.map(({ entry }) => entry.tornUserId), hitIndex, connection.tornUserId);
+
+  return { snapshots, errors, fetchedAt: new Date(nowMs).toISOString(), source, disconnected: false, dueTotal };
 }

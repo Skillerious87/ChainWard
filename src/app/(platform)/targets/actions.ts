@@ -7,7 +7,7 @@ import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { consumePartitionRateLimit } from "@/lib/security/rate-limit";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
-import { fetchTargetSnapshot, fetchTargetSnapshots, loadHitIndex, refreshTargets, snapshotFromFactionMember } from "@/lib/targets/data-service";
+import { fetchTargetSnapshot, loadHitIndex, placeholderSnapshot, refreshTargets, snapshotFromFactionMember } from "@/lib/targets/data-service";
 import { clearFfscouterKey, saveFfscouterKey } from "@/lib/targets/ffscouter-key-store";
 import {
   addTargetEntries,
@@ -34,13 +34,15 @@ import {
 export interface TargetsActionResult {
   ok: boolean;
   message: string;
+  /** Set by the bulk-import actions so the client can kick off the backfill loop. */
+  added?: number;
 }
 
 const addSchema = z.object({
   reference: z.string().trim().min(1).max(120),
   note: z.string().trim().max(280).optional(),
 });
-const importSchema = z.object({ text: z.string().trim().min(1).max(4_000) });
+const importSchema = z.object({ text: z.string().trim().min(1).max(20_000) });
 const removeSchema = z.object({ tornUserId: z.number().int().positive() });
 const noteSchema = z.object({ tornUserId: z.number().int().positive(), note: z.string().trim().max(280) });
 const pinnedSchema = z.object({ tornUserId: z.number().int().positive(), pinned: z.boolean() });
@@ -113,6 +115,13 @@ export async function removeTargetAction(input: unknown): Promise<TargetsActionR
   }
 }
 
+/**
+ * Adds a pasted list of player IDs with zero Torn calls: each new target gets
+ * a placeholder snapshot (see `placeholderSnapshot`) and the workspace's
+ * budgeted refresh loop backfills real status/life/bounty/history afterwards,
+ * with a progress bar. This is what makes importing ~200 targets feel instant
+ * instead of a 30-second hang.
+ */
 export async function importTargetsAction(input: unknown): Promise<TargetsActionResult> {
   const parsed = importSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Paste some Torn player IDs or profile links first." };
@@ -120,30 +129,30 @@ export async function importTargetsAction(input: unknown): Promise<TargetsAction
   if (ids.length === 0) return { ok: false, message: "No recognisable Torn player IDs or profile links were found." };
 
   try {
-    const { operatorId, faction, client } = await operatorContext();
-    const wanted = ids.filter((id) => id !== operatorId).slice(0, 100);
+    const { operatorId, faction } = await operatorContext();
     const list = await readTargetList(faction.id, operatorId);
     const known = new Set(list.entries.map((entry) => entry.tornUserId));
-    const toFetch = wanted.filter((id) => !known.has(id));
-    const alreadyListed = wanted.length - toFetch.length;
+    const wanted = ids.filter((id) => id !== operatorId);
+    const fresh = wanted.filter((id) => !known.has(id));
+    const alreadyListed = wanted.length - fresh.length;
 
-    const hitIndex = await loadHitIndex(client, operatorId);
-    const { snapshots, errors } = await fetchTargetSnapshots(client, toFetch, hitIndex, operatorId);
-    const snapshotById = new Map(snapshots.map((snapshot) => [snapshot.tornUserId, snapshot]));
-    const newEntries: TargetEntry[] = toFetch
-      .filter((id) => snapshotById.has(id))
-      .map((id) => ({ tornUserId: id, label: snapshotById.get(id)!.name, note: "", pinned: false, tags: [], addedAt: new Date().toISOString() }));
+    const room = Math.max(0, MAX_TARGETS - list.entries.length);
+    const toAdd = fresh.slice(0, room);
+    const capped = fresh.length - toAdd.length;
 
-    const { list: withEntries, added, skipped, capped } = addTargetEntries(list, newEntries);
+    const fetchedAtMs = Date.now();
+    const newEntries: TargetEntry[] = toAdd.map((id) => ({ tornUserId: id, label: "", note: "", pinned: false, tags: [], addedAt: new Date().toISOString() }));
+    const snapshots = toAdd.map((id) => placeholderSnapshot(id, fetchedAtMs));
+
+    const { list: withEntries, added } = addTargetEntries(list, newEntries);
     if (added > 0) await writeTargetList(faction, operatorId, mergeSnapshots(withEntries, snapshots));
     revalidatePath("/targets");
 
-    const failed = Object.keys(errors).length;
     const parts = [`Added ${added}`];
-    if (skipped + alreadyListed > 0) parts.push(`${skipped + alreadyListed} already listed`);
-    if (failed > 0) parts.push(`${failed} not found`);
+    if (alreadyListed > 0) parts.push(`${alreadyListed} already listed`);
     if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
-    return { ok: added > 0, message: `${parts.join(", ")}.` };
+    const suffix = added > 0 ? " — loading live data…" : "";
+    return { ok: added > 0, message: `${parts.join(", ")}.${suffix}`, added };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }
@@ -188,7 +197,7 @@ export async function importFactionTargetsAction(input: unknown): Promise<Target
     const parts = [`Added ${added} from ${basic.basic.name}`];
     if (skipped + alreadyListed > 0) parts.push(`${skipped + alreadyListed} already listed`);
     if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
-    return { ok: added > 0, message: `${parts.join(", ")}.` };
+    return { ok: added > 0, message: `${parts.join(", ")}.`, added };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }
@@ -258,17 +267,21 @@ export async function refreshTargetsAction(): Promise<TargetsActionResult> {
     const list = await readTargetList(faction.id, operatorId);
     if (list.entries.length === 0) return { ok: true, message: "Your target list is empty." };
 
-    const result = await refreshTargets(list.entries, list.snapshots, { force: true });
+    // Budgeted so one press can't fan out hundreds of Torn calls; the workspace
+    // "Refresh" button drives the /api/targets/refresh loop for the full sweep.
+    const result = await refreshTargets(list.entries, list.snapshots, { force: true, budget: 60 });
     if (result.snapshots.length > 0) {
       await writeTargetList(faction, operatorId, mergeSnapshots(list, result.snapshots));
     }
     revalidatePath("/targets");
     const failed = Object.keys(result.errors).length;
+    const remaining = Math.max(0, result.dueTotal - result.snapshots.length - failed);
+    const tail = remaining > 0 ? ` ${remaining} still queued.` : "";
     return {
       ok: failed === 0,
       message: failed === 0
-        ? `Refreshed ${result.snapshots.length} target${result.snapshots.length === 1 ? "" : "s"} from ${result.source}.`
-        : `Refreshed ${result.snapshots.length}, but ${failed} target${failed === 1 ? "" : "s"} could not be read.`,
+        ? `Refreshed ${result.snapshots.length} target${result.snapshots.length === 1 ? "" : "s"} from ${result.source}.${tail}`
+        : `Refreshed ${result.snapshots.length}, but ${failed} target${failed === 1 ? "" : "s"} could not be read.${tail}`,
     };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
