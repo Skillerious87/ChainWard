@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
+import { withDbRetry } from "@/lib/data/with-db-retry";
 import { decryptCredential, encryptCredential } from "@/lib/security/credential-encryption";
 import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import type { ValidatedTornConnection } from "./connection-service";
@@ -231,7 +232,7 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
   // Both lookups are fully scoped by the opaque token. Running them together
   // removes a database-network waterfall from every authenticated request;
   // the owner IDs are still compared before the credential is accepted.
-  const [session, credential] = await Promise.all([
+  const lookup = await withDbRetry(() => Promise.all([
     db.session.findUnique({ where: { tokenHash }, include: { user: true } }),
     db.factionApiCredential.findFirst({
       where: {
@@ -242,15 +243,19 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
       include: { faction: true },
       orderBy: { updatedAt: "desc" },
     }),
-  ]);
+  ])).catch(() => null);
+  // Database still unreachable after retries — degrade to "not connected"
+  // (recoverable on the next request) rather than throwing into global-error.
+  if (!lookup) return null;
+  const [session, credential] = lookup;
   if (!session) return null;
   if (session.expiresAt.getTime() <= Date.now()) {
-    await db.session.delete({ where: { id: session.id } });
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
   if (!credential || credential.ownerTornUserId !== session.user.tornUserId) return null;
   if (Date.now() - session.lastSeenAt.getTime() > 24 * 60 * 60 * 1_000) {
-    await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
+    await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => {});
   }
   try {
     return {

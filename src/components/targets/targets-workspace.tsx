@@ -65,8 +65,6 @@ const POLL_FAST_MS = 25_000;
  *  Retry-After if the very first sweep briefly overshoots). */
 const CATCHUP_BUDGET = 15;
 const CATCHUP_GAP_MS = 7_000;
-/** Stale-count on load past which the workspace auto-runs one catch-up sweep. */
-const CATCHUP_AUTO_THRESHOLD = 25;
 const LIVE_KEY = "chainward:targets-live:v1";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
@@ -187,9 +185,9 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const applyPoll = useCallback((payload: {
     snapshots: TargetSnapshot[];
     errors: Record<string, string>;
-    chain: SafeChainTelemetry | null;
-    dataAgeMs: number;
-    checkedAt: string;
+    chain?: SafeChainTelemetry | null;
+    dataAgeMs?: number;
+    checkedAt?: string;
     fairFight?: Record<string, FairFightInfo>;
   }) => {
     // Alert on anyone who has just become attackable (dedup via a ref).
@@ -233,13 +231,16 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
         delete nextErrors[snapshot.tornUserId];
       }
       for (const [id, message] of Object.entries(payload.errors)) nextErrors[Number(id)] = message;
+      // A chunked backfill response carries no chain telemetry — keep the last
+      // reading and its countdown anchor instead of nulling them.
+      const hasChain = payload.checkedAt !== undefined;
       return {
         snapshots: nextSnapshots,
         errors: nextErrors,
         clearedErrors: [...cleared],
         fairFight: payload.fairFight ? { ...prev.fairFight, ...payload.fairFight } : prev.fairFight,
-        chain: payload.chain,
-        chainAnchorMs: Date.parse(payload.checkedAt) - payload.dataAgeMs,
+        chain: hasChain ? (payload.chain ?? null) : prev.chain,
+        chainAnchorMs: hasChain ? Date.parse(payload.checkedAt!) - (payload.dataAgeMs ?? 0) : prev.chainAnchorMs,
         syncedAt: Date.now(),
       };
     });
@@ -437,10 +438,12 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const runCatchUp = useCallback(async ({ full = false }: { full?: boolean } = {}) => {
     if (catchUpRef.current || !connected) return;
     catchUpRef.current = true;
+    let ranLean = false;
     try {
       if (full) {
         const ids = entries.map((entry) => entry.tornUserId);
         if (ids.length === 0) return;
+        ranLean = true;
         setCatchUp({ done: 0, total: ids.length });
         let idleWaits = 0;
         for (let i = 0; i < ids.length;) {
@@ -461,6 +464,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       }
 
       const first = await postRefresh(`budget=${CATCHUP_BUDGET}`);
+      ranLean = true;
       if (!first || first.dueTotal <= first.fetched) return; // nothing waiting beyond this batch
       const total = first.dueTotal;
       setCatchUp({ done: Math.min(total, first.fetched), total });
@@ -476,6 +480,9 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     } finally {
       catchUpRef.current = false;
       setCatchUp(null);
+      // The loop ran lean (no chain / Fair Fight); one plain poll now pulls
+      // those in rather than waiting a full interval for the live poll.
+      if (ranLean && connected) void postRefresh("");
     }
   }, [connected, entries, postRefresh]);
 
@@ -516,15 +523,14 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     };
   }, [live, connected, entries.length, fetchedAt, applyPoll, pollIntervalMs, catchingUp]);
 
-  // One automatic sweep when the list lands with a large backlog (a fresh
-  // import, or a long time away) — after that it's manual or the trickle poll.
+  // The page no longer pre-refreshes on the server, so pull once on mount:
+  // `runCatchUp` returns immediately when nothing is due, or shows the bar and
+  // drains the backlog when there is one (a fresh import, or a long time away).
   useEffect(() => {
     if (autoCatchUpDoneRef.current || !connected || !live || entries.length === 0) return;
-    if (counts.stale >= CATCHUP_AUTO_THRESHOLD) {
-      autoCatchUpDoneRef.current = true;
-      void runCatchUp();
-    }
-  }, [connected, live, entries.length, counts.stale, runCatchUp]);
+    autoCatchUpDoneRef.current = true;
+    void runCatchUp();
+  }, [connected, live, entries.length, runCatchUp]);
 
   // --- Chain assistant -----------------------------------------------------
   const chainActive = Boolean(chain && chain.state === "active" && chain.current > 0);

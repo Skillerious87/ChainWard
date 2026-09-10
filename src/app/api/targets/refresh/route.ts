@@ -34,24 +34,28 @@ export async function GET(request: Request): Promise<Response> {
     // `?ids=1,2,3` — force-refresh exactly these targets (the "Refresh all"
     // sweep walks the whole list in deterministic client-sized chunks).
     const ids = [...new Set((params.get("ids") ?? "").split(",").map((s) => Number.parseInt(s, 10)).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 60);
+    const chunked = ids.length > 0;
+    // The catch-up loop (any `?budget=` or `?ids=` call) only needs snapshots —
+    // skip the chain-telemetry and Fair Fight round-trips so each of its many
+    // requests stays cheap. The plain live poll keeps both.
+    const lean = chunked || params.has("budget");
     const faction = { id: connection.factionId, name: connection.factionName ?? "", tag: connection.factionTag ?? "" };
 
     const [list, telemetry] = await Promise.all([
       readTargetList(faction.id, actor.tornUserId),
-      getWorkspaceTelemetry(),
+      lean ? Promise.resolve(null) : getWorkspaceTelemetry(),
     ]);
 
-    const scoped = ids.length > 0 ? list.entries.filter((entry) => ids.includes(entry.tornUserId)) : list.entries;
+    const scoped = chunked ? list.entries.filter((entry) => ids.includes(entry.tornUserId)) : list.entries;
     const refresh = scoped.length > 0
-      ? await refreshTargets(scoped, list.snapshots, ids.length > 0 ? { force: true } : { force, budget })
+      ? await refreshTargets(scoped, list.snapshots, chunked ? { force: true } : { force, budget })
       : { snapshots: [], errors: {}, fetchedAt: new Date().toISOString(), source: "Torn API v2", disconnected: false, dueTotal: 0 };
 
     if (refresh.snapshots.length > 0) {
       await writeTargetList(faction, actor.tornUserId, mergeSnapshots(list, refresh.snapshots)).catch(() => undefined);
     }
-    const ffTargets = (ids.length > 0 ? scoped : list.entries).map((entry) => entry.tornUserId);
-    const ffMap = ffTargets.length > 0
-      ? await enrichWithFairFight(faction.id, actor.tornUserId, ffTargets)
+    const ffMap = !lean && list.entries.length > 0
+      ? await enrichWithFairFight(faction.id, actor.tornUserId, list.entries.map((entry) => entry.tornUserId))
       : new Map();
 
     return Response.json({
@@ -60,9 +64,9 @@ export async function GET(request: Request): Promise<Response> {
       fetchedAt: refresh.fetchedAt,
       source: refresh.source,
       dueTotal: refresh.dueTotal,
-      chain: telemetry.chain,
-      dataAgeMs: telemetry.dataAgeMs ?? 0,
-      checkedAt: telemetry.checkedAt,
+      // Chain telemetry is omitted for chunked backfill calls; the client keeps
+      // its last reading rather than resetting the countdown anchor.
+      ...(telemetry ? { chain: telemetry.chain, dataAgeMs: telemetry.dataAgeMs ?? 0, checkedAt: telemetry.checkedAt } : {}),
       fairFight: Object.fromEntries([...ffMap].map(([tornUserId, info]) => [String(tornUserId), info])),
     }, { headers: noStore });
   } catch (error) {

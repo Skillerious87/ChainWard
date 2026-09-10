@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { localDatabaseExists, openLocalDatabase } from "@/lib/data/local-database";
+import { withDbRetry } from "@/lib/data/with-db-retry";
 import {
   MAX_TARGETS,
   targetListSchema,
@@ -32,7 +33,7 @@ export async function readTargetList(factionId: number, operatorId: number): Pro
   let raw: unknown;
   if (process.env.DATABASE_URL?.trim()) {
     const { db } = await import("@/lib/db");
-    const row = await db.factionSetting.findFirst({ where: { faction: { tornFactionId: factionId }, key }, select: { value: true } });
+    const row = await withDbRetry(() => db.factionSetting.findFirst({ where: { faction: { tornFactionId: factionId }, key }, select: { value: true } }));
     raw = row?.value;
   } else {
     const database = openLocalDatabase();
@@ -60,14 +61,14 @@ export async function writeTargetList(faction: Faction, operatorId: number, list
   const key = `${prefix}${operatorId}`;
   if (process.env.DATABASE_URL?.trim()) {
     const { db } = await import("@/lib/db");
-    await db.$transaction(async (tx) => {
+    await withDbRetry(() => db.$transaction(async (tx) => {
       const tenant = await tx.faction.upsert({ where: { tornFactionId: faction.id }, update: {}, create: { tornFactionId: faction.id, name: faction.name, tag: faction.tag } });
       await tx.factionSetting.upsert({
         where: { factionId_key: { factionId: tenant.id, key } },
         create: { factionId: tenant.id, key, value: record as unknown as Prisma.InputJsonValue },
         update: { value: record as unknown as Prisma.InputJsonValue },
       });
-    });
+    }));
   } else {
     const database = openLocalDatabase();
     if (!database) throw storageError();
