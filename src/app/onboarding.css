@@ -88,13 +88,8 @@
   gap: 20px;
   animation: login-rise 520ms cubic-bezier(.2, .75, .25, 1) both;
 }
-.login-brand, .login-legal { flex: 0 0 auto; }
-
-.login-brand { display: inline-flex; }
-.login-brand .brand__wordmark { color: #eef3f0; font-size: 20px; }
-.login-brand .brand__mark { filter: drop-shadow(0 4px 16px rgba(var(--accent-rgb), .28)); }
-
-.login-legal { margin: 0; color: #4c574f; font-size: 10.5px; text-align: center; }
+.login-legal { flex: 0 0 auto; margin: 0; color: #4c574f; font-size: 10.5px; text-align: center; }
+.login-legal span { display: block; margin-top: 5px; color: rgba(var(--accent-rgb), .3); font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
 
 /* --- Card --------------------------------------------------------- */
 .login-card {
@@ -143,18 +138,39 @@
 .login-card .connect-stage--entry { min-height: 0; }
 
 /* --- Heading -------------------------------------------------- */
-.login-card .connect-form__heading { display: block; padding: 0; border: 0; }
-.login-card .connect-form__heading > p {
-  display: inline-flex; align-items: center; gap: 6px;
-  color: var(--accent); font-size: 10px; font-weight: 760; letter-spacing: 1px; text-transform: uppercase;
-}
+.login-card .connect-form__heading { display: block; padding: 0; border: 0; text-align: center; }
 .login-card .connect-form__heading h2 {
-  margin-top: 10px; color: #f1f5f2; font-size: 24px; font-weight: 640; letter-spacing: -.7px; line-height: 1.14;
+  margin-top: 26px; color: #f1f5f2; font-size: 24px; font-weight: 640; letter-spacing: -.7px; line-height: 1.14;
 }
 .login-card .connect-form__heading > span {
   display: block; width: auto; height: auto; margin-top: 8px;
   border: 0; border-radius: 0; background: none;
   color: #808d84; font-size: 12.5px; line-height: 1.5;
+}
+
+/* --- Hero mark ---------------------------------------------- */
+.connect-hero { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.connect-hero__mark {
+  position: relative;
+  display: grid; place-items: center;
+  width: 58px; height: 58px;
+  border: 1px solid rgba(var(--accent-rgb), .28);
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(var(--accent-rgb), .2), rgba(var(--accent-rgb), .03));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .05) inset, 0 18px 34px -14px rgba(var(--accent-rgb), .6);
+}
+.connect-hero__mark::before {
+  position: absolute; inset: -18px; z-index: -1;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), .22), transparent 68%);
+  filter: blur(4px);
+  content: "";
+}
+.connect-hero__mark svg { width: 29px; height: 29px; }
+.connect-hero__word { margin: 0; color: #eef3f0; font-size: 21px; font-weight: 800; letter-spacing: -.4px; }
+.connect-hero__word span { color: var(--accent); }
+.connect-hero__tag {
+  margin: 0; color: #4c574f; font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace; font-size: 9px; font-weight: 600;
+  letter-spacing: 2.2px; text-transform: uppercase;
 }
 
 /* --- API key field ---------------------------------------- */
@@ -401,11 +417,16 @@
 .login-card .form-error span { display: block; margin-top: 2px; color: #d9b6b6; font-size: 11.5px; line-height: 1.45; }
 .login-card .form-error small { display: block; margin-top: 4px; color: #9a8585; font-size: 10.5px; line-height: 1.45; }
 
-/* --- Disclosures ---------------------------------- */
-.connect-details { margin-top: 16px; }
-.offline-test-entry { margin-top: 12px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .06); }
+/* --- Trust line & footer link ---------------------- */
+.connect-trust { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; color: #6f7c74; font-size: 10.5px; text-align: center; }
+.connect-trust svg { flex: 0 0 auto; color: #78c74c; }
 
-.connect-details summary,
+.connect-footer-link { margin-top: 18px; color: #6f7c74; font-size: 12px; text-align: center; }
+.connect-footer-link a { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-weight: 650; }
+
+/* --- Disclosures ---------------------------------- */
+.offline-test-entry { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .06); }
+
 .offline-test-entry summary {
   display: flex; min-height: 40px; align-items: center; gap: 7px;
   padding: 0 12px;
@@ -419,45 +440,10 @@
   list-style: none;
   transition: color .14s ease, border-color .14s ease;
 }
-.connect-details summary::-webkit-details-marker,
 .offline-test-entry summary::-webkit-details-marker { display: none; }
-.connect-details summary:hover,
 .offline-test-entry summary:hover { color: #c1cbc5; border-color: #35413a; }
-.connect-details summary svg:last-child,
 .offline-test-entry summary svg:last-child { margin-left: auto; transition: transform .16s ease; }
-.connect-details[open] summary svg:last-child,
 .offline-test-entry[open] summary svg:last-child { transform: rotate(180deg); }
-
-.connect-details > div {
-  max-height: clamp(150px, 34vh, 300px);
-  margin-top: 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid #262f2a;
-  border-radius: 10px;
-  background: rgba(145, 230, 83, .02);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, .14) transparent;
-}
-.connect-details > div::-webkit-scrollbar { width: 6px; }
-.connect-details > div::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255, 255, 255, .14); }
-.connect-details > div > p { padding: 11px 12px; border-bottom: 1px solid #232c27; color: #77867d; font-size: 10px; line-height: 1.5; }
-.connect-details__selections { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 10px 12px 0; list-style: none; }
-.connect-details__selections li {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 8px;
-  border: 1px solid #2a352f;
-  border-radius: 999px;
-  color: #8b988f;
-  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
-  font-size: 10px;
-}
-.connect-details__selections li svg { color: #72bb48; }
-.connect-details dl { margin: 0; padding: 8px 12px 6px; }
-.connect-details dl > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 9px; padding: 7px 0; border-bottom: 1px solid #202924; font-size: 9.5px; line-height: 1.5; }
-.connect-details dl > div:last-child { border-bottom: 0; }
-.connect-details dt { color: #828f86; font-weight: 650; }
-.connect-details dd { margin: 0; color: #6e7c73; }
 
 .offline-test-entry > p { margin-top: 11px; color: #66736b; font-size: 10.5px; line-height: 1.5; }
 .offline-test-entry > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
@@ -489,18 +475,65 @@
 @media (max-height: 720px) {
   .login-shell { gap: 16px; }
   .login-card .connect-form { padding: 24px 24px 20px; }
-  .login-card .connect-form__heading h2 { font-size: 22px; }
+  .connect-hero__mark { width: 46px; height: 46px; border-radius: 15px; }
+  .connect-hero__mark svg { width: 23px; height: 23px; }
+  .connect-hero__word { font-size: 18px; }
+  .login-card .connect-form__heading h2 { margin-top: 18px; font-size: 22px; }
   .login-card .api-key-field { margin-top: 20px; }
   .login-remember { margin-top: 14px; padding: 10px 12px; }
   .login-card .connect-submit { min-height: 48px; margin-top: 16px; }
+  .connect-trust { margin-top: 10px; }
+  .connect-footer-link { margin-top: 12px; }
 }
 
-@media (max-width: 460px) {
-  .login-page { padding-inline: 16px; }
-  .login-card { border-radius: 18px; }
-  .login-card .connect-form { padding: 26px 20px 20px; }
+/* --- Full-bleed mobile ------------------------------
+   Below ~560px the floating-card chrome drops away and the sign-in screen
+   becomes the page itself — edge to edge, no border or radius — the way a
+   native app screen reads, instead of a card centred on visible backdrop. */
+@media (max-width: 560px) {
+  .login-page { padding: 0; }
+  .login-shell { max-width: none; height: 100%; gap: 0; }
+  .login-card {
+    flex: 1 1 auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg);
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .login-card::before { display: none; }
+  .login-card .connect-form {
+    height: 100%;
+    padding-top: max(72px, calc(env(safe-area-inset-top) + 64px));
+    padding-inline: 20px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+  .login-card .connect-stage--entry { display: flex; height: 100%; flex-direction: column; min-height: 0; }
+  .connect-footer-link { margin-top: auto; padding-top: 18px; }
   .login-card .api-key-field > small { align-items: flex-start; flex-direction: column; gap: 6px; }
   .offline-test-entry > div { grid-template-columns: 1fr; }
+  .login-legal { padding: 14px 20px max(14px, env(safe-area-inset-bottom)); }
+}
+
+/* Narrow and short together (e.g. iPhone SE) — the full-bleed screen above
+   needs more headroom clawed back than either breakpoint alone provides. */
+@media (max-width: 560px) and (max-height: 700px) {
+  .login-card .connect-form { padding-top: max(56px, calc(env(safe-area-inset-top) + 48px)); }
+  .connect-hero { gap: 8px; }
+  .connect-hero__mark { width: 40px; height: 40px; border-radius: 13px; }
+  .connect-hero__mark svg { width: 20px; height: 20px; }
+  .connect-hero__word { font-size: 17px; }
+  .connect-hero__tag { display: none; }
+  .login-card .connect-form__heading h2 { margin-top: 12px; font-size: 20px; }
+  .login-card .connect-form__heading > span { margin-top: 6px; }
+  .login-card .api-key-field { margin-top: 16px; }
+  .login-card .api-key-field > div { height: 46px; }
+  .login-remember { margin-top: 10px; padding: 8px 10px; }
+  .login-card .connect-submit { min-height: 44px; margin-top: 12px; }
+  .connect-trust { margin-top: 8px; }
+  .connect-footer-link { padding-top: 10px; }
+  .login-legal { padding-top: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { BrandMark } from "@/components/brand-mark";
 import { ConnectForm } from "@/components/onboarding/connect-form";
 import { LoginBackdrop } from "@/components/onboarding/login-backdrop";
 import { offlineTestModeEnabled } from "@/lib/torn/offline-fixture";
@@ -19,13 +18,14 @@ export default function ConnectPage() {
       <Link className="login-home" href="/"><ArrowLeft size={14} /> Home</Link>
 
       <div className="login-shell">
-        <Link className="login-brand" href="/" aria-label="Chainward home"><BrandMark /></Link>
-
         <section className="login-card" aria-labelledby="login-title">
           <ConnectForm offlineEnabled={offlineTestModeEnabled()} />
         </section>
 
-        <p className="login-legal">Independent community software · Not affiliated with Torn</p>
+        <p className="login-legal">
+          Independent community software · Not affiliated with Torn
+          <span>Torn City · Faction Ops · Secure by Design</span>
+        </p>
       </div>
     </main>
   );

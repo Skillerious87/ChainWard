@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   ArrowRight,
-  Check,
   ChevronDown,
   Eye,
   EyeOff,
@@ -32,8 +31,23 @@ type ConnectionResult = {
 
 type ConnectionError = { message: string; code: string | null };
 
-/** Mirrors the selections `validateTornConnection` requires before connecting. */
-const REQUIRED_SELECTIONS = ["key/info", "user/basic", "user/profile", "faction/basic", "chain", "chains", "chainreport", "members"] as const;
+/** The chain-link mark shown above the sign-in headline — scoped to this
+ * screen rather than the shared `BrandMark`, which stays the PNG app icon
+ * used in the sidebar/topbar. */
+function ConnectHeroMark() {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="connectHeroMarkGradient" x1="4" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#c3f79a" />
+          <stop offset="1" stopColor="#78d63b" />
+        </linearGradient>
+      </defs>
+      <rect x="4" y="10" width="16" height="9" rx="4.5" transform="rotate(-28 12 14.5)" stroke="url(#connectHeroMarkGradient)" strokeWidth="2.6" />
+      <rect x="12" y="13" width="16" height="9" rx="4.5" transform="rotate(-28 20 17.5)" stroke="url(#connectHeroMarkGradient)" strokeWidth="2.6" />
+    </svg>
+  );
+}
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
   const [visible, setVisible] = useState(false);
@@ -113,9 +127,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       <span className="connect-form__activity" aria-hidden="true" />
       <div className="connect-stage connect-stage--entry">
         <header className="connect-form__heading">
-          <p><ShieldCheck size={13} /> Secure sign in</p>
-          <h2 id="login-title">Welcome to Chainward</h2>
-          <span>Connect a restricted Torn key to open your faction workspace.</span>
+          <div className="connect-hero">
+            <span className="connect-hero__mark"><ConnectHeroMark /></span>
+            <p className="connect-hero__word">Chain<span>ward</span></p>
+            <p className="connect-hero__tag">Faction Ops · Secure Access</p>
+          </div>
+          <h2 id="login-title">Welcome back</h2>
+          <span>Reconnect your Torn key to re-enter the faction workspace.</span>
         </header>
         <span className="sr-only" aria-live="polite">{loading ? "Verifying your Torn connection." : ""}</span>
 
@@ -154,18 +172,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
           </span>
         </button>
 
-        <details className="connect-details">
-          <summary><ShieldCheck size={14} /> How your key is used <ChevronDown size={15} /></summary>
-          <div>
-            <p>Your raw key is validated and encrypted server-side and never returned to browser code. Chainward checks these selections before opening a workspace:</p>
-            <ul className="connect-details__selections">{REQUIRED_SELECTIONS.map((selection) => <li key={selection}><Check size={11} />{selection}</li>)}</ul>
-            <dl>
-              <div><dt>Stored data</dt><dd>Operational records, member reports, and awards persist in the configured Chainward database until the workspace operator removes that data. Torn roster responses are briefly cached.</dd></div>
-              <div><dt>Shared with</dt><dd>The connected faction workspace. Entries marked leadership-only are restricted to authorised member managers.</dd></div>
-              <div><dt>API key</dt><dd>Used server-side only. A temporary connection is encrypted for up to 12 hours; “Keep me signed in” stores the encrypted key server-side for up to 30 days.</dd></div>
-            </dl>
-          </div>
-        </details>
+        <p className="connect-trust"><ShieldCheck size={13} /> Encrypted server-side. Never stored in your browser.</p>
+
+        <p className="connect-footer-link">Need a key? <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create one <ExternalLink size={12} /></a></p>
 
         {offlineEnabled && <details className="offline-test-entry">
           <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>
