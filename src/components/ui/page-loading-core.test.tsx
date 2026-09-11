@@ -9,7 +9,6 @@ describe("page loading experience", () => {
     const html = renderToStaticMarkup(<PageLoadingCore title="Loading roster" hint="Fetching verified faction members" />);
     expect(html).toContain("page-loading-core__ring");
     expect(html).toContain("page-loading-core__chip");
-    expect(html).toContain("page-loading-core__bar");
     expect(html).toContain("android-chrome-192x192.png");
     expect(html).toContain('aria-label="Loading roster. Fetching verified faction members."');
     expect(html).toContain("Fetching verified faction members</small>");

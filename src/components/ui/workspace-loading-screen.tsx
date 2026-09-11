@@ -18,8 +18,6 @@ export function WorkspaceLoadingScreen({
 }: WorkspaceLoadingScreenProps) {
   return (
     <div className={`workspace-loading-screen${className ? ` ${className}` : ""}`}>
-      <span className="workspace-loading-screen__grid" aria-hidden="true" />
-      <span className="workspace-loading-screen__halo" aria-hidden="true" />
       <div className="workspace-loading-screen__content">
         <PageLoadingCore title={title} hint={hint} />
         <p className="workspace-loading-screen__assurance"><i /> Secure session handoff</p>

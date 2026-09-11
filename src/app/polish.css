@@ -1724,7 +1724,8 @@ body {
 
 /* Protected document handoff. This screen is rendered before login leaves and
    again while the authenticated shell resolves, so no unstyled or blank frame
-   can appear between those two documents. */
+   can appear between those two documents. One quiet radial glow behind the
+   mark — no rings, grid, or second halo layer competing for attention. */
 .workspace-loading-screen {
   position: fixed;
   z-index: 210;
@@ -1735,25 +1736,14 @@ body {
   place-items: center;
   padding: 32px;
   background:
-    radial-gradient(circle at 50% 44%,rgba(var(--accent-rgb),.075),transparent 24%),
-    radial-gradient(circle at 8% 12%,rgba(var(--accent-rgb),.025),transparent 28%),
-    linear-gradient(145deg,#070b0d,#090e10 52%,#070a0c);
-  isolation: isolate;
+    radial-gradient(circle at 50% 42%,rgba(var(--accent-rgb),.06),transparent 38%),
+    linear-gradient(160deg,#080b0d,#0a0f11 55%,#080b0d);
 }
-.workspace-loading-screen::before,
-.workspace-loading-screen::after { position: absolute; border: 1px solid rgba(var(--accent-rgb),.055); border-radius: 50%; content: ""; pointer-events: none; }
-.workspace-loading-screen::before { width: min(720px,74vw); aspect-ratio: 1; box-shadow: inset 0 0 170px rgba(var(--accent-rgb),.012); }
-.workspace-loading-screen::after { width: min(470px,52vw); aspect-ratio: 1; border-color: rgba(var(--accent-rgb),.035); }
-.workspace-loading-screen__grid { position: absolute; inset: 0; z-index: -2; background-image: linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px); background-size: 58px 58px; mask-image: radial-gradient(circle at center,black,transparent 67%); }
-.workspace-loading-screen__halo { position: absolute; z-index: -1; width: min(370px,70vw); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle,rgba(var(--accent-rgb),.055),rgba(var(--accent-rgb),.012) 39%,transparent 70%); filter: blur(8px); }
-.workspace-loading-screen__content { position: relative; z-index: 1; display: grid; justify-items: center; }
+.workspace-loading-screen__content { position: relative; display: grid; justify-items: center; }
 /* The assurance sits outside layout flow so it cannot change the loader's
    centre point when the protected toolbar replaces this document screen. */
-.workspace-loading-screen__assurance { position: absolute; top: 100%; left: 50%; display: inline-flex; align-items: center; gap: 8px; margin-top: 30px; color: #5f6c65; font-size: 9px; font-weight: 690; letter-spacing: 1.25px; text-transform: uppercase; transform: translateX(-50%); white-space: nowrap; }
-.workspace-loading-screen__assurance::before,
-.workspace-loading-screen__assurance::after { width: 34px; height: 1px; background: linear-gradient(90deg,transparent,rgba(var(--accent-rgb),.22)); content: ""; }
-.workspace-loading-screen__assurance::after { background: linear-gradient(90deg,rgba(var(--accent-rgb),.22),transparent); }
-.workspace-loading-screen__assurance i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-rgb),.07),0 0 13px rgba(var(--accent-rgb),.28); }
+.workspace-loading-screen__assurance { position: absolute; top: 100%; left: 50%; display: inline-flex; align-items: center; gap: 7px; margin-top: 26px; color: #5c6862; font-size: 10px; font-weight: 620; letter-spacing: .9px; text-transform: uppercase; transform: translateX(-50%); white-space: nowrap; }
+.workspace-loading-screen__assurance i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.1); }
 
 /* Route loading state. The muted incoming layout holds the page geometry while
    the shared circular loading mark stays exactly centred in the workspace. */
@@ -1805,49 +1795,38 @@ body {
 .view-loading__stage-bar { width: min(300px,55%); height: 20px; border-radius: 7px; }
 .view-loading__stage .view-loading__panel { flex: 1; }
 
-/* Full-page loading mark. One spinning ring around a still brand chip, a soft
-   halo, and a slim indeterminate track. Calm and legible — nothing orbits,
-   nothing pulses hard, the text is always the point. */
+/* Full-page loading mark: one spinning ring around a still brand chip. A
+   single motion cue reads as considered; stacking a halo pulse and a second
+   indeterminate track on top of it just reads as busy. */
 .page-loading-core {
-  --core-size: 92px;
-  display: grid; justify-items: center; gap: 20px;
-  min-width: min(340px, calc(100vw - 40px));
+  --core-size: 72px;
+  display: grid; justify-items: center; gap: 22px;
+  min-width: min(320px, calc(100vw - 40px));
   color: #dbe4de; text-align: center;
 }
-.page-loading-core__mark { position: relative; display: grid; place-items: center; width: var(--core-size); height: var(--core-size); isolation: isolate; }
-.page-loading-core__halo {
-  position: absolute; inset: -36%; border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--accent-rgb), .11), transparent 68%);
-  animation: page-core-breathe 2.6s ease-in-out infinite;
+.page-loading-core__mark {
+  position: relative; display: grid; place-items: center;
+  width: var(--core-size); height: var(--core-size);
+  filter: drop-shadow(0 0 22px rgba(var(--accent-rgb), .14));
 }
 .page-loading-core__ring {
   position: absolute; inset: 0; border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, .07);
+  border: 2px solid rgba(255, 255, 255, .065);
   border-top-color: var(--accent);
-  border-right-color: rgba(var(--accent-rgb), .45);
-  animation: page-core-spin .9s linear infinite;
+  animation: page-core-spin 1s linear infinite;
 }
 .page-loading-core__chip {
   position: relative; z-index: 1; display: grid; place-items: center;
-  width: 58%; height: 58%; border-radius: 20px;
-  border: 1px solid rgba(var(--accent-rgb), .16);
+  width: 60%; height: 60%; border-radius: 16px;
+  border: 1px solid rgba(var(--accent-rgb), .18);
   background: linear-gradient(160deg, rgba(255, 255, 255, .045), transparent 60%), rgba(10, 15, 13, .92);
-  box-shadow: 0 16px 38px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .04);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .3), inset 0 1px rgba(255, 255, 255, .04);
 }
-.page-loading-core__chip img { width: 62%; height: 62%; object-fit: contain; background: transparent; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
-.page-loading-core__copy { display: grid; justify-items: center; gap: 5px; max-width: 340px; }
-.page-loading-core__eyebrow { color: #6f7c75; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
-.page-loading-core__copy strong { color: #eef2f0; font-size: 15px; font-weight: 620; letter-spacing: -.15px; }
-.page-loading-core__copy small { color: #7c8880; font-size: 11px; line-height: 1.5; text-wrap: balance; }
-.page-loading-core__bar { position: relative; width: 132px; height: 2px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, .06); }
-.page-loading-core__bar i {
-  position: absolute; inset: 0; width: 38%; border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  animation: page-core-track 1.3s cubic-bezier(.5, 0, .5, 1) infinite;
-}
+.page-loading-core__chip img { width: 62%; height: 62%; object-fit: contain; background: transparent; }
+.page-loading-core__copy { display: grid; justify-items: center; gap: 6px; max-width: 320px; }
+.page-loading-core__copy strong { color: #eef2f0; font-size: 14.5px; font-weight: 640; letter-spacing: -.1px; }
+.page-loading-core__copy small { color: #7c8880; font-size: 11.5px; line-height: 1.5; text-wrap: balance; }
 @keyframes page-core-spin { to { transform: rotate(360deg); } }
-@keyframes page-core-breathe { 50% { opacity: .5; transform: scale(.9); } }
-@keyframes page-core-track { from { transform: translateX(-140%); } to { transform: translateX(360%); } }
 
 /* Compact loading mark: the same orbit language, simplified to stay crisp in
    dense controls where a miniature logo would become visual noise. */
@@ -1881,24 +1860,18 @@ body {
   .view-loading { min-height: calc(100dvh - 170px); }
   .view-loading__centre { padding: 18px; }
   .workspace-loading-screen { padding: max(22px,var(--mobile-safe-area-top)) max(20px,var(--mobile-safe-area-right)) max(22px,var(--mobile-safe-area-bottom)) max(20px,var(--mobile-safe-area-left)); }
-  .workspace-loading-screen::before { width: 116vw; }
-  .workspace-loading-screen::after { width: 82vw; }
-  .workspace-loading-screen__assurance { margin-top: 25px; }
-  .page-loading-core { --core-size: 78px; min-width: min(300px,calc(100vw - 32px)); gap: 17px; }
+  .workspace-loading-screen__assurance { margin-top: 22px; }
+  .page-loading-core { --core-size: 64px; min-width: min(280px,calc(100vw - 32px)); gap: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .view-loading { animation-duration: 1ms; }
   .skeleton-line { animation: none; background: #171e24; }
-  .cw-spinner__arc,
-  .page-loading-core__halo,
-  .page-loading-core__bar i { animation: none; }
+  .cw-spinner__arc { animation: none; }
   .page-loading-core__ring { animation-duration: 1.8s; }
 }
 :root.reduced-motion .skeleton-line { animation: none; background: #171e24; }
-:root.reduced-motion .cw-spinner__arc,
-:root.reduced-motion .page-loading-core__halo,
-:root.reduced-motion .page-loading-core__bar i { animation: none; }
+:root.reduced-motion .cw-spinner__arc { animation: none; }
 :root.reduced-motion .page-loading-core__ring { animation-duration: 1.8s; }
 
 /* Shared interaction polish. Custom controls that visually replace their
