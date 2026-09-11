@@ -42,6 +42,18 @@ type ConnectionResult = {
 type ConnectionError = { message: string; code: string | null };
 type PasskeyAssertion = Awaited<ReturnType<typeof startAuthentication>>;
 
+/**
+ * The OS - not this app - decides whether a "platform authenticator" prompt
+ * is a fingerprint, Face ID, or a PIN entry, so this can't force one method.
+ * What it can do honestly is set expectations by device class: phones are
+ * overwhelmingly fingerprint sensors (Face ID iPhones aside), and desktops
+ * without a camera/reader fall back to a PIN via Windows Hello or similar -
+ * "PIN" reads as less demanding than "Face ID" for that case.
+ */
+function isMobileUserAgent(userAgent: string): boolean {
+  return /android|iphone|ipad|ipod|mobile/i.test(userAgent);
+}
+
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -52,6 +64,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const [autofillSupported, setAutofillSupported] = useState(false);
   const [passkeyPrompt, setPasskeyPrompt] = useState<ConnectionResult | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  // Only ever read by content already gated behind `platformAuthAvailable`
+  // (false on both the server render and the initial client hydration pass),
+  // or by a post-interaction prompt - so recomputing it per render can't
+  // introduce a server/client output mismatch.
+  const isMobile = isMobileUserAgent(typeof navigator === "undefined" ? "" : navigator.userAgent);
+  const passkeyNoun = isMobile ? "fingerprint" : "PIN";
+  const PasskeyIcon = isMobile ? Fingerprint : KeyRound;
 
   useEffect(() => {
     const goOnline = () => setNetworkOffline(false);
@@ -73,7 +92,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       // the key field itself, with no explicit button - try this passively
       // and let a manual key entry or the explicit unlock button win if the
       // user does something else first. Browsers without autofill support
-      // fall back to the explicit "Unlock with Face ID" button instead.
+      // fall back to the explicit unlock button instead.
       const autofillReady = await browserSupportsWebAuthnAutofill().catch(() => false);
       if (!cancelled) setAutofillSupported(autofillReady);
       if (!autofillReady || cancelled) return;
@@ -256,9 +275,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
         {passkeyPrompt ? (
           <div className="connect-passkey-offer">
-            <span className="connect-passkey-offer__icon" aria-hidden="true"><Fingerprint size={22} /></span>
-            <strong>Enable Face ID for next time?</strong>
-            <p>Unlock this workspace with your device&apos;s biometrics instead of pasting your API key.</p>
+            <span className="connect-passkey-offer__icon" aria-hidden="true"><PasskeyIcon size={22} /></span>
+            <strong>Enable {passkeyNoun} unlock for next time?</strong>
+            <p>Unlock this workspace with your {passkeyNoun} instead of pasting your API key.</p>
             <div className="connect-passkey-offer__actions">
               <button type="button" className="button button--primary" disabled={enrolling} onClick={() => void enrollPasskey(passkeyPrompt)}>{enrolling ? "Enabling…" : "Enable"}</button>
               <button type="button" className="button button--quiet" disabled={enrolling} onClick={() => proceedToWorkspace(passkeyPrompt)}>Skip</button>
@@ -267,8 +286,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
         ) : (
           <>
             {platformAuthAvailable && !autofillSupported && (
-              <button type="button" className="connect-passkey-unlock" disabled={loading || opening || networkOffline} onClick={() => void unlockWithPasskey()}>
-                <Fingerprint size={16} /> Unlock with Face ID / fingerprint
+              <button type="button" className="connect-passkey-unlock connect-passkey-unlock--in" disabled={loading || opening || networkOffline} onClick={() => void unlockWithPasskey()}>
+                <PasskeyIcon size={16} /> Unlock with {passkeyNoun}
               </button>
             )}
 

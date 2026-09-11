@@ -474,6 +474,18 @@
 .connect-passkey-unlock:hover:not(:disabled) { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .1); }
 .connect-passkey-unlock:disabled { opacity: .55; cursor: default; }
 
+/* Whether a platform authenticator exists is only known async, after mount -
+   this eases the button in instead of letting it pop into the layout, which
+   otherwise reads as a rendering glitch rather than a deliberate reveal. */
+.connect-passkey-unlock--in { animation: connect-passkey-unlock-in 320ms cubic-bezier(.2, .75, .25, 1) both; }
+@keyframes connect-passkey-unlock-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .connect-passkey-unlock--in { animation: none; }
+}
+
 .connect-passkey-offer {
   display: flex;
   flex-direction: column;
