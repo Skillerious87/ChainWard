@@ -132,8 +132,6 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <span className="connect-hero__word">Chain<span>ward</span></span>
             <span className="connect-hero__tag">Faction Ops · Secure Access</span>
           </div>
-          <h2 id="login-title">Welcome back</h2>
-          <span>Reconnect your Torn key to re-enter the faction workspace.</span>
         </header>
         <span className="sr-only" aria-live="polite">{loading ? "Verifying your Torn connection." : ""}</span>
 

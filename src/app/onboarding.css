@@ -74,6 +74,27 @@
 }
 .login-home:hover { gap: 8px; color: #d4ddd7; border-color: rgba(255, 255, 255, .16); }
 
+/* --- Help trigger ------------------------------------------------------ */
+.login-help {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  z-index: 3;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  background: rgba(10, 14, 16, .5);
+  backdrop-filter: blur(8px);
+  color: #8b968e;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.login-help:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), .3); background: rgba(var(--accent-rgb), .07); }
+.login-help:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* --- Shell ---------------------------------------------------------- */
 .login-shell {
   position: relative;
@@ -139,14 +160,6 @@
 
 /* --- Heading -------------------------------------------------- */
 .login-card .connect-form__heading { display: block; padding: 0; border: 0; text-align: center; }
-.login-card .connect-form__heading h2 {
-  margin-top: 26px; color: #f1f5f2; font-family: var(--font-manrope); font-size: 24px; font-weight: 680; letter-spacing: -.6px; line-height: 1.14;
-}
-.login-card .connect-form__heading > span {
-  display: block; width: auto; height: auto; margin-top: 8px;
-  border: 0; border-radius: 0; background: none;
-  color: #808d84; font-size: 12.5px; line-height: 1.5;
-}
 
 /* --- Hero mark ----------------------------------------------
    A lockup, not three independently-sized lines: the mark sets the scale,
@@ -183,7 +196,7 @@
 .connect-hero__tag::before, .connect-hero__tag::after { width: 13px; height: 1px; background: rgba(var(--accent-rgb), .4); content: ""; }
 
 /* --- API key field ---------------------------------------- */
-.login-card .api-key-field { display: flex; flex-direction: column; gap: 8px; margin-top: 26px; }
+.login-card .api-key-field { display: flex; flex-direction: column; gap: 8px; margin-top: 34px; }
 .login-card .api-key-field__label { display: flex; align-items: baseline; justify-content: space-between; }
 .login-card .api-key-field__label strong { color: #d7ded9; font-size: 12px; font-weight: 650; }
 .login-card .api-key-field__label small { color: #667369 !important; font-size: 10.5px !important; }
@@ -472,6 +485,93 @@
 .offline-test-entry button strong { font-size: 10.5px; }
 .offline-test-entry button small { color: #626f67 !important; font-size: 9.5px !important; }
 
+/* --- Key help dialog ------------------------------------------------ */
+.key-help-dialog {
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+.key-help-dialog::backdrop { background: rgba(2, 4, 5, .76); backdrop-filter: blur(5px) saturate(.8); }
+.key-help-dialog__surface {
+  position: relative;
+  box-sizing: border-box;
+  max-height: calc(100dvh - 24px);
+  padding: 26px 24px 22px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid #35423b;
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% -10%, rgba(var(--accent-rgb), .08), transparent 34%), #0f1517;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .62), inset 0 1px rgba(255, 255, 255, .025);
+  animation: key-help-dialog-in 220ms cubic-bezier(.22, .82, .28, 1) both;
+}
+.key-help-dialog__surface::before {
+  position: absolute; inset: 0 0 auto; height: 1px;
+  background: linear-gradient(90deg, transparent 12%, var(--accent) 50%, transparent 88%);
+  opacity: .8; content: "";
+}
+@keyframes key-help-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.key-help-dialog__close {
+  position: absolute; z-index: 1; top: 14px; right: 14px;
+  display: grid; width: 32px; height: 32px; place-items: center;
+  border: 1px solid transparent; border-radius: 9px;
+  background: transparent; color: #7f8b85; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.key-help-dialog__close:hover { border-color: #334039; background: #151d1f; color: #e3e9e5; }
+.key-help-dialog__close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.key-help-dialog__header { display: flex; align-items: center; gap: 12px; padding-right: 30px; }
+.key-help-dialog__mark {
+  display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), .24); border-radius: 10px;
+  background: rgba(var(--accent-rgb), .055); color: var(--accent);
+}
+.key-help-dialog__header h2 { color: #f0f4f1; font-size: 17px; font-weight: 680; letter-spacing: -.4px; }
+
+.key-help-dialog__section { margin-top: 18px; }
+.key-help-dialog__section h3 { color: #8b988f; font-size: 10px; font-weight: 720; letter-spacing: .7px; text-transform: uppercase; }
+.key-help-dialog__section p { margin-top: 7px; color: #a6b0aa; font-size: 12.5px; line-height: 1.6; }
+.key-help-dialog__section ol { margin: 7px 0 0; padding-left: 18px; color: #a6b0aa; font-size: 12.5px; line-height: 1.75; }
+.key-help-dialog__section strong { color: #cde8b9; font-weight: 650; }
+
+.key-help-dialog__cta {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin-top: 20px; min-height: 44px;
+  border: 1px solid rgba(var(--accent-rgb), .3); border-radius: 11px;
+  background: rgba(var(--accent-rgb), .08); color: var(--accent);
+  font-size: 12.5px; font-weight: 650;
+  transition: border-color .15s ease, background .15s ease;
+}
+.key-help-dialog__cta:hover { border-color: rgba(var(--accent-rgb), .5); background: rgba(var(--accent-rgb), .13); }
+
+.key-help-dialog__note {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 14px; color: #69756f; font-size: 10.5px;
+}
+.key-help-dialog__note svg { flex: 0 0 auto; color: #728078; }
+
+@media (max-width: 480px) {
+  .key-help-dialog { width: 100%; max-width: 100%; max-height: 92vh; margin: auto 0 0; align-self: end; }
+  .key-help-dialog__surface { border-width: 1px 0 0; border-radius: 20px 20px 0 0; padding: 22px 20px calc(20px + env(safe-area-inset-bottom)); }
+  @keyframes key-help-dialog-in {
+    from { opacity: 0; transform: translateY(100%); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key-help-dialog__surface { animation: none; }
+}
+
 /* The page never scrolls — the card body and the disclosure panel each take
    over any overflow internally instead. */
 
@@ -488,8 +588,7 @@
   .connect-hero__mark svg { width: 26px; height: 26px; }
   .connect-hero__word { margin-top: 12px; font-size: 27px; }
   .connect-hero__tag { margin-top: 7px; }
-  .login-card .connect-form__heading h2 { margin-top: 18px; font-size: 22px; }
-  .login-card .api-key-field { margin-top: 20px; }
+  .login-card .api-key-field { margin-top: 26px; }
   .login-remember { margin-top: 14px; padding: 10px 12px; }
   .login-card .connect-submit { min-height: 48px; margin-top: 16px; }
   .connect-trust { margin-top: 10px; }
@@ -537,9 +636,7 @@
   .connect-hero__mark svg { width: 22px; height: 22px; }
   .connect-hero__word { margin-top: 9px; font-size: 24px; }
   .connect-hero__tag { display: none; }
-  .login-card .connect-form__heading h2 { margin-top: 16px; font-size: 20px; }
-  .login-card .connect-form__heading > span { margin-top: 6px; }
-  .login-card .api-key-field { margin-top: 16px; }
+  .login-card .api-key-field { margin-top: 22px; }
   .login-card .api-key-field > div { height: 46px; }
   .login-remember { margin-top: 10px; padding: 8px 10px; }
   .login-card .connect-submit { min-height: 44px; margin-top: 12px; }

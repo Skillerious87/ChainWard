@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { ApiKeyHelpDialog } from "@/components/onboarding/api-key-help-dialog";
 import { ConnectForm } from "@/components/onboarding/connect-form";
 import { LoginBackdrop } from "@/components/onboarding/login-backdrop";
 import { offlineTestModeEnabled } from "@/lib/torn/offline-fixture";
@@ -16,9 +17,10 @@ export default function ConnectPage() {
       <LoginBackdrop />
 
       <Link className="login-home" href="/"><ArrowLeft size={14} /> Home</Link>
+      <ApiKeyHelpDialog />
 
       <div className="login-shell">
-        <section className="login-card" aria-labelledby="login-title">
+        <section className="login-card" aria-label="Sign in to Chainward">
           <ConnectForm offlineEnabled={offlineTestModeEnabled()} />
         </section>
 
