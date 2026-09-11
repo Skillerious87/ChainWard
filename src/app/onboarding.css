@@ -632,12 +632,30 @@
     box-shadow: none;
   }
   .login-card::before { display: none; }
+  /* The sign-in block reads as a native app screen when it sits in the
+     vertical middle of the available height, not pinned to the top edge with
+     the legal footer stranded far below it — so `.connect-form` becomes the
+     flexible region that fills whatever space `.login-card` has (between the
+     safe-area top and the footer) and centres its one real child within it.
+     The base (desktop) rules set `min-height: 0` on both `.connect-form` and
+     `.connect-stage--entry` so the floating card can scroll its own body
+     instead of growing — reinstated here as `auto`, its default, so that on a
+     very short viewport, where there isn't room to both centre and keep the
+     logo clear of the Home/Help buttons above it, the content keeps its
+     natural size and pushes the *page* into the same soft scroll it always
+     had, rather than letting the logo get compressed up into those buttons. */
   .login-card .connect-form {
-    padding-top: max(72px, calc(env(safe-area-inset-top) + 64px));
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: auto;
+    justify-content: center;
+    padding-top: max(28px, calc(env(safe-area-inset-top) + 22px));
     padding-inline: 20px;
     padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 14px));
     overflow: visible;
   }
+  .login-card .connect-stage--entry { min-height: auto; }
   .offline-test-entry > div { grid-template-columns: 1fr; }
   .login-legal { padding: 20px 20px max(20px, env(safe-area-inset-bottom)); }
 }
@@ -645,6 +663,10 @@
 /* Narrow and short together (e.g. iPhone SE) — the full-bleed screen above
    needs more headroom clawed back than either breakpoint alone provides. */
 @media (max-width: 560px) and (max-height: 700px) {
+  /* At this height there is rarely any slack left for centring to
+     redistribute (content plus padding already fills the available space),
+     so this keeps the same fixed clearance the top-anchored layout always
+     used rather than risking the logo landing under the Home/Help buttons. */
   .login-card .connect-form { padding-top: max(56px, calc(env(safe-area-inset-top) + 48px)); }
   .connect-hero__mark { width: 44px; height: 44px; border-radius: 14px; }
   .connect-hero__mark svg { width: 22px; height: 22px; }
