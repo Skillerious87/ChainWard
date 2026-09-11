@@ -8,6 +8,7 @@ import { ExportButton, MenuButton } from "@/components/ui/action-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { notify } from "@/lib/client-actions";
+import type { BestChainTargetResult } from "@/lib/targets/best-target";
 import type { TornChainReportView } from "@/lib/torn/workspace-types";
 import { ChainHero } from "./chain-hero";
 import { ContributionTable } from "./contribution-table";
@@ -19,7 +20,7 @@ const viewOptions = [
   { label: "At-risk status", value: "risk", description: "Show hospital and unavailable roster states" },
 ] as const;
 
-export function LiveChainWorkspace({ report: initialReport, reportMessage }: { report: TornChainReportView | null; reportMessage: string }) {
+export function LiveChainWorkspace({ report: initialReport, reportMessage, bestTarget }: { report: TornChainReportView | null; reportMessage: string; bestTarget: BestChainTargetResult }) {
   const { telemetry } = useLiveWorkspaceTelemetry();
   const router = useRouter();
   const preferences = useAppearancePreferences();
@@ -57,7 +58,7 @@ export function LiveChainWorkspace({ report: initialReport, reportMessage }: { r
   return <div className="page-stack">
     <PageHeader eyebrow="Live operations" title="Active chain" description={live ? "Live chain fields and the matching report retrieved from Torn API v2." : "Torn reports no chain in progress. The most recent completed report is shown below."} actions={<><ExportButton filename="chainward-live-contributions.csv" label="Export" rows={members.map((member) => ({ rank: member.rank, player: member.name, tornId: member.tornId, chainHits: member.hits, contribution: `${member.contribution.toFixed(2)}%`, respect: member.respect, status: member.status ?? "Unavailable" }))} /><MenuButton label="View options" icon="settings" selected={viewMode} onSelect={changeView} reflectSelection={false} className="button button--secondary" options={viewOptions} /></>} />
     <div className={`notice-bar ${report ? (live ? "notice-bar--info" : "notice-bar--muted") : "notice-bar--warning"}`}><Radio size={16} /><span><strong>{report ? `${reportLabel} #${report.id}.` : "No matching chain report."}</strong> {report ? `${report.hits.toLocaleString()} recorded hits from ${report.contributorCount} contributor${report.contributorCount === 1 ? "" : "s"}. Rows count qualifying leave, mug, and hospitalize attacks.` : emptyMessage}</span></div>
-    <ChainHero detailed onRefresh={() => startRefresh(() => router.refresh())} />
+    <ChainHero detailed bestTarget={bestTarget} onRefresh={() => startRefresh(() => router.refresh())} />
     <ContributionTable members={members} compact={viewMode === "compact"} title={tableTitle} emptyMessage={viewMode === "risk" && report ? "No contributors currently have an at-risk roster status." : emptyMessage} />
   </div>;
 }

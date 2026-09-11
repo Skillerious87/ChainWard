@@ -291,6 +291,52 @@
   text-wrap: balance;
 }
 
+/* Attack suggestion --------------------------------------------------------
+   Live Chain's own tap into the Targets workspace's hit-priority scoring —
+   deliberately reuses the ring's `--ring-glow`/`--ring-colour` tone tokens,
+   so the suggestion reads more urgent exactly when the timer does. */
+.timeout-ring__attack {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(var(--ring-glow, var(--accent-rgb)), .32);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(var(--ring-glow, var(--accent-rgb)), .14), rgba(var(--ring-glow, var(--accent-rgb)), .03));
+  color: #f2f7f1;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+.timeout-ring__attack:hover {
+  border-color: rgba(var(--ring-glow, var(--accent-rgb)), .6);
+  background: linear-gradient(135deg, rgba(var(--ring-glow, var(--accent-rgb)), .2), rgba(var(--ring-glow, var(--accent-rgb)), .05));
+  transform: translateY(-1px);
+}
+.timeout-ring__attack:focus-visible { outline: 2px solid var(--ring-colour, var(--accent)); outline-offset: 2px; }
+.timeout-ring__attack-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(var(--ring-glow, var(--accent-rgb)), .16);
+  color: var(--ring-colour, var(--accent));
+}
+.timeout-ring__attack-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
+.timeout-ring__attack-copy em { color: #7d8891; font-size: 9px; font-style: normal; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.timeout-ring__attack-copy strong { overflow: hidden; color: #f2f7f1; font-size: 12.5px; font-weight: 680; letter-spacing: -.1px; text-overflow: ellipsis; white-space: nowrap; }
+.timeout-ring__attack-copy small { overflow: hidden; color: #92a098 !important; font-size: 10.5px !important; text-overflow: ellipsis; white-space: nowrap; }
+.timeout-ring__attack-go { flex: 0 0 auto; color: var(--ring-colour, var(--accent)); transition: transform 150ms ease; }
+.timeout-ring__attack:hover .timeout-ring__attack-go { transform: translate(2px, -2px); }
+
+.timeout-ring__attack--empty { border-style: dashed; background: rgba(255, 255, 255, .014); }
+.timeout-ring__attack--empty .timeout-ring__attack-icon { background: rgba(255, 255, 255, .045); color: #7d8891; }
+.timeout-ring__attack--empty .timeout-ring__attack-copy strong { color: #b7c1bc; }
+.timeout-ring__attack--empty .timeout-ring__attack-go { color: #7d8891; }
+.timeout-ring__attack--empty:hover { border-color: rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .024); }
+
 /* Tones --------------------------------------------------------------------- */
 .timeout-ring--safe { --ring-colour: var(--accent); --ring-from: rgba(var(--accent-rgb), .4); --ring-glow: var(--accent-rgb); }
 .timeout-ring--warning { --ring-colour: var(--warning); --ring-from: rgba(245, 185, 76, .38); --ring-glow: 245, 185, 76; }
@@ -305,12 +351,14 @@
   .timeout-ring { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; }
   .timeout-ring__header { order: -1; }
   .timeout-ring__facts { width: auto; min-width: 220px; flex: 1; }
+  .timeout-ring__attack { flex: 1 1 100%; }
 }
 
 @media (max-width: 620px) {
   .timeout-ring__dial { width: 148px; height: 148px; }
   .timeout-ring__readout strong { font-size: 31px; }
   .timeout-ring__facts { width: 100%; }
+  .timeout-ring__attack { flex-basis: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

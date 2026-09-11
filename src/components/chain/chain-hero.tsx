@@ -1,14 +1,15 @@
 "use client";
 
-import { Activity, Clock3, Crosshair, Expand, TrendingUp, Users, X } from "lucide-react";
+import { Activity, ArrowUpRight, Clock3, Crosshair, Expand, Swords, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
+import type { BestChainTargetResult } from "@/lib/targets/best-target";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
-interface ChainHeroProps { detailed?: boolean; onRefresh?: () => void; }
+interface ChainHeroProps { detailed?: boolean; bestTarget?: BestChainTargetResult; onRefresh?: () => void; }
 
 /**
  * Torn awards a flat respect bonus at thirteen fixed chain lengths. Torn's
@@ -29,7 +30,7 @@ function milestoneWindow(target: number): number[] {
   return [...CHAIN_BONUS_MILESTONES].slice(Math.max(0, index - 1), index + 3);
 }
 
-export function ChainHero({ detailed = false, onRefresh }: ChainHeroProps) {
+export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHeroProps) {
   const { telemetry: snapshot, seconds, deadlineAtSeconds, nowSeconds } = useLiveWorkspaceTelemetry();
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -216,6 +217,7 @@ export function ChainHero({ detailed = false, onRefresh }: ChainHeroProps) {
           windowSeconds={timeoutWindow}
           deadlineAtSeconds={deadlineAtSeconds}
           warmup={chain.current < 10}
+          bestTarget={bestTarget}
         />
       </div>
 
@@ -244,11 +246,13 @@ function TimeoutRing({
   windowSeconds,
   deadlineAtSeconds,
   warmup,
+  bestTarget,
 }: {
   seconds: number;
   windowSeconds: number;
   deadlineAtSeconds: number;
   warmup: boolean;
+  bestTarget?: BestChainTargetResult;
 }) {
   const radius = 54;
   // Browser and server JavaScript engines can serialize the final few bits of
@@ -330,10 +334,56 @@ function TimeoutRing({
         <div><dt>Drops at</dt><dd>{seconds > 0 ? formatTornTime(deadlineAtSeconds) : "—"}</dd></div>
         <div><dt>Window</dt><dd>{formatDuration(windowSeconds)}</dd></div>
       </dl>
+
+      {bestTarget && <ChainAttackSuggestion result={bestTarget} />}
+
       <small title="Torn reports seconds remaining when it answers. Automatic active-chain checks bypass the service cache and project each response with a monotonic clock.">
         {warmup ? "First 10 hits share one 5m window" : "Anchored to server time · each new hit restarts 5m"}
       </small>
     </aside>
+  );
+}
+
+/**
+ * Live Chain's link into the Targets workspace's own hit-priority scoring
+ * (see `getBestChainTarget`): the highest-priority attackable target right
+ * now, one tap away from keeping the chain alive without a detour through
+ * the Targets page.
+ */
+function ChainAttackSuggestion({ result }: { result: BestChainTargetResult }) {
+  const { target, targetCount } = result;
+
+  if (target) {
+    const lead = target.reasons[0];
+    return (
+      <a
+        className="timeout-ring__attack"
+        href={target.attackUrl}
+        target="_blank"
+        rel="noreferrer"
+        title={target.reasons.length > 0 ? `Hit priority ${target.score} — ${target.reasons.join(" · ")}` : `Hit priority ${target.score}`}
+      >
+        <span className="timeout-ring__attack-icon"><Swords size={15} /></span>
+        <span className="timeout-ring__attack-copy">
+          <em>Suggested target</em>
+          <strong>Attack {target.name}</strong>
+          <small>Lvl {target.level}{lead ? ` · ${lead}` : ""}</small>
+        </span>
+        <ArrowUpRight size={15} className="timeout-ring__attack-go" />
+      </a>
+    );
+  }
+
+  return (
+    <Link className="timeout-ring__attack timeout-ring__attack--empty" href="/targets">
+      <span className="timeout-ring__attack-icon"><Crosshair size={15} /></span>
+      <span className="timeout-ring__attack-copy">
+        <em>Suggested target</em>
+        <strong>{targetCount > 0 ? "No target ready right now" : "No targets tracked yet"}</strong>
+        <small>{targetCount > 0 ? "Nobody on your list is available to hit." : "Add targets to get attack suggestions here."}</small>
+      </span>
+      <ArrowUpRight size={15} className="timeout-ring__attack-go" />
+    </Link>
   );
 }
 
