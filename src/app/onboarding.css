@@ -600,11 +600,27 @@
    becomes the page itself — edge to edge, no border or radius — the way a
    native app screen reads, instead of a card centred on visible backdrop. */
 @media (max-width: 560px) {
-  .login-page { padding: 0; }
-  .login-shell { max-width: none; height: 100%; gap: 0; }
+  /* The exact-fit, zero-scroll version of this layout had no margin for
+     error: real safe-area insets (the home-indicator band on notched
+     phones) and font-metric differences are enough to push content a few
+     pixels past the viewport, and anything past it was silently clipped —
+     the sign-off line at the bottom is exactly what disappeared. The page
+     now grows with its content and scrolls the small amount that needs it,
+     instead of ever hiding it. In the common case content still fits and
+     no scrollbar appears. */
+  .login-page {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .login-shell { max-width: none; max-height: none; min-height: 100vh; min-height: 100dvh; gap: 0; }
   .login-card {
     flex: 1 1 auto;
     max-height: none;
+    overflow: visible;
     border: 0;
     border-radius: 0;
     /* The floating card's tinted glass was designed to sit on top of a
@@ -617,15 +633,13 @@
   }
   .login-card::before { display: none; }
   .login-card .connect-form {
-    height: 100%;
     padding-top: max(72px, calc(env(safe-area-inset-top) + 64px));
     padding-inline: 20px;
-    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 14px));
+    overflow: visible;
   }
-  .login-card .connect-stage--entry { display: flex; height: 100%; flex-direction: column; min-height: 0; }
-  .connect-footer-link { margin-top: auto; padding-top: 18px; }
   .offline-test-entry > div { grid-template-columns: 1fr; }
-  .login-legal { padding: 14px 20px max(14px, env(safe-area-inset-bottom)); }
+  .login-legal { padding: 20px 20px max(20px, env(safe-area-inset-bottom)); }
 }
 
 /* Narrow and short together (e.g. iPhone SE) — the full-bleed screen above
