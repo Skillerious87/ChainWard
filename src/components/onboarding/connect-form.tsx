@@ -129,8 +129,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
         <header className="connect-form__heading">
           <div className="connect-hero">
             <span className="connect-hero__mark"><ConnectHeroMark /></span>
-            <p className="connect-hero__word">Chain<span>ward</span></p>
-            <p className="connect-hero__tag">Faction Ops · Secure Access</p>
+            <span className="connect-hero__word">Chain<span>ward</span></span>
+            <span className="connect-hero__tag">Faction Ops · Secure Access</span>
           </div>
           <h2 id="login-title">Welcome back</h2>
           <span>Reconnect your Torn key to re-enter the faction workspace.</span>
@@ -172,9 +172,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
           </span>
         </button>
 
-        <p className="connect-trust"><ShieldCheck size={13} /> Encrypted server-side. Never stored in your browser.</p>
+        <span className="connect-trust"><ShieldCheck size={13} /> Encrypted server-side. Never stored in your browser.</span>
 
-        <p className="connect-footer-link">Need a key? <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create one <ExternalLink size={12} /></a></p>
+        <span className="connect-footer-link">Need a key? <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create one <ExternalLink size={12} /></a></span>
 
         {offlineEnabled && <details className="offline-test-entry">
           <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>

@@ -148,14 +148,18 @@
   color: #808d84; font-size: 12.5px; line-height: 1.5;
 }
 
-/* --- Hero mark ---------------------------------------------- */
-.connect-hero { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* --- Hero mark ----------------------------------------------
+   A lockup, not three independently-sized lines: the mark sets the scale,
+   the wordmark reads as its equal partner at nearly the mark's own height,
+   and the tag rides close underneath it as a caption — small, wide-tracked,
+   and boxed in by a pair of hairlines rather than floating on its own. */
+.connect-hero { display: flex; flex-direction: column; align-items: center; }
 .connect-hero__mark {
   position: relative;
   display: grid; place-items: center;
-  width: 58px; height: 58px;
+  width: 62px; height: 62px;
   border: 1px solid rgba(var(--accent-rgb), .28);
-  border-radius: 18px;
+  border-radius: 19px;
   background: linear-gradient(160deg, rgba(var(--accent-rgb), .2), rgba(var(--accent-rgb), .03));
   box-shadow: 0 0 0 1px rgba(255, 255, 255, .05) inset, 0 18px 34px -14px rgba(var(--accent-rgb), .6);
 }
@@ -165,13 +169,18 @@
   filter: blur(4px);
   content: "";
 }
-.connect-hero__mark svg { width: 29px; height: 29px; }
-.connect-hero__word { margin: 0; color: #eef3f0; font-family: var(--font-manrope); font-size: 21px; font-weight: 800; letter-spacing: -.4px; }
+.connect-hero__mark svg { width: 32px; height: 32px; }
+.connect-hero__word {
+  margin: 16px 0 0; color: #eef3f0; font-family: var(--font-manrope); font-size: 34px; font-weight: 800;
+  letter-spacing: -1px; line-height: 1;
+}
 .connect-hero__word span { color: var(--accent); }
 .connect-hero__tag {
-  margin: 0; color: #4c574f; font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace; font-size: 9px; font-weight: 600;
-  letter-spacing: 2.2px; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: 9px;
+  margin: 9px 0 0; color: #56645b; font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace; font-size: 8px; font-weight: 700;
+  letter-spacing: 3px; text-transform: uppercase;
 }
+.connect-hero__tag::before, .connect-hero__tag::after { width: 13px; height: 1px; background: rgba(var(--accent-rgb), .4); content: ""; }
 
 /* --- API key field ---------------------------------------- */
 .login-card .api-key-field { display: flex; flex-direction: column; gap: 8px; margin-top: 26px; }
@@ -421,7 +430,7 @@
 .connect-trust { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; color: #6f7c74; font-size: 10.5px; text-align: center; }
 .connect-trust svg { flex: 0 0 auto; color: #78c74c; }
 
-.connect-footer-link { margin-top: 18px; color: #6f7c74; font-size: 12px; text-align: center; }
+.connect-footer-link { display: block; margin-top: 18px; color: #6f7c74; font-size: 12px; text-align: center; }
 .connect-footer-link a { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-weight: 650; }
 
 /* --- Disclosures ---------------------------------- */
@@ -475,9 +484,10 @@
 @media (max-height: 720px) {
   .login-shell { gap: 16px; }
   .login-card .connect-form { padding: 24px 24px 20px; }
-  .connect-hero__mark { width: 46px; height: 46px; border-radius: 15px; }
-  .connect-hero__mark svg { width: 23px; height: 23px; }
-  .connect-hero__word { font-size: 18px; }
+  .connect-hero__mark { width: 52px; height: 52px; border-radius: 16px; }
+  .connect-hero__mark svg { width: 26px; height: 26px; }
+  .connect-hero__word { margin-top: 12px; font-size: 27px; }
+  .connect-hero__tag { margin-top: 7px; }
   .login-card .connect-form__heading h2 { margin-top: 18px; font-size: 22px; }
   .login-card .api-key-field { margin-top: 20px; }
   .login-remember { margin-top: 14px; padding: 10px 12px; }
@@ -523,12 +533,11 @@
    needs more headroom clawed back than either breakpoint alone provides. */
 @media (max-width: 560px) and (max-height: 700px) {
   .login-card .connect-form { padding-top: max(56px, calc(env(safe-area-inset-top) + 48px)); }
-  .connect-hero { gap: 8px; }
-  .connect-hero__mark { width: 40px; height: 40px; border-radius: 13px; }
-  .connect-hero__mark svg { width: 20px; height: 20px; }
-  .connect-hero__word { font-size: 17px; }
+  .connect-hero__mark { width: 44px; height: 44px; border-radius: 14px; }
+  .connect-hero__mark svg { width: 22px; height: 22px; }
+  .connect-hero__word { margin-top: 9px; font-size: 24px; }
   .connect-hero__tag { display: none; }
-  .login-card .connect-form__heading h2 { margin-top: 12px; font-size: 20px; }
+  .login-card .connect-form__heading h2 { margin-top: 16px; font-size: 20px; }
   .login-card .connect-form__heading > span { margin-top: 6px; }
   .login-card .api-key-field { margin-top: 16px; }
   .login-card .api-key-field > div { height: 46px; }

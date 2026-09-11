@@ -28,6 +28,13 @@ export function LoginBackdrop() {
     let pulses: Pulse[] = [];
     let nextPulseAt = 0;
     let running = true;
+    // Every per-frame increment below is scaled by this, so motion covers the
+    // same distance per second on a 60Hz display and a 120Hz one — without it
+    // the pulse visibly doubles speed on high-refresh phones, reading as a
+    // dart or a "shooting star" instead of a smooth, even drift.
+    let lastFrameTime = 0;
+    const BASELINE_FRAME_MS = 1000 / 60;
+    const PULSE_SPEED = 0.013;
 
     function resize(): void {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -100,11 +107,14 @@ export function LoginBackdrop() {
     function step(now: number): void {
       if (!running) return;
       frame = window.requestAnimationFrame(step);
+      const dt = lastFrameTime ? Math.min(now - lastFrameTime, 50) : BASELINE_FRAME_MS;
+      lastFrameTime = now;
+      const speed = dt / BASELINE_FRAME_MS;
       context!.clearRect(0, 0, width, height);
 
       for (const node of nodes) {
-        node.x += node.vx;
-        node.y += node.vy;
+        node.x += node.vx * speed;
+        node.y += node.vy * speed;
         if (node.x < -20) node.x = width + 20;
         if (node.x > width + 20) node.x = -20;
         if (node.y < -20) node.y = height + 20;
@@ -136,7 +146,7 @@ export function LoginBackdrop() {
         const from = nodes[pulse.path[pulse.segment]!];
         const to = nodes[pulse.path[pulse.segment + 1]!];
         if (!from || !to) return false;
-        pulse.t += 0.022;
+        pulse.t += PULSE_SPEED * speed;
         if (pulse.t >= 1) {
           pulse.t = 0;
           pulse.segment += 1;
@@ -145,19 +155,19 @@ export function LoginBackdrop() {
         const x = from.x + (to.x - from.x) * pulse.t;
         const y = from.y + (to.y - from.y) * pulse.t;
 
-        context!.strokeStyle = withAlpha(accent, 0.4);
-        context!.lineWidth = 1.4;
+        context!.strokeStyle = withAlpha(accent, 0.3);
+        context!.lineWidth = 1.2;
         context!.beginPath();
         context!.moveTo(from.x, from.y);
         context!.lineTo(x, y);
         context!.stroke();
 
-        const glow = context!.createRadialGradient(x, y, 0, x, y, 16);
-        glow.addColorStop(0, withAlpha(accent, 0.55));
+        const glow = context!.createRadialGradient(x, y, 0, x, y, 13);
+        glow.addColorStop(0, withAlpha(accent, .4));
         glow.addColorStop(1, withAlpha(accent, 0));
         context!.fillStyle = glow;
         context!.beginPath();
-        context!.arc(x, y, 16, 0, Math.PI * 2);
+        context!.arc(x, y, 13, 0, Math.PI * 2);
         context!.fill();
         return true;
       });
