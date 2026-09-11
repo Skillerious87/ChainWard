@@ -30,6 +30,13 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   images: {
     remotePatterns: [{ protocol: "https", hostname: "profileimages.torn.com", pathname: "/**" }],
+    // The brand icon is versioned with `?v=` (see components using
+    // `/icons/*.png`) so a logo update invalidates next/image's optimizer
+    // cache immediately, rather than waiting out its default four-hour
+    // `minimumCacheTTL`. Next 16 requires local query strings to be
+    // explicitly allow-listed (with an exact `search` match) to prevent
+    // cache-key enumeration abuse.
+    localPatterns: [{ pathname: "/icons/**", search: "?v=2" }],
   },
   experimental: {
     serverActions: {

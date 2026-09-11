@@ -216,7 +216,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       if (getBrowserNotificationPermission() === "granted") {
         void showWindowsNotification(
           (ranked.length === 1 ? `${names[0]} is out of hospital` : `${ranked.length} targets are attackable`) + reasonSuffix,
-          { body: names.slice(0, 4).join(", "), icon: "/icons/android-chrome-192x192.png", tag: "chainward-targets", data: { url: "/targets?section=chain" } },
+          { body: names.slice(0, 4).join(", "), icon: "/icons/android-chrome-192x192.png?v=2", tag: "chainward-targets", data: { url: "/targets?section=chain" } },
         );
       }
     }
@@ -557,7 +557,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     });
     if (chainDangerTier === 2 && getBrowserNotificationPermission() === "granted") {
       void showWindowsNotification("Chain at risk — drops in under 2m", {
-        body, icon: "/icons/android-chrome-192x192.png", tag: "chainward-chain-risk", data: { url: "/targets?section=chain" },
+        body, icon: "/icons/android-chrome-192x192.png?v=2", tag: "chainward-chain-risk", data: { url: "/targets?section=chain" },
       });
     }
   }, [chain, chainActive, chainDangerTier, chainTimeoutMs, nextReady]);

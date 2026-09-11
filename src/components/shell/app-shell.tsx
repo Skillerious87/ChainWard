@@ -339,8 +339,8 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
       critical ? `Chain critical · ${formatChainCountdown(chainSeconds)}` : `Chain warning · ${formatChainCountdown(chainSeconds)}`,
       {
         body: `${liveTelemetry.faction?.name ?? "Your faction"}: ${currentChain.current.toLocaleString()} / ${currentChain.maximum.toLocaleString()} hits. Open the live chain now.`,
-        icon: "/icons/android-chrome-192x192.png",
-        badge: "/icons/favicon-32x32.png",
+        icon: "/icons/android-chrome-192x192.png?v=2",
+        badge: "/icons/favicon-32x32.png?v=2",
         tag: `chainward-chain-${liveTelemetry.faction?.id ?? "global"}-${currentChain.id}`,
         requireInteraction: critical && deviceAlertPreferences.keepCriticalVisible,
         data: { url: "/live-chain" },

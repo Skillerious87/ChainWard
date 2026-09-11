@@ -26,8 +26,8 @@ self.addEventListener("push", (event) => {
   const url = safeRelativeUrl(payload.url);
   event.waitUntil(self.registration.showNotification(title, {
     body,
-    icon: "/icons/android-chrome-192x192.png",
-    badge: "/icons/favicon-32x32.png",
+    icon: "/icons/android-chrome-192x192.png?v=2",
+    badge: "/icons/favicon-32x32.png?v=2",
     tag,
     renotify: true,
     requireInteraction: payload.requireInteraction === true,

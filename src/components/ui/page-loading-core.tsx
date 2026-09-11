@@ -16,7 +16,7 @@ export function PageLoadingCore({ title, hint }: PageLoadingCoreProps) {
       <div className="page-loading-core__mark" aria-hidden="true">
         <span className="page-loading-core__ring" />
         <span className="page-loading-core__chip">
-          <Image src="/icons/android-chrome-192x192.png" alt="" width={48} height={48} priority />
+          <Image src="/icons/android-chrome-192x192.png?v=2" alt="" width={48} height={48} priority />
         </span>
       </div>
       <div className="page-loading-core__copy">

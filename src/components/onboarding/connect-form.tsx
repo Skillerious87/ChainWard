@@ -111,7 +111,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       <div className="connect-stage connect-stage--entry">
         <header className="connect-form__heading">
           <div className="connect-hero">
-            <span className="connect-hero__mark"><Image src="/icons/android-chrome-512x512.png" alt="" width={144} height={144} priority /></span>
+            <span className="connect-hero__mark"><Image src="/icons/android-chrome-512x512.png?v=2" alt="" width={144} height={144} priority /></span>
             <span className="connect-hero__word">Chain<span>ward</span></span>
             <span className="connect-hero__tag">Faction Ops · Secure Access</span>
           </div>

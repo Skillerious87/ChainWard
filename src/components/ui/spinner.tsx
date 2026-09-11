@@ -10,7 +10,7 @@ export function Spinner({ size = 22, label = "Loading", tone = "accent" }: { siz
         <circle className="cw-spinner__arc" cx="20" cy="20" r="16" pathLength="100" />
         <circle className="cw-spinner__arc cw-spinner__arc--inner" cx="20" cy="20" r="11.5" pathLength="100" />
       </svg>
-      {compact ? <i className="cw-spinner__core" aria-hidden="true" /> : <Image className="cw-spinner__mark" src="/icons/android-chrome-192x192.png" alt="" width={40} height={40} />}
+      {compact ? <i className="cw-spinner__core" aria-hidden="true" /> : <Image className="cw-spinner__mark" src="/icons/android-chrome-192x192.png?v=2" alt="" width={40} height={40} />}
     </span>
   );
 }

@@ -110,8 +110,8 @@ async function maybeNotify(snapshot: MemberActivityMonitorSnapshot, preferences:
   const body = `${snapshot.factionName}: ${visibleNames}${alerts.length > 3 ? ` and ${alerts.length - 3} more` : ""}.`;
   const shown = await showWindowsNotification(title, {
     body,
-    icon: "/icons/android-chrome-192x192.png",
-    badge: "/icons/favicon-32x32.png",
+    icon: "/icons/android-chrome-192x192.png?v=2",
+    badge: "/icons/favicon-32x32.png?v=2",
     tag: `chainward-member-activity-${snapshot.factionId}`,
     requireInteraction: criticalCount > 0 && preferences.keepCriticalVisible,
     data: { url: "/members?view=attention" },
