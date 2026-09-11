@@ -140,7 +140,7 @@
 /* --- Heading -------------------------------------------------- */
 .login-card .connect-form__heading { display: block; padding: 0; border: 0; text-align: center; }
 .login-card .connect-form__heading h2 {
-  margin-top: 26px; color: #f1f5f2; font-size: 24px; font-weight: 640; letter-spacing: -.7px; line-height: 1.14;
+  margin-top: 26px; color: #f1f5f2; font-family: var(--font-manrope); font-size: 24px; font-weight: 680; letter-spacing: -.6px; line-height: 1.14;
 }
 .login-card .connect-form__heading > span {
   display: block; width: auto; height: auto; margin-top: 8px;
@@ -166,7 +166,7 @@
   content: "";
 }
 .connect-hero__mark svg { width: 29px; height: 29px; }
-.connect-hero__word { margin: 0; color: #eef3f0; font-size: 21px; font-weight: 800; letter-spacing: -.4px; }
+.connect-hero__word { margin: 0; color: #eef3f0; font-family: var(--font-manrope); font-size: 21px; font-weight: 800; letter-spacing: -.4px; }
 .connect-hero__word span { color: var(--accent); }
 .connect-hero__tag {
   margin: 0; color: #4c574f; font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace; font-size: 9px; font-weight: 600;
@@ -498,7 +498,11 @@
     max-height: none;
     border: 0;
     border-radius: 0;
-    background: var(--bg);
+    /* The floating card's tinted glass was designed to sit on top of a
+       highly visible backdrop; stretched full-screen it just muted the
+       animated field to near-invisible. Full-bleed relies on the
+       backdrop's own vignette for contrast instead — see login-backdrop.tsx. */
+    background: transparent;
     backdrop-filter: none;
     box-shadow: none;
   }
@@ -511,7 +515,6 @@
   }
   .login-card .connect-stage--entry { display: flex; height: 100%; flex-direction: column; min-height: 0; }
   .connect-footer-link { margin-top: auto; padding-top: 18px; }
-  .login-card .api-key-field > small { align-items: flex-start; flex-direction: column; gap: 6px; }
   .offline-test-entry > div { grid-template-columns: 1fr; }
   .login-legal { padding: 14px 20px max(14px, env(safe-area-inset-bottom)); }
 }

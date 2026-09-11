@@ -3,6 +3,8 @@
      which supplies `--font-inter-sans`. The system faces stay as the fallback
      for the moment before the variable file finishes loading. */
   --font-inter: var(--font-inter-sans), "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+  /* Sign-in screen display type only — see layout.tsx for why it's self-hosted. */
+  --font-manrope: var(--font-manrope-sans), "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
   color-scheme: dark;
   --bg: #090b0d;
   --sidebar: #0c0e11;

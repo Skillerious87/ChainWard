@@ -45,6 +45,23 @@ const inter = localFont({
   fallback: ["Segoe UI Variable", "Segoe UI", "Arial", "sans-serif"],
 });
 
+/**
+ * Manrope, self-hosted for the same reason as Inter above: no third-party
+ * font request, no dependency on the deployed app having internet access.
+ * Latin-only subset — used sparingly, for the sign-in screen's display type.
+ *
+ * Licence: SIL Open Font License 1.1 — see `fonts/Manrope-LICENSE.txt`.
+ */
+const manrope = localFont({
+  src: "./fonts/ManropeVariable.woff2",
+  // globals.css composes this into `--font-manrope` with the system fallbacks.
+  variable: "--font-manrope-sans",
+  weight: "200 800",
+  style: "normal",
+  display: "swap",
+  fallback: ["Segoe UI Variable", "Segoe UI", "Arial", "sans-serif"],
+});
+
 export const metadata: Metadata = {
   metadataBase,
   applicationName: "Chainward",
@@ -85,7 +102,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     // `AppearanceBootScript` writes the saved accent and rail width onto this
     // element before React hydrates, which is the whole point of it — so the
     // attributes here will legitimately differ from the server markup.
-    <html lang="en" className={inter.variable} data-scroll-behavior="smooth" data-sidebar="expanded" suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${manrope.variable}`} data-scroll-behavior="smooth" data-sidebar="expanded" suppressHydrationWarning>
       <body>
         <AppearanceBootScript />
         {children}
