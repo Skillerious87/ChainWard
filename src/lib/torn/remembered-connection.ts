@@ -38,7 +38,7 @@ interface LocalRememberedRow {
 export async function createRememberedConnection(
   apiKey: string,
   connection: ValidatedTornConnection,
-): Promise<{ token: string; expiresAt: number }> {
+): Promise<{ token: string; expiresAt: number; keyFingerprint: string }> {
   const expiresAt = Date.now() + REMEMBERED_CONNECTION_MAX_AGE_SECONDS * 1_000;
   const encrypted = encryptCredential(apiKey, credentialEncryptionSecret());
   // The random secret remains opaque, while the non-secret scope makes the
@@ -53,7 +53,7 @@ export async function createRememberedConnection(
     createLocalConnection(tokenHash, expiresAt, encrypted, connection);
   }
 
-  return { token, expiresAt };
+  return { token, expiresAt, keyFingerprint: encrypted.fingerprint };
 }
 
 export async function readRememberedConnection(token: string | undefined): Promise<RememberedConnection | null> {
@@ -162,7 +162,16 @@ function revokeLocalConnection(tokenHash: string): void {
   const database = openCredentialDatabase();
   try {
     const row = database.prepare("SELECT torn_user_id FROM remembered_torn_connections WHERE token_hash = ?").get(tokenHash) as unknown as { torn_user_id: number } | undefined;
-    if (row) database.prepare("DELETE FROM remembered_torn_connections WHERE torn_user_id = ?").run(row.torn_user_id);
+    if (!row) return;
+    // Collected before the delete, since the rows carrying each fingerprint
+    // are about to disappear - any passkey registered against one of them
+    // would otherwise still resolve to a now-nonexistent credential.
+    const fingerprints = database.prepare("SELECT DISTINCT key_fingerprint FROM remembered_torn_connections WHERE torn_user_id = ?")
+      .all(row.torn_user_id) as unknown as Array<{ key_fingerprint: string }>;
+    database.prepare("DELETE FROM remembered_torn_connections WHERE torn_user_id = ?").run(row.torn_user_id);
+    for (const { key_fingerprint } of fingerprints) {
+      database.prepare("DELETE FROM webauthn_credentials WHERE key_fingerprint = ?").run(key_fingerprint);
+    }
   } finally {
     database.close();
   }
@@ -278,9 +287,18 @@ async function revokePostgresConnection(tokenHash: string): Promise<void> {
   const { db } = await import("@/lib/db");
   const session = await db.session.findUnique({ where: { tokenHash }, include: { user: true } });
   if (!session) return;
+  // Collected before the delete, for the same reason as the local backend:
+  // a passkey scoped to one of these fingerprints must stop resolving once
+  // the credential it unlocks is gone.
+  const credentials = await db.factionApiCredential.findMany({
+    where: { ownerTornUserId: session.user.tornUserId },
+    select: { keyFingerprint: true },
+  });
+  const fingerprints = credentials.map((credential) => credential.keyFingerprint);
   await db.$transaction([
     db.session.deleteMany({ where: { userId: session.userId } }),
     db.factionApiCredential.deleteMany({ where: { ownerTornUserId: session.user.tornUserId } }),
+    ...(fingerprints.length ? [db.webAuthnCredential.deleteMany({ where: { keyFingerprint: { in: fingerprints } } })] : []),
   ]);
 }
 
@@ -334,7 +352,8 @@ function decryptAndMigrateLocalCredential(
   }
 }
 
-async function decryptAndMigratePostgresCredential(credential: {
+/** Shared with WebAuthn authentication, which resolves a credential by keyFingerprint alone. */
+export async function decryptAndMigratePostgresCredential(credential: {
   id: string;
   encryptedKey: Uint8Array;
   encryptionIv: Uint8Array;

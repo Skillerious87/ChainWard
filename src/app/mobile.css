@@ -571,24 +571,10 @@
   .onboarding-intro h1 span { display: inline; }
   p.onboarding-intro__lede { margin-top: 12px; font-size: 13.5px !important; line-height: 1.6; }
 
-  .onboarding-form-shell { width: 100%; border-radius: 14px; }
-  .onboarding-form-shell__topline { min-height: 42px; padding-inline: 18px; }
-  .onboarding-form-shell__topline > span { font-size: 10.5px; }
-  .onboarding-form-shell .connect-form { min-height: 0; padding: 20px 18px; }
   .connect-stage--entry { min-height: 0; }
-  .onboarding-form-shell .connect-form__heading { gap: 11px; padding-bottom: 16px; }
-  .onboarding-form-shell .connect-form__heading > span { width: 38px; height: 38px; }
-  .onboarding-form-shell .connect-form__heading h2 { font-size: 18px; }
-  .onboarding-form-shell .connect-form__heading p { font-size: 11.5px !important; }
-  .onboarding-form-shell .api-key-field { margin-top: 16px; }
-  .onboarding-form-shell .api-key-field > div { height: 54px; }
-  .onboarding-form-shell .api-key-field button { width: 52px; }
-  .onboarding-form-shell .remember-connection { padding: 12px; }
-  .onboarding-form-shell .connect-submit { min-height: 54px; font-size: 14px; }
   .connect-details { margin-top: 14px; }
   .connect-details__selections li { padding: 5px 8px; font-size: 10.5px; }
   .connect-details dl > div { grid-template-columns: 1fr; gap: 2px; padding-block: 8px; font-size: 10.5px; }
-  .onboarding-form-shell > footer { padding: 13px 18px; }
 
   .onboarding-page .onboarding-journey > li { padding: 13px 0; }
   .onboarding-journey p { font-size: 11.5px !important; }
@@ -616,20 +602,13 @@
   .welcome-pricing,
   .welcome-assurance,
   .welcome-cta,
-  .welcome-footer,
-  .login-topbar,
-  .login-layout,
-  .login-footer {
+  .welcome-footer {
     width: auto;
     margin-inline: max(14px, var(--mobile-safe-area-left)) max(14px, var(--mobile-safe-area-right));
   }
   .welcome-nav { min-height: calc(70px + var(--mobile-safe-area-top)); padding-top: var(--mobile-safe-area-top); }
-  .login-topbar { min-height: calc(64px + var(--mobile-safe-area-top)); padding-top: var(--mobile-safe-area-top); }
-  .welcome-footer,
-  .login-footer { padding-bottom: calc(24px + var(--mobile-safe-area-bottom)); }
+  .welcome-footer { padding-bottom: calc(24px + var(--mobile-safe-area-bottom)); }
   .welcome-nav > a:first-child,
-  .login-topbar > a:first-child,
-  .login-topbar__back,
   .welcome-assurance__intro > a,
   .api-key-field > small a,
   .connect-details summary,
@@ -638,8 +617,6 @@
     min-height: 44px;
   }
   .welcome-nav > a:first-child,
-  .login-topbar > a:first-child,
-  .login-topbar__back,
   .welcome-assurance__intro > a,
   .api-key-field > small a {
     display: inline-flex;
@@ -663,9 +640,6 @@
     width: auto;
     margin-inline: max(12px, var(--mobile-safe-area-left)) max(12px, var(--mobile-safe-area-right));
   }
-  .onboarding-form-shell .connect-form { padding-inline: 15px; }
-  .onboarding-form-shell__topline,
-  .onboarding-form-shell > footer { padding-inline: 15px; }
 }
 
 /* Reward console ------------------------------------------------------------ */

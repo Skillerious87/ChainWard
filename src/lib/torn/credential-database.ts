@@ -40,6 +40,23 @@ export function openCredentialDatabase(): DatabaseSync {
 
     CREATE INDEX IF NOT EXISTS remembered_torn_connections_user
       ON remembered_torn_connections(torn_user_id, expires_at);
+
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      credential_id   TEXT PRIMARY KEY,
+      public_key      BLOB NOT NULL,
+      counter         INTEGER NOT NULL DEFAULT 0,
+      torn_faction_id INTEGER NOT NULL,
+      key_fingerprint TEXT NOT NULL,
+      transports_json TEXT NOT NULL,
+      device_label    TEXT,
+      encrypted_key   BLOB NOT NULL,
+      encryption_iv   BLOB NOT NULL,
+      created_at      TEXT NOT NULL,
+      last_used_at    TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS webauthn_credentials_fingerprint
+      ON webauthn_credentials(key_fingerprint);
   `);
   ensureCredentialColumns(database);
   migrateLegacyCredentialRows(database);

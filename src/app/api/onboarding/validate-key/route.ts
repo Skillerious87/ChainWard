@@ -4,14 +4,15 @@ import {
   reportUnexpectedOnboardingValidationFailure,
   type OnboardingValidationStage,
 } from "@/lib/diagnostics/onboarding-validation";
+import { encryptCredential } from "@/lib/security/credential-encryption";
+import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 import { consumeGlobalRateLimit, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
-import { registerFactionAccessRequest } from "@/lib/auth/faction-access-store";
+import { respondWithEstablishedConnection } from "@/lib/torn/connection-response";
 import { MissingTornSelectionsError, validateTornConnection } from "@/lib/torn/connection-service";
-import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession } from "@/lib/torn/connection-session";
 import { TornApiError, userFacingTornError } from "@/lib/torn/errors";
-import { createRememberedConnection, REMEMBERED_CONNECTION_COOKIE, REMEMBERED_CONNECTION_MAX_AGE_SECONDS } from "@/lib/torn/remembered-connection";
+import { credentialExistsForFingerprint } from "@/lib/torn/webauthn-credentials";
 
 const requestSchema = z.object({
   apiKey: z.string()
@@ -55,49 +56,13 @@ export async function POST(request: Request) {
       liveCacheSeconds: parsePositiveInteger(process.env.TORN_LIVE_CACHE_SECONDS, 30),
       historyCacheSeconds: parsePositiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 60),
     });
-    stage = "access-request";
-    await registerFactionAccessRequest(connection);
-    let session:
-      | { kind: "remembered"; value: Awaited<ReturnType<typeof createRememberedConnection>> }
-      | { kind: "temporary"; value: string };
-    if (parsed.data.remember) {
-      stage = "remembered-connection";
-      session = {
-        kind: "remembered",
-        value: await createRememberedConnection(parsed.data.apiKey, connection),
-      };
-    } else {
-      stage = "temporary-session";
-      session = {
-        kind: "temporary",
-        value: createConnectionSession(parsed.data.apiKey, connection.player.id, connection.faction.id, {
-          tornUserName: connection.player.name,
-          tornUserImageUrl: connection.player.imageUrl,
-          factionName: connection.faction.name,
-          factionTag: connection.faction.tag,
-        }),
-      };
-    }
-
     stage = "response-construction";
-    const response = NextResponse.json({
-      ...connection,
-      connected: true,
-      session: {
-        remembered: session.kind === "remembered",
-        expiresAt: new Date(session.kind === "remembered" ? session.value.expiresAt : Date.now() + CONNECTION_MAX_AGE_SECONDS * 1_000).toISOString(),
-      },
-    }, {
-      headers: { "cache-control": "no-store" },
+    const keyFingerprint = encryptCredential(parsed.data.apiKey, credentialEncryptionSecret()).fingerprint;
+    const hasWebauthnCredential = await credentialExistsForFingerprint(keyFingerprint);
+    return await respondWithEstablishedConnection(parsed.data.apiKey, connection, {
+      remember: parsed.data.remember,
+      extra: { hasWebauthnCredential },
     });
-    if (session.kind === "remembered") {
-      response.cookies.set(REMEMBERED_CONNECTION_COOKIE, session.value.token, connectionCookieOptions(REMEMBERED_CONNECTION_MAX_AGE_SECONDS));
-      response.cookies.set(CONNECTION_COOKIE, "", connectionCookieOptions(0));
-    } else {
-      response.cookies.set(CONNECTION_COOKIE, session.value, connectionCookieOptions(CONNECTION_MAX_AGE_SECONDS));
-      response.cookies.set(REMEMBERED_CONNECTION_COOKIE, "", connectionCookieOptions(0));
-    }
-    return response;
   } catch (error: unknown) {
     if (error instanceof MissingTornSelectionsError) {
       return errorResponse(`This custom key is missing: ${error.missingSelections.join(", ")}.`, "MISSING_SELECTIONS", 200);
@@ -156,15 +121,4 @@ function retryAfter(results: Array<{ allowed: boolean; retryAfterSeconds: number
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
   const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function connectionCookieOptions(maxAge: number) {
-  return {
-    httpOnly: true,
-    sameSite: "strict" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge,
-    priority: "high" as const,
-  };
 }

@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { ApiKeyHelpDialog } from "@/components/onboarding/api-key-help-dialog";
 import { ConnectForm } from "@/components/onboarding/connect-form";
+import { InstallPrompt } from "@/components/onboarding/install-prompt";
 import { LoginBackdrop } from "@/components/onboarding/login-backdrop";
 import { offlineTestModeEnabled } from "@/lib/torn/offline-fixture";
 
@@ -29,6 +30,8 @@ export default function ConnectPage() {
           <span>Torn City · Faction Ops · Secure by Design</span>
         </p>
       </div>
+
+      <InstallPrompt />
     </main>
   );
 }

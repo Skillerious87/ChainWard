@@ -29,6 +29,8 @@
   "dependencies": {
     "@prisma/adapter-pg": "7.9.1",
     "@prisma/client": "7.9.1",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.1",
     "lucide-react": "1.30.0",
     "next": "16.3.3",
     "pg": "8.16.3",

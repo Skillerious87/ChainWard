@@ -437,6 +437,68 @@
 .login-card .form-error span { display: block; margin-top: 2px; color: #d9b6b6; font-size: 11.5px; line-height: 1.45; }
 .login-card .form-error small { display: block; margin-top: 4px; color: #9a8585; font-size: 10.5px; line-height: 1.45; }
 
+/* --- Offline banner --------------------------------- */
+.connect-offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 13px;
+  border: 1px solid rgba(230, 178, 90, .3);
+  border-radius: 11px;
+  background: rgba(230, 178, 90, .08);
+  color: #e6b25a;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.connect-offline-banner svg { flex: 0 0 auto; }
+
+/* --- Passkey unlock & enrollment offer -------------- */
+.connect-passkey-unlock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--accent-rgb), .28);
+  border-radius: 12px;
+  background: rgba(var(--accent-rgb), .06);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background .14s ease, border-color .14s ease;
+}
+.connect-passkey-unlock:hover:not(:disabled) { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .1); }
+.connect-passkey-unlock:disabled { opacity: .55; cursor: default; }
+
+.connect-passkey-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 32px;
+  padding: 26px 20px;
+  text-align: center;
+}
+.connect-passkey-offer__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(var(--accent-rgb), .3);
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), .08);
+  color: var(--accent);
+}
+.connect-passkey-offer strong { color: #dce6df; font-size: 15px; font-weight: 660; }
+.connect-passkey-offer p { max-width: 34ch; margin: 0; color: #8a978e; font-size: 12px; line-height: 1.5; }
+.connect-passkey-offer__actions { display: flex; gap: 10px; margin-top: 18px; }
+.connect-passkey-offer__actions .button { min-width: 108px; }
+
 /* --- Trust line & footer link ---------------------- */
 .connect-trust { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; color: #6f7c74; font-size: 10.5px; text-align: center; }
 .connect-trust svg { flex: 0 0 auto; color: #78c74c; }
@@ -681,4 +743,59 @@
   .login-shell,
   .login-backdrop__aurora { animation: none !important; }
   .login-card .connect-submit:hover:not(:disabled) .connect-submit__arrow { transform: none; }
+}
+
+/* --- Add-to-Home-Screen nudge ----------------------- */
+.install-nudge {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0) 22%),
+    rgba(14, 18, 21, .92);
+  backdrop-filter: blur(18px) saturate(120%);
+  box-shadow: 0 -20px 50px -20px rgba(0, 0, 0, .6);
+  animation: install-nudge-in 320ms cubic-bezier(.2, .75, .25, 1) both;
+}
+.install-nudge__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(var(--accent-rgb), .3);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), .08);
+  color: var(--accent);
+}
+.install-nudge__body { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 2px; }
+.install-nudge__body strong { color: #dce6df; font-size: 12.5px; font-weight: 650; }
+.install-nudge__body span { display: flex; align-items: center; gap: 4px; color: #8a978e; font-size: 11px; line-height: 1.4; }
+.install-nudge__install { flex: 0 0 auto; min-height: 34px; padding: 0 14px; font-size: 12px; }
+.install-nudge__dismiss {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #6f7c74;
+  transition: background .14s ease, color .14s ease;
+}
+.install-nudge__dismiss:hover { background: rgba(255, 255, 255, .06); color: #a1afa6; }
+
+@keyframes install-nudge-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-nudge { animation: none; }
 }

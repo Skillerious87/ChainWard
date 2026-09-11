@@ -188,6 +188,26 @@ model FactionApiCredential {
   @@index([factionId, status])
 }
 
+// Scoped to the FactionApiCredential's keyFingerprint rather than a foreign
+// key, since a passkey must be resolvable from nothing but its credential ID
+// at authentication time (the whole point is recovering a session with no
+// cookie present) and never stores or duplicates the encrypted API key -
+// authentication re-decrypts the existing FactionApiCredential by fingerprint.
+model WebAuthnCredential {
+  id             String    @id @default(uuid()) @db.Uuid
+  credentialId   String    @unique
+  publicKey      Bytes
+  counter        BigInt    @default(0)
+  tornFactionId  Int
+  keyFingerprint String
+  transports     Json
+  deviceLabel    String?
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+
+  @@index([keyFingerprint])
+}
+
 model FactionLicense {
   id            String        @id @default(uuid()) @db.Uuid
   factionId     String        @db.Uuid
