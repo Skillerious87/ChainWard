@@ -167,14 +167,12 @@
    and the tag rides close underneath it as a caption — small, wide-tracked,
    and boxed in by a pair of hairlines rather than floating on its own. */
 .connect-hero { display: flex; flex-direction: column; align-items: center; }
+/* The shield mark already carries its own edge and depth, so it sits directly
+   on the ambient glow rather than inside a second bordered badge box. */
 .connect-hero__mark {
   position: relative;
   display: grid; place-items: center;
-  width: 62px; height: 62px;
-  border: 1px solid rgba(var(--accent-rgb), .28);
-  border-radius: 19px;
-  background: linear-gradient(160deg, rgba(var(--accent-rgb), .2), rgba(var(--accent-rgb), .03));
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, .05) inset, 0 18px 34px -14px rgba(var(--accent-rgb), .6);
+  width: 72px; height: 72px;
 }
 .connect-hero__mark::before {
   position: absolute; inset: -18px; z-index: -1;
@@ -182,7 +180,7 @@
   filter: blur(4px);
   content: "";
 }
-.connect-hero__mark svg { width: 32px; height: 32px; }
+.connect-hero__mark img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 24px rgba(0, 0, 0, .5)); }
 .connect-hero__word {
   margin: 16px 0 0; color: #eef3f0; font-family: var(--font-manrope); font-size: 34px; font-weight: 800;
   letter-spacing: -1px; line-height: 1;
@@ -584,8 +582,7 @@
 @media (max-height: 720px) {
   .login-shell { gap: 16px; }
   .login-card .connect-form { padding: 24px 24px 20px; }
-  .connect-hero__mark { width: 52px; height: 52px; border-radius: 16px; }
-  .connect-hero__mark svg { width: 26px; height: 26px; }
+  .connect-hero__mark { width: 58px; height: 58px; }
   .connect-hero__word { margin-top: 12px; font-size: 27px; }
   .connect-hero__tag { margin-top: 7px; }
   .login-card .api-key-field { margin-top: 26px; }
@@ -668,8 +665,7 @@
      so this keeps the same fixed clearance the top-anchored layout always
      used rather than risking the logo landing under the Home/Help buttons. */
   .login-card .connect-form { padding-top: max(56px, calc(env(safe-area-inset-top) + 48px)); }
-  .connect-hero__mark { width: 44px; height: 44px; border-radius: 14px; }
-  .connect-hero__mark svg { width: 22px; height: 22px; }
+  .connect-hero__mark { width: 48px; height: 48px; }
   .connect-hero__word { margin-top: 9px; font-size: 24px; }
   .connect-hero__tag { display: none; }
   .login-card .api-key-field { margin-top: 22px; }

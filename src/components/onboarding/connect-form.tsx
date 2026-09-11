@@ -13,6 +13,7 @@ import {
   UserRoundCog,
 } from "lucide-react";
 import type { Route } from "next";
+import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { enterConnectedWorkspace } from "./workspace-navigation";
@@ -30,24 +31,6 @@ type ConnectionResult = {
 };
 
 type ConnectionError = { message: string; code: string | null };
-
-/** The chain-link mark shown above the sign-in headline — scoped to this
- * screen rather than the shared `BrandMark`, which stays the PNG app icon
- * used in the sidebar/topbar. */
-function ConnectHeroMark() {
-  return (
-    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="connectHeroMarkGradient" x1="4" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#c3f79a" />
-          <stop offset="1" stopColor="#78d63b" />
-        </linearGradient>
-      </defs>
-      <rect x="4" y="10" width="16" height="9" rx="4.5" transform="rotate(-28 12 14.5)" stroke="url(#connectHeroMarkGradient)" strokeWidth="2.6" />
-      <rect x="12" y="13" width="16" height="9" rx="4.5" transform="rotate(-28 20 17.5)" stroke="url(#connectHeroMarkGradient)" strokeWidth="2.6" />
-    </svg>
-  );
-}
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
   const [visible, setVisible] = useState(false);
@@ -128,7 +111,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       <div className="connect-stage connect-stage--entry">
         <header className="connect-form__heading">
           <div className="connect-hero">
-            <span className="connect-hero__mark"><ConnectHeroMark /></span>
+            <span className="connect-hero__mark"><Image src="/icons/android-chrome-512x512.png" alt="" width={144} height={144} priority /></span>
             <span className="connect-hero__word">Chain<span>ward</span></span>
             <span className="connect-hero__tag">Faction Ops · Secure Access</span>
           </div>
