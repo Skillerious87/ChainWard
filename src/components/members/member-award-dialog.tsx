@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import { addMemberAward } from "@/app/(platform)/members/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { notify } from "@/lib/client-actions";
-import { AWARD_CATEGORIES, AWARD_CITATION_MAX, MEMBER_BADGES, awardCitationError, memberBadgeDefinition, type AwardCategory, type MemberBadgeId } from "@/lib/members/member-badges";
+import { AWARD_CATEGORIES, AWARD_CITATION_MAX, MEMBER_BADGES, awardCitationError, memberBadgeDefinition, renderAwardTemplate, type AwardCategory, type MemberBadgeId } from "@/lib/members/member-badges";
 import type { MemberAward } from "@/lib/members/member-profile-store";
 import { AwardMedallion } from "./award-medallion";
 
@@ -22,7 +22,8 @@ export function MemberAwardDialog({ member, factionId, awards, onClose, onSaved 
   const [badgeId, setBadgeId] = useState<MemberBadgeId>(() => !owned.has("CHAIN_SENTINEL") ? "CHAIN_SENTINEL" : MEMBER_BADGES.find((badge) => !owned.has(badge.id))?.id ?? "CHAIN_SENTINEL");
   const [category, setCategory] = useState<AwardCategory | "All">("All");
   const [query, setQuery] = useState("");
-  const [citation, setCitation] = useState("");
+  const [citation, setCitation] = useState(() => renderAwardTemplate(badgeId, member.name));
+  const [citationCustomised, setCitationCustomised] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,17 +61,20 @@ export function MemberAwardDialog({ member, factionId, awards, onClose, onSaved 
         <div className="honours-filters" aria-label="Filter awards by category">{(["All", ...AWARD_CATEGORIES] as const).map((item) => <button type="button" key={item} aria-pressed={category === item} onClick={() => setCategory(item)}>{item}</button>)}</div>
         <fieldset className="honours-catalogue"><legend className="sr-only">Choose an award for {member.name}</legend>
           {catalogue.map((item) => <label key={item.id} className={`honours-option award-color--${item.color}${badgeId === item.id ? " honours-option--selected" : ""}${owned.has(item.id) ? " honours-option--owned" : ""}`}>
-            <input type="radio" name={`${id}-badge`} value={item.id} checked={badgeId === item.id} disabled={owned.has(item.id)} onChange={() => { setBadgeId(item.id); setError(null); }} />
+            <input type="radio" name={`${id}-badge`} value={item.id} checked={badgeId === item.id} disabled={owned.has(item.id)} onChange={() => { setBadgeId(item.id); setError(null); if (!citationCustomised) setCitation(renderAwardTemplate(item.id, member.name)); }} />
             <AwardMedallion badgeId={item.id} />
             <span className="honours-option__copy"><strong>{item.label}</strong><small>{owned.has(item.id) ? "Already on this member's record" : item.detail}</small></span>
             <span className="honours-option__check">{owned.has(item.id) || badgeId === item.id ? <Check size={12} /> : <ChevronRight size={12} />}</span>
           </label>)}
           {!catalogue.length && <div className="honours-search-empty"><Search size={22} /><strong>No matching distinctions</strong><p>Try another search or category.</p><button type="button" onClick={() => { setQuery(""); setCategory("All"); }}>Show all awards</button></div>}
         </fieldset>
-        <div className="honours-step honours-step--citation"><span>02</span><h3>Tell their story</h3><small>Required</small></div>
-        <label className="honours-citation" htmlFor={`${id}-citation`}>Award citation <span>{citation.trim().length}/{AWARD_CITATION_MAX}</span></label>
-        <textarea id={`${id}-citation`} className="honours-citation-input" value={citation} maxLength={AWARD_CITATION_MAX} onBlur={() => setTouched(true)} onChange={(event) => { setCitation(event.target.value); setError(null); }} placeholder={badge.prompt} aria-describedby={`${id}-guidance`} aria-invalid={touched && !!citationError} />
-        <p id={`${id}-guidance`} className={`honours-guidance${touched && citationError ? " honours-guidance--error" : ""}`}>{touched && citationError ? citationError : "Be specific: the contribution, the context, and the difference it made."}</p>
+        <div className="honours-step honours-step--citation"><span>02</span><h3>Tell their story</h3><small>Pre-filled — edit as needed</small></div>
+        <div className="honours-citation-row">
+          <label className="honours-citation" htmlFor={`${id}-citation`}>Award citation <span>{citation.trim().length}/{AWARD_CITATION_MAX}</span></label>
+          <button type="button" className="honours-citation-template" onClick={() => { setCitation(renderAwardTemplate(badgeId, member.name)); setCitationCustomised(false); setError(null); }}>Use suggested wording</button>
+        </div>
+        <textarea id={`${id}-citation`} className="honours-citation-input" value={citation} maxLength={AWARD_CITATION_MAX} onBlur={() => setTouched(true)} onChange={(event) => { setCitation(event.target.value); setCitationCustomised(true); setError(null); }} placeholder={badge.prompt} aria-describedby={`${id}-guidance`} aria-invalid={touched && !!citationError} />
+        <p id={`${id}-guidance`} className={`honours-guidance${touched && citationError ? " honours-guidance--error" : ""}`}>{touched && citationError ? citationError : "A ready-to-send citation is filled in — tailor it, or award it exactly as written."}</p>
         {error && <p className="honours-error" role="alert">{error}</p>}
       </fieldset>
       <aside className={`honours-preview award-color--${badge.color}`} aria-label="Award preview">

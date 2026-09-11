@@ -60,7 +60,11 @@
 .dialog--honours .honours-option--selected .honours-option__check { border-radius: 50%; background: rgb(var(--award-rgb)); color: #101820; }
 .dialog--honours .honours-option--owned { opacity: .55; cursor: not-allowed; }
 .dialog--honours .honours-step--citation { margin-top: 23px; }
-.dialog--honours .honours-citation { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; color: #c7d0d6; font-size: 11px; font-weight: 600; }
+.dialog--honours .honours-citation-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.dialog--honours .honours-citation { display: flex; justify-content: space-between; flex: 1 1 auto; gap: 12px; color: #c7d0d6; font-size: 11px; font-weight: 600; }
+.dialog--honours .honours-citation-template { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #514937; border-radius: 5px; background: #d4b7770c; color: #d7c18e; font-size: 10px; font-weight: 600; cursor: pointer; transition: border-color 140ms,background 140ms; }
+.dialog--honours .honours-citation-template:hover { border-color: #8a7850; background: #d7bb7e18; }
+.dialog--honours .honours-citation-template:focus-visible { outline: 2px solid #e2c994; outline-offset: 2px; }
 .dialog--honours .honours-citation > span { color: #8d9ba6; font-size: 10px; font-variant-numeric: tabular-nums; font-weight: 400; }
 .dialog--honours .honours-citation-input { width: 100%; min-height: 108px; padding: 12px; resize: vertical; border: 1px solid #3a4650; border-radius: 8px; outline: 0; background: #0c1319; color: #dce4e9; font: inherit; font-size: 11.5px; line-height: 1.7; }
 .dialog--honours .honours-citation-input::placeholder { color: #8b99a4; }

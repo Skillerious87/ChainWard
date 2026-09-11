@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { MEMBER_BADGES } from "@/lib/members/member-badges";
+import { MEMBER_BADGES, renderAwardTemplate } from "@/lib/members/member-badges";
 import type { MemberAward } from "@/lib/members/member-profile-store";
 
 vi.mock("@/app/(platform)/members/actions", () => ({ addMemberAward: vi.fn() }));
@@ -27,7 +27,10 @@ describe("award presentation", () => {
     expect(html).toContain("Presented to");
     expect(html).toContain("TORN ID 123");
     expect(html).toContain('maxLength="600"');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Award Chain Sentinel<\/button>/);
+    expect(html).toContain(renderAwardTemplate("CHAIN_SENTINEL", "Member"));
+    expect(html).toContain("Use suggested wording");
+    expect(html).toMatch(/<button[^>]*>Award Chain Sentinel<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Award Chain Sentinel<\/button>/);
   });
 
   it("disables active awards and selects an available distinction instead", () => {
