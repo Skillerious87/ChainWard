@@ -35,6 +35,7 @@ import { analyzeAccessChange, analyzeAccessPosture } from "@/lib/auth/access-int
 import { roleDefinitions, roleLabel } from "@/lib/auth/authorization";
 import type { FactionAccessAssignment, FactionAccessWorkspace, ManagedAccessStatus, ManagedFactionRole } from "@/lib/auth/faction-access-store";
 import { summarizeRoster } from "@/lib/intelligence/analytics";
+import { factionMonogram } from "@/lib/torn/faction-monogram";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 import type { TornDataResult, TornRosterMember } from "@/lib/torn/workspace-types";
 
@@ -210,7 +211,7 @@ export function FactionAccessWorkspace({ telemetry, rosterResult, access, canMan
 
     <section id="access-panel-overview" className="access-workspace-overview" role="tabpanel" aria-labelledby="access-tab-overview" hidden={accessView !== "overview"}>
     <section className="faction-command-hero">
-      <span className="faction-command-hero__mark">{faction?.tag?.slice(0, 2).toUpperCase() || "—"}</span>
+      <span className="faction-command-hero__mark">{factionMonogram(faction)}</span>
       <div className="faction-command-hero__identity"><p className="eyebrow">Verified Torn faction</p><h2>{faction?.name ?? "Faction unavailable"}</h2>{faction && <a href={`https://www.torn.com/factions.php?step=profile&ID=${faction.id}`} target="_blank" rel="noreferrer">Open Torn profile <ExternalLink size={13} /></a>}</div>
       <dl><div><dt>Faction ID</dt><dd>{faction?.id ?? "—"}</dd></div><div><dt>Roster coverage</dt><dd>{rosterResult.available ? `${roster.length} members` : "Unavailable"}</dd></div><div><dt>Positions</dt><dd>{summary.positions.length}</dd></div><div><dt>Last verified</dt><dd>{formatCheckedAt(rosterResult.checkedAt)}</dd></div></dl>
       <span className={`faction-command-hero__state faction-command-hero__state--${telemetry.source}`}><i />{telemetry.source === "live" ? "API verified" : "Unavailable"}</span>

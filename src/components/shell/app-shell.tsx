@@ -78,6 +78,7 @@ import {
   useMemberNotificationPreferences,
 } from "@/lib/member-notification-preferences";
 import { buildOperationalNotifications, type OperationalNotification } from "@/lib/notifications/notification-intelligence";
+import { factionMonogram } from "@/lib/torn/faction-monogram";
 import { pollSecondsForChain } from "@/lib/torn/polling-policy";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { readWorkspaceTelemetryEvent, workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
@@ -669,12 +670,12 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
             <button className="icon-button topbar__menu" onClick={() => { saveAppearancePreferences({ sidebarCollapsed: false }); setMobileOpen(true); }} aria-label="Open navigation"><Menu size={20} /></button>
             <div className="topbar-faction-wrap">
               <button className="faction-selector" aria-label="Change faction" aria-expanded={openPanel === "faction"} onClick={() => setOpenPanel(openPanel === "faction" ? null : "faction")}>
-                <span className="faction-monogram">{faction?.tag?.slice(0, 2).toUpperCase() || "—"}</span><span className="faction-selector__copy"><strong>{faction?.name ?? "Faction unavailable"}</strong><small>{offlineMode ? `Offline fixture · ID ${faction?.id ?? "—"}` : liveTelemetry.source === "live" ? `${faction?.tag ?? "Faction"} · Torn ID ${faction?.id ?? "—"}` : "Connection required"}</small></span><ChevronDown size={15} />
+                <span className="faction-monogram">{factionMonogram(faction)}</span><span className="faction-selector__copy"><strong>{faction?.name ?? "Faction unavailable"}</strong><small>{offlineMode ? `Offline fixture · ID ${faction?.id ?? "—"}` : liveTelemetry.source === "live" ? `${faction?.tag ?? "Faction"} · Torn ID ${faction?.id ?? "—"}` : "Connection required"}</small></span><ChevronDown size={15} />
               </button>
               {openPanel === "faction" && (
                 <TopbarPopover className="topbar-popover--faction" close={() => setOpenPanel(null)}>
                   <div className="popover-heading"><span>Faction workspace</span><small>{faction ? "1 connected faction" : "Connection required"}</small></div>
-                  {faction && <button className="workspace-option workspace-option--active" onClick={() => { setOpenPanel(null); notify({ title: `${faction.name} selected`, description: "You are already viewing this workspace.", tone: "info" }); }}><span className="faction-monogram">{faction.tag.slice(0, 2).toUpperCase()}</span><span><strong>{faction.name}</strong><small>Verified Torn data · ID {faction.id}</small></span><Check size={14} /></button>}
+                  {faction && <button className="workspace-option workspace-option--active" onClick={() => { setOpenPanel(null); notify({ title: `${faction.name} selected`, description: "You are already viewing this workspace.", tone: "info" }); }}><span className="faction-monogram">{factionMonogram(faction)}</span><span><strong>{faction.name}</strong><small>Verified Torn data · ID {faction.id}</small></span><Check size={14} /></button>}
                   <Link href="/connect" onClick={() => setOpenPanel(null)} className="popover-action"><KeyRound size={14} /> Connect another faction</Link>
                 </TopbarPopover>
               )}

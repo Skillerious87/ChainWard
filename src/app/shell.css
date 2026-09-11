@@ -516,9 +516,13 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 .topbar-upgrade__copy small { font-size: 10.5px; }
 
 @media (max-width: 1180px) {
-  .chain-state { min-width: 0; }
-  .chain-state__copy { display: none; }
-  .chain-state > i { min-width: 0; }
+  /* Below this width the sidebar already collapses to a mobile drawer (see
+     mobile.css), so the topbar should adopt its compact chrome at the same
+     breakpoint. Left at its desktop size, the chain-state control loses its
+     copy but keeps its box, leaving a bare status dot floating in the gap
+     next to an orphaned separator — hiding both reads far cleaner. */
+  .chain-state,
+  .topbar__separator { display: none; }
 
   /* polish.css compacts this control at the same viewport range, while the
      shell's later desktop min-width used to leave a wide, textless pill. Keep
