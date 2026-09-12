@@ -486,6 +486,25 @@
   .connect-passkey-unlock--in { animation: none; }
 }
 
+/* Status shown only for the autofill-triggered flow, which has no button of
+   its own - non-interactive, so it never looks clickable like the unlock
+   button above it. */
+.connect-passkey-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--accent-rgb), .2);
+  border-radius: 12px;
+  background: rgba(var(--accent-rgb), .05);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
 .connect-passkey-offer {
   display: flex;
   flex-direction: column;

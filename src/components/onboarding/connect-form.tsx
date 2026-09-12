@@ -104,10 +104,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       const available = await platformAuthenticatorIsAvailable().catch(() => false);
       if (!cancelled) setPlatformAuthAvailable(available);
       // A discoverable passkey can surface as a native autofill suggestion on
-      // the key field itself, with no explicit button - try this passively
-      // and let a manual key entry or the explicit unlock button win if the
-      // user does something else first. Browsers without autofill support
-      // fall back to the explicit unlock button instead.
+      // the key field itself, with no explicit button. This is the *only*
+      // passkey entry point wherever it's available (most current mobile
+      // browsers, this device included) - a pending conditional `get()`
+      // request makes a second, explicit `get()` call fail immediately with
+      // NotAllowedError in several browsers, so the explicit unlock button
+      // below is deliberately hidden for as long as this stays pending.
+      // Browsers without autofill support fall back to that button instead.
       const autofillReady = await browserSupportsWebAuthnAutofill().catch(() => false);
       if (!cancelled) setAutofillSupported(autofillReady);
       if (!autofillReady || cancelled) return;
@@ -120,7 +123,18 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       if (cancelled || !optionsResponse?.ok || !isOptionsPayload(optionsPayload)) return;
       const assertion = await startAuthentication({ optionsJSON: optionsPayload.options, useBrowserAutofill: true }).catch(() => null);
       if (cancelled || !assertion) return;
-      await completePasskeyAuthentication(assertion).catch(() => {});
+      // The OS prompt itself gives its own feedback while it's up; this is
+      // for the gap right after the user confirms, while Chainward verifies
+      // the assertion with the server - otherwise the page looks frozen for
+      // that entire round trip, since there is no button to spin here.
+      if (!cancelled) setPasskeyBusy(true);
+      try {
+        await completePasskeyAuthentication(assertion);
+      } catch {
+        // Autofill is a passive convenience, never a gate - the key field stays usable.
+      } finally {
+        if (!cancelled) setPasskeyBusy(false);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -323,6 +337,16 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
                 {passkeyBusy ? <Spinner size={16} label={`Waiting for ${passkeyNoun}`} tone="muted" /> : <PasskeyIcon size={16} />}
                 {passkeyBusy ? "Waiting for you to confirm…" : `Unlock with ${passkeyNoun}`}
               </button>
+            )}
+            {/* Autofill-triggered unlock has no button of its own to spin - the
+                OS prompt gives its own feedback while it's open, but this fills
+                the gap between confirming the fingerprint and Chainward
+                finishing server verification, so the page never looks frozen. */}
+            {autofillSupported && passkeyBusy && (
+              <div className="connect-passkey-status" role="status">
+                <Spinner size={14} label={`Confirming your ${passkeyNoun}`} tone="muted" />
+                <span>Confirming your {passkeyNoun}…</span>
+              </div>
             )}
 
             <div className="api-key-field">
