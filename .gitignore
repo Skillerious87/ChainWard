@@ -40,3 +40,6 @@ src/generated/prisma/
 
 # Local tooling
 .vercel/
+
+# Local notes, not part of the shipped product
+/IDEAS.md

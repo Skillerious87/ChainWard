@@ -26,6 +26,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
+import { waitForNextPaint } from "@/lib/wait-for-paint";
 import { enterConnectedWorkspace } from "./workspace-navigation";
 
 type ConnectionResult = {
@@ -147,6 +148,11 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     if (loading || opening || passkeyBusy) return;
     setError(null);
     setPasskeyBusy(true);
+    // The native biometric sheet can seize the main thread as soon as
+    // startAuthentication fires, even after a network await - on some mobile
+    // browsers that happens before the busy state above ever gets painted.
+    // Force a frame first so the spinner is actually visible.
+    await waitForNextPaint();
     try {
       const optionsResponse = await fetch("/api/onboarding/webauthn/authentication-options", {
         method: "POST",

@@ -12,6 +12,7 @@ import { listMyPasskeys, removeMyPasskey } from "@/app/(platform)/settings/passk
 import { accentOptions, saveAppearancePreferences, useAppearancePreferences, type AccentOption } from "@/lib/appearance-preferences";
 import { notify } from "@/lib/client-actions";
 import { deriveDeviceLabel } from "@/lib/device-label";
+import { waitForNextPaint } from "@/lib/wait-for-paint";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { WebauthnCredentialSummary } from "@/lib/torn/webauthn-credentials";
 import {
@@ -115,6 +116,9 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
 
   async function addPasskey(): Promise<void> {
     setPasskeyWorking("add");
+    // Give the browser a frame to paint the spinner before the native
+    // biometric sheet can seize the main thread - see connect-form.tsx.
+    await waitForNextPaint();
     try {
       const optionsResponse = await fetch("/api/onboarding/webauthn/registration-options", { method: "POST", credentials: "same-origin", cache: "no-store" });
       const optionsPayload: unknown = await optionsResponse.json();
