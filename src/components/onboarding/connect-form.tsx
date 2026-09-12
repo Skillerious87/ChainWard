@@ -23,6 +23,7 @@ import {
   startAuthentication,
   startRegistration,
 } from "@simplewebauthn/browser";
+import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
 import { enterConnectedWorkspace } from "./workspace-navigation";
@@ -73,6 +74,10 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const [autofillSupported, setAutofillSupported] = useState(false);
   const [passkeyPrompt, setPasskeyPrompt] = useState<ConnectionResult | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  // Kept separate from `loading` (the key-submit flow) so tapping the
+  // fingerprint/PIN button never makes the *key* submit button read
+  // "Verifying securely..." for a request it had nothing to do with.
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   // Only ever read by content already gated behind `platformAuthAvailable`
   // (false on both the server render and the initial client hydration pass),
   // or by a post-interaction prompt - so recomputing it per render can't
@@ -139,9 +144,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   }
 
   async function unlockWithPasskey(): Promise<void> {
-    if (loading || opening) return;
+    if (loading || opening || passkeyBusy) return;
     setError(null);
-    setLoading(true);
+    setPasskeyBusy(true);
     try {
       const optionsResponse = await fetch("/api/onboarding/webauthn/authentication-options", {
         method: "POST",
@@ -155,7 +160,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     } catch (cause: unknown) {
       setError(connectionErrorFrom(cause, "The passkey could not be used."));
     } finally {
-      setLoading(false);
+      setPasskeyBusy(false);
     }
   }
 
@@ -269,9 +274,14 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
   const formState = loading || opening ? "validating" : "entry";
   const className = `connect-form connect-form--${formState}${offlineEnabled ? " connect-form--offline" : ""}`;
+  // The key field and its neighbours lock while either flow is in progress,
+  // so the two can't race - but only `loading` drives the submit button's
+  // own "Verifying securely..." visuals, since that one is specific to a key
+  // submission the passkey flow never makes.
+  const formBusy = loading || passkeyBusy;
 
   return (
-    <form className={className} onSubmit={submit} aria-busy={loading || opening}>
+    <form className={className} onSubmit={submit} aria-busy={formBusy || opening}>
       <WorkspaceLoadingOverlay visible={opening} />
       <span className="connect-form__activity" aria-hidden="true" />
       <div className="connect-stage connect-stage--entry">
@@ -296,23 +306,24 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <strong>Enable {passkeyNoun} unlock for next time?</strong>
             <p>Unlock this workspace with your {passkeyNoun} instead of pasting your API key.</p>
             <div className="connect-passkey-offer__actions">
-              <button type="button" className="button button--primary" disabled={enrolling} onClick={() => void enrollPasskey(passkeyPrompt)}>{enrolling ? "Enabling…" : "Enable"}</button>
+              <button type="button" className="button button--primary" disabled={enrolling} onClick={() => void enrollPasskey(passkeyPrompt)}>{enrolling && <Spinner size={14} label="Enabling passkey" tone="muted" />} {enrolling ? "Enabling…" : "Enable"}</button>
               <button type="button" className="button button--quiet" disabled={enrolling} onClick={() => skipPasskeyPrompt(passkeyPrompt)}>Skip</button>
             </div>
           </div>
         ) : (
           <>
             {platformAuthAvailable && !autofillSupported && (
-              <button type="button" className="connect-passkey-unlock connect-passkey-unlock--in" disabled={loading || opening || networkOffline} onClick={() => void unlockWithPasskey()}>
-                <PasskeyIcon size={16} /> Unlock with {passkeyNoun}
+              <button type="button" className="connect-passkey-unlock connect-passkey-unlock--in" data-busy={passkeyBusy ? "true" : "false"} disabled={loading || opening || passkeyBusy || networkOffline} onClick={() => void unlockWithPasskey()}>
+                {passkeyBusy ? <Spinner size={16} label={`Waiting for ${passkeyNoun}`} tone="muted" /> : <PasskeyIcon size={16} />}
+                {passkeyBusy ? "Waiting for you to confirm…" : `Unlock with ${passkeyNoun}`}
               </button>
             )}
 
             <div className="api-key-field">
               <label className="api-key-field__label" htmlFor="torn-api-key"><strong>Torn API key</strong><small>16 characters</small></label>
               <div>
-                <input id="torn-api-key" name="apiKey" type={visible ? "text" : "password"} autoComplete="username webauthn" autoCapitalize="none" spellCheck={false} inputMode="text" enterKeyHint="go" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={loading} placeholder="Paste your Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} />
-                <button type="button" disabled={loading} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+                <input id="torn-api-key" name="apiKey" type={visible ? "text" : "password"} autoComplete="username webauthn" autoCapitalize="none" spellCheck={false} inputMode="text" enterKeyHint="go" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={formBusy} placeholder="Paste your Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} />
+                <button type="button" disabled={formBusy} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
               </div>
               <small id="api-key-guidance">
                 <span><ShieldCheck size={13} /> Limited Access is enough</span>
@@ -322,13 +333,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
             <label className="login-remember">
               <span className="login-remember__text"><strong>Keep me signed in</strong><small>Remember this browser for 30 days</small></span>
-              <input name="remember" type="checkbox" defaultChecked disabled={loading} />
+              <input name="remember" type="checkbox" defaultChecked disabled={formBusy} />
               <span className="login-remember__track" aria-hidden="true"><span /></span>
             </label>
 
             {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
 
-            <button type="submit" className="button button--primary connect-submit" data-state={loading ? "loading" : "idle"} disabled={loading || networkOffline}>
+            <button type="submit" className="button button--primary connect-submit" data-state={loading ? "loading" : "idle"} disabled={formBusy || networkOffline}>
               <span className="connect-submit__text">
                 <span key={loading ? "verifying" : "enter"}>{loading ? "Verifying securely…" : "Enter workspace"}</span>
               </span>
