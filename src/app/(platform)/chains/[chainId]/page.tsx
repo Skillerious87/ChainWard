@@ -7,8 +7,7 @@ import { ContributionTable } from "@/components/chain/contribution-table";
 import { ExportButton } from "@/components/ui/action-controls";
 import { MemberAvatar } from "@/components/ui/member-avatar";
 import { RewardAmount } from "@/components/ui/reward-amount";
-import { calculateChainRewardPreview, getChainSettlement, getPendingPayoutRevertRequest, payableMemberCount } from "@/lib/rewards/chain-settlement";
-import { getCurrentActor } from "@/lib/auth/current-actor";
+import { calculateChainRewardPreview, getChainSettlement, payableMemberCount } from "@/lib/rewards/chain-settlement";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getRewardWorkspace } from "@/lib/rewards/reward-store";
 import { getChainReportView } from "@/lib/torn/workspace-data-service";
@@ -26,7 +25,7 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
   const report = result.data;
   if (!report) return <div className="page-stack"><Link href="/chains" className="back-link"><ArrowLeft size={15} /> Back to chain history</Link><section className="data-section"><div className="table-empty report-unavailable"><FileCheck2 size={24} /><strong>Chain report unavailable</strong><p>{result.message}</p></div></section></div>;
 
-  const [workspace, settlement, pendingRevert, actor] = await Promise.all([getRewardWorkspace(report.factionId), getChainSettlement(report.factionId, report.id), getPendingPayoutRevertRequest(report.factionId, report.id), getCurrentActor()]);
+  const [workspace, settlement] = await Promise.all([getRewardWorkspace(report.factionId), getChainSettlement(report.factionId, report.id)]);
   const preview = settlement ?? calculateChainRewardPreview(report, workspace);
   const memberRewards = Object.fromEntries(preview.members.map((member) => [member.tornUserId, { amount: member.amount, tierLabel: member.tierLabel }]));
   const maxHits = Math.max(1, ...report.contributions.map((member) => member.hits));
@@ -35,7 +34,7 @@ export default async function ChainReportPage({ params }: ChainReportPageProps) 
 
   return <div className="page-stack">
     <Link href="/chains" className="back-link"><ArrowLeft size={15} /> Back to chain history</Link>
-    <header className="report-header"><div><span className="report-header__status"><FileCheck2 size={15} /> Torn chain report</span><p className="eyebrow">Completed {formatDate(report.endedAt)}</p><h1>Chain #{report.id}</h1><p>Contribution values come from Torn API v2. Rewards are calculated from the named, saved scheme version below.</p></div><div className="page-header__actions"><ChainPaymentControl chainId={report.id} preview={preview} settlement={settlement} pendingRevert={pendingRevert} currentTornUserId={actor.tornUserId} /><ExportButton filename={`chainward-chain-${report.id}.csv`} rows={report.contributions.map((member) => ({ rank: member.rank, player: member.name, tornId: member.tornId, chainHits: member.hits, contribution: `${member.contribution.toFixed(2)}%`, respect: member.respect, reward: memberRewards[member.tornId]?.amount ?? "Not calculated", rewardUnit: preview.rewardUnit ?? "", rewardTier: memberRewards[member.tornId]?.tierLabel ?? "" }))} /></div></header>
+    <header className="report-header"><div><span className="report-header__status"><FileCheck2 size={15} /> Torn chain report</span><p className="eyebrow">Completed {formatDate(report.endedAt)}</p><h1>Chain #{report.id}</h1><p>Contribution values come from Torn API v2. Rewards are calculated from the named, saved scheme version below.</p></div><div className="page-header__actions"><ChainPaymentControl chainId={report.id} preview={preview} settlement={settlement} /><ExportButton filename={`chainward-chain-${report.id}.csv`} rows={report.contributions.map((member) => ({ rank: member.rank, player: member.name, tornId: member.tornId, chainHits: member.hits, contribution: `${member.contribution.toFixed(2)}%`, respect: member.respect, reward: memberRewards[member.tornId]?.amount ?? "Not calculated", rewardUnit: preview.rewardUnit ?? "", rewardTier: memberRewards[member.tornId]?.tierLabel ?? "" }))} /></div></header>
     <section className="report-overview">
       <div className="report-overview__primary"><small>Final chain</small><strong>{report.hits.toLocaleString()}</strong><span>hits · {respectPerHit.toFixed(2)} respect each</span></div>
       <div><small>Duration</small><strong>{formatDuration(report.endedAt - report.startedAt)}</strong><span>{formatTime(report.startedAt)} – {formatTime(report.endedAt)} TCT</span></div>

@@ -513,33 +513,6 @@
 }
 .payment-confirmation--revert h3 { color: #f2d59a; }
 
-/* Second-admin withdrawal approval ------------------------------------------ */
-.payment-revert-pending {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 14px;
-  padding: 11px 13px;
-  border: 1px solid rgba(245, 185, 76, .24);
-  border-radius: 9px;
-  background: rgba(245, 185, 76, .05);
-  color: #d7dee2;
-  font-size: 12px;
-}
-.payment-revert-pending p { margin: 0; }
-.payment-revert-pending strong { color: var(--warning); font-weight: 650; }
-.payment-revert-pending__reason { color: var(--text-muted); font-size: 11.5px !important; font-style: italic; }
-.payment-revert-pending--inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  color: var(--warning);
-  font-size: 11.5px;
-  font-weight: 600;
-}
-.payment-revert-pending--inline svg { flex: 0 0 auto; }
-
 /* Withdrawal reason --------------------------------------------------------- */
 .payment-revert-reason { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .payment-revert-reason > span { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }

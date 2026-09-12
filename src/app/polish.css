@@ -1251,15 +1251,12 @@ body { font-size: 15px; line-height: 1.55; }
 
 /* Historical rewards and settlement controls */
 .chain-payment-button { display: inline-grid; min-width: 310px; min-height: 66px; grid-template-columns: 42px minmax(88px,.8fr) minmax(112px,1fr) 18px; align-items: center; gap: 11px; padding: 9px 12px 9px 9px; border: 1px solid #3a464f; border-radius: 8px; background: #0e1418; color: #d5dcdf; cursor: pointer; text-align: left; transition: border-color 140ms ease,background 140ms ease,transform 140ms ease; }
-.chain-payment-button:has(.chain-payment-button__pending) { min-height: 74px; }
 .chain-payment-button:hover { border-color: #52606a; background: #121a1f; transform: translateY(-1px); }
 .chain-payment-button__seal { display: grid; width: 42px; height: 46px; place-items: center; border: 1px solid #3b4750; border-radius: 7px; background: #11191e; color: #9da9b1; }
 .chain-payment-button__status,.chain-payment-button__amount { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .chain-payment-button__status { padding-right: 10px; border-right: 1px solid #303b43; }
 .chain-payment-button__status strong { font-size: 12px; font-weight: 720; }
 .chain-payment-button__status small { color: #7f8c95; font-family: var(--font-inter),Inter,sans-serif; font-size: 11px; text-transform: uppercase; }
-.chain-payment-button__pending { display: flex; align-items: center; gap: 4px; overflow: hidden; color: var(--warning); font-family: var(--font-inter),Inter,sans-serif; font-size: 9.5px; font-style: normal; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.chain-payment-button__pending svg { flex: 0 0 auto; }
 .chain-payment-button__amount { align-items: flex-end; }
 .chain-payment-button__amount strong { max-width: 100%; overflow: hidden; color: #e1e7e9; font-size: 13px; text-overflow: ellipsis; }
 .chain-payment-button__amount small { max-width: 100%; overflow: hidden; color: #7f8c95; font-family: var(--font-inter),Inter,sans-serif; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
