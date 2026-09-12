@@ -106,7 +106,7 @@ function InactiveAccess({ factionId, factionName, paymentReference }: { factionI
               <span className="licence-tier-card__selector">{active && <Check size={14} />}</span>
               <span className="licence-tier-card__identity"><strong>{plan.name}</strong><small>{plan.term}</small></span>
               <span className="licence-tier-card__description"><strong>{plan.detail}</strong><small><Check size={11} />Analytics, rewards, payouts, and member access</small></span>
-              <span className="licence-tier-card__price"><Image className="licence-tier-card__price-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={36} height={18} unoptimized /><span><strong>{plan.itemQuantity}</strong><small>{pluralizeItemName(plan.itemQuantity, plan.itemName)}</small></span></span>
+              <span className="licence-tier-card__price"><Image className="licence-tier-card__price-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={36} height={18} unoptimized /><span><span className="licence-tier-card__price-amount"><span className="licence-tier-card__price-multiplier" aria-hidden="true">×</span><strong>{plan.itemQuantity}</strong></span><small>{pluralizeItemName(plan.itemQuantity, plan.itemName)}</small></span></span>
             </button>;
           })}
         </div>

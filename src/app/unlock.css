@@ -179,14 +179,16 @@
 .licence-tier-card__description strong { color: #c2ccc6; font-weight: 620; }
 .licence-tier-card__price { display: flex; align-items: center; gap: 8px; text-align: right; white-space: nowrap; }
 .licence-tier-card__price-icon { width: 36px; height: 18px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
+.licence-tier-card__price-amount { display: flex; align-items: baseline; gap: 2px; justify-content: flex-end; }
+.licence-tier-card__price-multiplier { color: var(--text-muted); font-size: 13px; font-weight: 600; }
 .licence-tier-card__price strong,
 .licence-tier-card__price b {
   display: block;
-  color: #f2f7f3;
-  font-size: 30px;
-  font-weight: 640;
+  color: #f6faf6;
+  font-size: 32px;
+  font-weight: 740;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -1.4px;
+  letter-spacing: -1.6px;
   line-height: 1;
 }
 .licence-tier-card__price small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 11.5px !important; font-weight: 600; }
