@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AppearanceBootScript } from "@/components/appearance-boot-script";
+import { NativeSplashHide } from "@/components/native-splash-hide";
 import { deploymentOrigin } from "@/lib/metadata/public-origin";
 import "./globals.css";
 import "./polish.css";
@@ -105,6 +106,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={`${inter.variable} ${manrope.variable}`} data-scroll-behavior="smooth" data-sidebar="expanded" suppressHydrationWarning>
       <body>
         <AppearanceBootScript />
+        <NativeSplashHide />
         {children}
       </body>
     </html>
