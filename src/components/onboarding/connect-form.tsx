@@ -24,6 +24,7 @@ import {
   startRegistration,
 } from "@simplewebauthn/browser";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
+import { deriveDeviceLabel } from "@/lib/device-label";
 import { enterConnectedWorkspace } from "./workspace-navigation";
 
 type ConnectionResult = {
@@ -52,6 +53,14 @@ type PasskeyAssertion = Awaited<ReturnType<typeof startAuthentication>>;
  */
 function isMobileUserAgent(userAgent: string): boolean {
   return /android|iphone|ipad|ipod|mobile/i.test(userAgent);
+}
+
+function passkeySkipKey(playerId: number): string {
+  return `chainward-passkey-skip-${playerId}`;
+}
+
+function hasSkippedPasskeyOffer(playerId: number): boolean {
+  try { return localStorage.getItem(passkeySkipKey(playerId)) === "1"; } catch { return false; }
 }
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
@@ -166,7 +175,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
-        body: JSON.stringify({ response: registration }),
+        body: JSON.stringify({ response: registration, deviceLabel: deriveDeviceLabel(navigator.userAgent) }),
       });
     } catch {
       // Enrollment is a bonus, never a gate - a cancelled prompt or an
@@ -175,6 +184,14 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       setEnrolling(false);
       proceedToWorkspace(result);
     }
+  }
+
+  function skipPasskeyPrompt(result: ConnectionResult): void {
+    // A permanent per-browser dismissal, not a cooldown - Settings offers a
+    // manual "Add a passkey" entry point from now on, so declining here no
+    // longer forecloses the feature, it just stops the repeat nagging.
+    try { localStorage.setItem(passkeySkipKey(result.player.id), "1"); } catch { /* private browsing - the prompt just reappears next time */ }
+    proceedToWorkspace(result);
   }
 
   function proceedToWorkspace(result: ConnectionResult): void {
@@ -208,7 +225,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       }
       formElement.reset();
       setVisible(false);
-      if (payload.hasWebauthnCredential === false && platformAuthAvailable) {
+      if (payload.hasWebauthnCredential === false && platformAuthAvailable && !hasSkippedPasskeyOffer(payload.player.id)) {
         // Offer to enroll a passkey before entering the workspace - skippable
         // and never blocking, but this is the one moment the server knows
         // for certain no passkey exists yet for this key.
@@ -280,7 +297,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <p>Unlock this workspace with your {passkeyNoun} instead of pasting your API key.</p>
             <div className="connect-passkey-offer__actions">
               <button type="button" className="button button--primary" disabled={enrolling} onClick={() => void enrollPasskey(passkeyPrompt)}>{enrolling ? "Enabling…" : "Enable"}</button>
-              <button type="button" className="button button--quiet" disabled={enrolling} onClick={() => proceedToWorkspace(passkeyPrompt)}>Skip</button>
+              <button type="button" className="button button--quiet" disabled={enrolling} onClick={() => skipPasskeyPrompt(passkeyPrompt)}>Skip</button>
             </div>
           </div>
         ) : (

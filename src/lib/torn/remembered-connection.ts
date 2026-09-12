@@ -9,7 +9,14 @@ import { connectionEncryptionSecret } from "./connection-session";
 import { openCredentialDatabase } from "./credential-database";
 
 export const REMEMBERED_CONNECTION_COOKIE = "chainward_remembered_connection";
+// The database row's expiresAt (below) is the actual authority and slides
+// forward on activity, so the cookie only needs to physically outlive that
+// sliding window with margin - it is set once at login and never reissued
+// (Server Components can't set cookies, so refreshing it would need
+// middleware; giving it more runway than the window it re-validates against
+// achieves the same "active use never expires" outcome without that).
 export const REMEMBERED_CONNECTION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+export const REMEMBERED_CONNECTION_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
 export interface RememberedConnection {
   apiKey: string;
@@ -131,14 +138,20 @@ function readLocalConnection(tokenHash: string, scope: RememberedTokenScope): Re
       database.prepare("DELETE FROM remembered_torn_connections WHERE token_hash = ?").run(tokenHash);
       return null;
     }
-    const expiresAt = Date.parse(row.expires_at);
+    let expiresAt = Date.parse(row.expires_at);
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       database.prepare("DELETE FROM remembered_torn_connections WHERE token_hash = ?").run(tokenHash);
       return null;
     }
     const lastSeenAt = Date.parse(row.last_seen_at);
     if (!Number.isFinite(lastSeenAt) || Date.now() - lastSeenAt > 24 * 60 * 60 * 1_000) {
-      database.prepare("UPDATE remembered_torn_connections SET last_seen_at = ? WHERE token_hash = ?").run(new Date().toISOString(), tokenHash);
+      // Sliding window: a session touched at least once every 30 days never
+      // actually expires, while one left untouched still dies on schedule.
+      // Throttled to this same once-per-24h check so daily use doesn't turn
+      // into a write on every request.
+      expiresAt = Date.now() + REMEMBERED_CONNECTION_MAX_AGE_SECONDS * 1_000;
+      database.prepare("UPDATE remembered_torn_connections SET last_seen_at = ?, expires_at = ? WHERE token_hash = ?")
+        .run(new Date().toISOString(), new Date(expiresAt).toISOString(), tokenHash);
     }
     return {
       apiKey: decryptAndMigrateLocalCredential(database, tokenHash, row),
@@ -263,8 +276,14 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
     return null;
   }
   if (!credential || credential.ownerTornUserId !== session.user.tornUserId) return null;
+  let expiresAt = session.expiresAt.getTime();
   if (Date.now() - session.lastSeenAt.getTime() > 24 * 60 * 60 * 1_000) {
-    await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => {});
+    // Sliding window: a session touched at least once every 30 days never
+    // actually expires, while one left untouched still dies on schedule.
+    // Throttled to this same once-per-24h check so daily use doesn't turn
+    // into a write on every request.
+    expiresAt = Date.now() + REMEMBERED_CONNECTION_MAX_AGE_SECONDS * 1_000;
+    await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date(), expiresAt: new Date(expiresAt) } }).catch(() => {});
   }
   try {
     return {
@@ -275,7 +294,7 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
       factionId: credential.faction.tornFactionId,
       factionName: credential.faction.name,
       factionTag: credential.faction.tag ?? "",
-      expiresAt: session.expiresAt.getTime(),
+      expiresAt,
     };
   } catch {
     await db.session.delete({ where: { id: session.id } });

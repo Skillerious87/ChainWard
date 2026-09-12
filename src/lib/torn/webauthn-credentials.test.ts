@@ -7,6 +7,7 @@ import {
   credentialExistsForFingerprint,
   deleteWebauthnCredential,
   deleteWebauthnCredentialsForFingerprint,
+  findCredentialFingerprint,
   listCredentialsForFingerprint,
   registerWebauthnCredential,
   resolveWebauthnCandidate,
@@ -54,7 +55,9 @@ describe.sequential("WebAuthn credential storage (local backend)", () => {
     });
 
     await expect(credentialExistsForFingerprint("fingerprint-a")).resolves.toBe(true);
-    await expect(listCredentialsForFingerprint("fingerprint-a")).resolves.toEqual([{ credentialId: "cred-1", transports: ["internal"] }]);
+    await expect(listCredentialsForFingerprint("fingerprint-a")).resolves.toEqual([
+      { credentialId: "cred-1", transports: ["internal"], deviceLabel: "Test iPhone", createdAt: expect.any(String), lastUsedAt: null },
+    ]);
 
     const candidate = await resolveWebauthnCandidate("cred-1");
     expect(candidate).toMatchObject({
@@ -82,6 +85,12 @@ describe.sequential("WebAuthn credential storage (local backend)", () => {
     });
     await updateWebauthnCounter("cred-2", 7);
     await expect(resolveWebauthnCandidate("cred-2")).resolves.toMatchObject({ counter: 7 });
+  });
+
+  it("resolves a credential's owning fingerprint without decrypting anything, for ownership checks", async () => {
+    await registerWebauthnCredential({ credentialId: "cred-owner", publicKey: new Uint8Array([1]), counter: 0, tornFactionId: 1, keyFingerprint: "fingerprint-owner", apiKey: "A1B2C3D4E5F6G7H8" });
+    await expect(findCredentialFingerprint("cred-owner")).resolves.toBe("fingerprint-owner");
+    await expect(findCredentialFingerprint("does-not-exist")).resolves.toBeNull();
   });
 
   it("deletes a single credential without touching others sharing the same fingerprint", async () => {

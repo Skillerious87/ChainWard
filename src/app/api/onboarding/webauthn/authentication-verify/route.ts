@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       liveCacheSeconds: parsePositiveInteger(process.env.TORN_LIVE_CACHE_SECONDS, 30),
       historyCacheSeconds: parsePositiveInteger(process.env.TORN_HISTORY_CACHE_SECONDS, 60),
     });
-    return clearChallenge(await respondWithEstablishedConnection(candidate.apiKey, connection, { remember: true }));
+    return clearChallenge(await respondWithEstablishedConnection(candidate.apiKey, connection, { remember: true, method: "passkey" }));
   } catch (error: unknown) {
     if (error instanceof MissingTornSelectionsError) {
       return clearChallenge(errorResponse(`This custom key is missing: ${error.missingSelections.join(", ")}.`, "MISSING_SELECTIONS", 200));

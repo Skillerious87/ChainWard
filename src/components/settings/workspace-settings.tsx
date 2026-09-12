@@ -1,15 +1,19 @@
 "use client";
 
-import { Activity, AlertTriangle, BellOff, BellRing, Check, ChevronRight, Clipboard, Clock3, Copy, Database, DatabaseBackup, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Palette, Play, RefreshCw, ServerCog, ShieldCheck, SlidersHorizontal, Unlock, Upload, FlaskConical, Lock, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, BellOff, BellRing, Check, ChevronRight, Clipboard, Clock3, Copy, Database, DatabaseBackup, Download, Eye, EyeOff, Fingerprint, HardDrive, KeyRound, LockKeyhole, Palette, Play, RefreshCw, ServerCog, ShieldCheck, SlidersHorizontal, Trash2, Unlock, Upload, FlaskConical, Lock, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { platformAuthenticatorIsAvailable, startRegistration } from "@simplewebauthn/browser";
 import { Dialog } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { lockWorkspaceForTesting, unlockWorkspaceForTesting } from "@/app/(platform)/settings/actions";
+import { listMyPasskeys, removeMyPasskey } from "@/app/(platform)/settings/passkey-actions";
 import { accentOptions, saveAppearancePreferences, useAppearancePreferences, type AccentOption } from "@/lib/appearance-preferences";
 import { notify } from "@/lib/client-actions";
+import { deriveDeviceLabel } from "@/lib/device-label";
 import type { DatabaseStatus } from "@/lib/data/database-status";
+import type { WebauthnCredentialSummary } from "@/lib/torn/webauthn-credentials";
 import {
   getBrowserNotificationPermission,
   hasActivePushSubscription,
@@ -63,7 +67,7 @@ interface PostgresTestResult {
   latencyMs: number;
 }
 
-export function WorkspaceSettings({ telemetry, database, canMonitorMembers, licenceTesting = null }: { telemetry: WorkspaceTelemetry; database: DatabaseStatus; canMonitorMembers: boolean; licenceTesting?: LicenceTestingContext | null }) {
+export function WorkspaceSettings({ telemetry, database, canMonitorMembers, licenceTesting = null, initialPasskeys }: { telemetry: WorkspaceTelemetry; database: DatabaseStatus; canMonitorMembers: boolean; licenceTesting?: LicenceTestingContext | null; initialPasskeys: WebauthnCredentialSummary[] }) {
   const router = useRouter();
   const preferences = useAppearancePreferences();
   const notificationPreferences = useMemberNotificationPreferences();
@@ -73,6 +77,9 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   const [installGuidance, setInstallGuidance] = useState<"ios-install" | "unsupported" | null>(null);
   const [notificationWorking, setNotificationWorking] = useState(false);
   const [licenceWorking, setLicenceWorking] = useState(false);
+  const [passkeys, setPasskeys] = useState(initialPasskeys);
+  const [passkeyPlatformAvailable, setPasskeyPlatformAvailable] = useState(false);
+  const [passkeyWorking, setPasskeyWorking] = useState<string | null>(null);
   const views = licenceTesting ? [...baseViews, developerView] : baseViews;
   const [storageWorking, setStorageWorking] = useState<"create" | "download" | "restore" | null>(null);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
@@ -99,6 +106,51 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
     const next = saveMemberNotificationPreferences({ chainWarningSeconds: preferences.chainWarningSeconds });
     void syncDeviceNotificationPreferences(next).catch(() => undefined);
   }, [notificationPreferences.chainWarningSeconds, notificationPreferences.enabled, preferences.chainWarningSeconds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void platformAuthenticatorIsAvailable().then((available) => { if (!cancelled) setPasskeyPlatformAvailable(available); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  async function addPasskey(): Promise<void> {
+    setPasskeyWorking("add");
+    try {
+      const optionsResponse = await fetch("/api/onboarding/webauthn/registration-options", { method: "POST", credentials: "same-origin", cache: "no-store" });
+      const optionsPayload: unknown = await optionsResponse.json();
+      if (!optionsResponse.ok || !isRegistrationOptionsPayload(optionsPayload)) throw new Error(isErrorPayload(optionsPayload) ? optionsPayload.error : "Passkeys are unavailable right now.");
+      const registration = await startRegistration({ optionsJSON: optionsPayload.options });
+      const verifyResponse = await fetch("/api/onboarding/webauthn/registration-verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ response: registration, deviceLabel: deriveDeviceLabel(navigator.userAgent) }),
+      });
+      const verifyPayload: unknown = await verifyResponse.json();
+      if (!verifyResponse.ok) throw new Error(isErrorPayload(verifyPayload) ? verifyPayload.error : "The passkey could not be verified.");
+      setPasskeys(await listMyPasskeys());
+      notify({ title: "Passkey added", description: "This device can now unlock Chainward without your API key.", tone: "success" });
+    } catch (error: unknown) {
+      notify({ title: "Passkey not added", description: error instanceof Error ? error.message : "Try again.", tone: "warning" });
+    } finally {
+      setPasskeyWorking(null);
+    }
+  }
+
+  async function removePasskey(credentialId: string): Promise<void> {
+    setPasskeyWorking(credentialId);
+    try {
+      const result = await removeMyPasskey(credentialId);
+      if (!result.ok) throw new Error(result.message);
+      setPasskeys((current) => current.filter((passkey) => passkey.credentialId !== credentialId));
+      notify({ title: "Passkey removed", tone: "success" });
+    } catch (error: unknown) {
+      notify({ title: "Passkey not removed", description: error instanceof Error ? error.message : "Try again.", tone: "warning" });
+    } finally {
+      setPasskeyWorking(null);
+    }
+  }
 
   function chooseAccent(color: AccentOption): void {
     saveAppearancePreferences({ accent: color });
@@ -334,6 +386,23 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
             <article><span><LockKeyhole size={17} /></span><div><strong>Your key stays private</strong><p>Your API key is kept on the server and excluded from reports and portable backups.</p></div></article>
           </div>
           <div className="settings-view-actions"><Link className="button button--secondary" href="/connect"><KeyRound size={15} /> {telemetry.source === "live" ? "Replace connection" : "Connect Torn API"}</Link></div>
+
+          <div className="settings-subsection">
+            <header><h3><Fingerprint size={16} /> Your passkeys</h3><p>Unlock Chainward with your device&apos;s fingerprint, face, or PIN instead of pasting your API key.</p></header>
+            {passkeys.length > 0 ? <ul className="settings-passkey-list">
+              {passkeys.map((passkey) => <li key={passkey.credentialId}>
+                <span className="settings-passkey-list__icon" aria-hidden="true"><Fingerprint size={16} /></span>
+                <span className="settings-passkey-list__meta">
+                  <strong>{passkey.deviceLabel ?? "Unknown device"}</strong>
+                  <small>Added {new Date(passkey.createdAt).toLocaleDateString("en-GB")} · Last used {passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString("en-GB") : "Never"}</small>
+                </span>
+                <button type="button" className="button button--quiet settings-passkey-list__remove" disabled={passkeyWorking === passkey.credentialId} onClick={() => void removePasskey(passkey.credentialId)} aria-label={`Remove ${passkey.deviceLabel ?? "this passkey"}`}>
+                  {passkeyWorking === passkey.credentialId ? <Spinner size={14} label="Removing" tone="muted" /> : <Trash2 size={14} />}
+                </button>
+              </li>)}
+            </ul> : <p className="settings-passkey-empty">No passkeys yet on this connection.</p>}
+            {passkeyPlatformAvailable && <div className="settings-view-actions"><button type="button" className="button button--secondary" disabled={passkeyWorking === "add"} onClick={() => void addPasskey()}>{passkeyWorking === "add" ? <Spinner size={15} label="Adding passkey" tone="muted" /> : <Fingerprint size={15} />} Add a passkey for this device</button></div>}
+          </div>
         </section>}
 
         {activeView === "operations" && <section className="settings-view-content">
@@ -469,6 +538,7 @@ function notificationStatusDetail(permission: BrowserNotificationPermission, ena
 
 async function responseError(response: Response): Promise<string> { const payload: unknown = await response.json().catch(() => null); return isErrorPayload(payload) ? payload.error : "The server could not create a backup."; }
 function isErrorPayload(value: unknown): value is { error: string } { return Boolean(value && typeof value === "object" && "error" in value && typeof value.error === "string"); }
+function isRegistrationOptionsPayload(value: unknown): value is { options: Parameters<typeof startRegistration>[0]["optionsJSON"] } { return Boolean(value && typeof value === "object" && "options" in value && value.options && typeof value.options === "object"); }
 function isRestorePayload(value: unknown): value is { imported: number; skipped: number } { return Boolean(value && typeof value === "object" && "imported" in value && typeof value.imported === "number" && "skipped" in value && typeof value.skipped === "number"); }
 function isDatabasePayload(value: unknown): value is { filename: string } { return Boolean(value && typeof value === "object" && "filename" in value && typeof value.filename === "string"); }
 function isPostgresTestPayload(value: unknown): value is PostgresTestResult { return Boolean(value && typeof value === "object" && "database" in value && typeof value.database === "string" && "user" in value && typeof value.user === "string" && "serverVersion" in value && typeof value.serverVersion === "string" && "latencyMs" in value && typeof value.latencyMs === "number"); }

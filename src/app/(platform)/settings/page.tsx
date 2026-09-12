@@ -10,11 +10,12 @@ import { getFactionAccessSummary } from "@/lib/licensing/faction-access";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { redactLockedTelemetry } from "@/lib/licensing/telemetry";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import { listMyPasskeys } from "./passkey-actions";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const [telemetry, database, actor] = await Promise.all([getWorkspaceTelemetry(), getDatabaseStatus(), getCurrentActor()]);
+  const [telemetry, database, actor, passkeys] = await Promise.all([getWorkspaceTelemetry(), getDatabaseStatus(), getCurrentActor(), listMyPasskeys()]);
   const factionId = telemetry.faction?.id ?? null;
   const owner = isPlatformOwner(actor);
   // Local licence controls remain available to the exact platform owner.
@@ -34,5 +35,5 @@ export default async function SettingsPage() {
     && owner
     ? { locked: access.state !== "active", label: access.label, factionName: telemetry.faction?.name ?? null }
     : null;
-  return <WorkspaceSettings telemetry={redactLockedTelemetry(telemetry, access, workspaceAuthorized)} database={database} canMonitorMembers={canMonitorMembers} licenceTesting={licenceTesting} />;
+  return <WorkspaceSettings telemetry={redactLockedTelemetry(telemetry, access, workspaceAuthorized)} database={database} canMonitorMembers={canMonitorMembers} licenceTesting={licenceTesting} initialPasskeys={passkeys} />;
 }

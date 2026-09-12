@@ -9,6 +9,9 @@ import { openCredentialDatabase } from "./credential-database";
 export interface WebauthnCredentialSummary {
   credentialId: string;
   transports?: string[];
+  deviceLabel: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
 }
 
 export interface WebauthnAuthenticationCandidate {
@@ -62,13 +65,32 @@ export async function credentialExistsForFingerprint(keyFingerprint: string): Pr
 export async function listCredentialsForFingerprint(keyFingerprint: string): Promise<WebauthnCredentialSummary[]> {
   if (process.env.DATABASE_URL?.trim()) {
     const { db } = await import("@/lib/db");
-    const rows = await withDbRetry(() => db.webAuthnCredential.findMany({ where: { keyFingerprint }, select: { credentialId: true, transports: true } })).catch(() => []);
-    return rows.map((row) => ({ credentialId: row.credentialId, transports: parseTransports(row.transports) }));
+    const rows = await withDbRetry(() => db.webAuthnCredential.findMany({
+      where: { keyFingerprint },
+      select: { credentialId: true, transports: true, deviceLabel: true, createdAt: true, lastUsedAt: true },
+      orderBy: { createdAt: "asc" },
+    })).catch(() => []);
+    return rows.map((row) => ({
+      credentialId: row.credentialId,
+      transports: parseTransports(row.transports),
+      deviceLabel: row.deviceLabel,
+      createdAt: row.createdAt.toISOString(),
+      lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+    }));
   }
   const database = openCredentialDatabase();
   try {
-    const rows = database.prepare("SELECT credential_id, transports_json FROM webauthn_credentials WHERE key_fingerprint = ?").all(keyFingerprint) as unknown as Array<{ credential_id: string; transports_json: string }>;
-    return rows.map((row) => ({ credentialId: row.credential_id, transports: parseTransports(row.transports_json) }));
+    const rows = database.prepare(`
+      SELECT credential_id, transports_json, device_label, created_at, last_used_at
+      FROM webauthn_credentials WHERE key_fingerprint = ? ORDER BY created_at ASC
+    `).all(keyFingerprint) as unknown as Array<{ credential_id: string; transports_json: string; device_label: string | null; created_at: string; last_used_at: string | null }>;
+    return rows.map((row) => ({
+      credentialId: row.credential_id,
+      transports: parseTransports(row.transports_json),
+      deviceLabel: row.device_label,
+      createdAt: row.created_at,
+      lastUsedAt: row.last_used_at,
+    }));
   } finally {
     database.close();
   }
@@ -83,6 +105,26 @@ export async function listCredentialsForFingerprint(keyFingerprint: string): Pro
 export async function resolveWebauthnCandidate(credentialId: string): Promise<WebauthnAuthenticationCandidate | null> {
   if (process.env.DATABASE_URL?.trim()) return resolvePostgresCandidate(credentialId);
   return resolveLocalCandidate(credentialId);
+}
+
+/**
+ * A lighter ownership check for management actions (e.g. "remove this
+ * passkey") that never needs the plaintext API key - avoids decrypting it
+ * just to confirm which scope a credential belongs to.
+ */
+export async function findCredentialFingerprint(credentialId: string): Promise<string | null> {
+  if (process.env.DATABASE_URL?.trim()) {
+    const { db } = await import("@/lib/db");
+    const row = await withDbRetry(() => db.webAuthnCredential.findUnique({ where: { credentialId }, select: { keyFingerprint: true } })).catch(() => null);
+    return row?.keyFingerprint ?? null;
+  }
+  const database = openCredentialDatabase();
+  try {
+    const row = database.prepare("SELECT key_fingerprint FROM webauthn_credentials WHERE credential_id = ?").get(credentialId) as unknown as { key_fingerprint: string } | undefined;
+    return row?.key_fingerprint ?? null;
+  } finally {
+    database.close();
+  }
 }
 
 export async function updateWebauthnCounter(credentialId: string, counter: number): Promise<void> {

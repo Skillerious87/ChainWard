@@ -2,7 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 import { consumeGlobalRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
+import { recordAuthEvent } from "@/lib/torn/auth-audit";
 import { CONNECTION_COOKIE } from "@/lib/torn/connection-session";
+import { currentConnectionScope } from "@/lib/torn/current-connection-scope";
 import { REMEMBERED_CONNECTION_COOKIE, revokeRememberedConnection } from "@/lib/torn/remembered-connection";
 
 export async function POST(request: Request) {
@@ -16,7 +18,17 @@ export async function POST(request: Request) {
     );
   }
   const cookieStore = await cookies();
+  // Resolved before revoking - once the session is gone there's nothing left
+  // to attribute the audit entry to.
+  const scope = await currentConnectionScope();
   await revokeRememberedConnection(cookieStore.get(REMEMBERED_CONNECTION_COOKIE)?.value);
+  if (scope) {
+    await recordAuthEvent("auth.disconnected", {
+      tornFactionId: scope.tornFactionId,
+      tornUserId: scope.tornUserId,
+      keyFingerprint: scope.keyFingerprint,
+    });
+  }
   const response = NextResponse.json({ disconnected: true }, { headers: { "cache-control": "no-store" } });
   const expired = { httpOnly: true, sameSite: "strict" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0, priority: "high" as const };
   response.cookies.set(CONNECTION_COOKIE, "", expired);

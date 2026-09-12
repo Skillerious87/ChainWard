@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     const hasWebauthnCredential = await credentialExistsForFingerprint(keyFingerprint);
     return await respondWithEstablishedConnection(parsed.data.apiKey, connection, {
       remember: parsed.data.remember,
+      method: "key",
       extra: { hasWebauthnCredential },
     });
   } catch (error: unknown) {

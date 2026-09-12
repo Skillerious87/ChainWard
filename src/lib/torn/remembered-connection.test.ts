@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +10,7 @@ import {
   revokeRememberedConnection,
   updateRememberedConnectionImage,
 } from "./remembered-connection";
-import { credentialDatabasePath } from "./credential-database";
+import { credentialDatabasePath, openCredentialDatabase } from "./credential-database";
 
 describe.sequential("remembered Torn connections", () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
@@ -84,6 +85,24 @@ describe.sequential("remembered Torn connections", () => {
     const parts = stored.token.split(".");
     parts[2] = "99999";
     await expect(readRememberedConnection(parts.join("."))).resolves.toBeNull();
+  });
+
+  it("slides expiresAt forward once activity is seen more than 24h since the last touch", async () => {
+    const stored = await createRememberedConnection("A1B2C3D4E5F6G7H8", connectionFixture());
+    const tokenHash = createHash("sha256").update(stored.token).digest("hex");
+    const database = openCredentialDatabase();
+    const staleLastSeen = new Date(Date.now() - 25 * 60 * 60 * 1_000).toISOString();
+    database.prepare("UPDATE remembered_torn_connections SET last_seen_at = ? WHERE token_hash = ?").run(staleLastSeen, tokenHash);
+    database.close();
+
+    const refreshed = await readRememberedConnection(stored.token);
+    expect(refreshed?.expiresAt).toBeGreaterThan(stored.expiresAt);
+  });
+
+  it("does not slide expiresAt forward on a session touched within the last 24h", async () => {
+    const stored = await createRememberedConnection("A1B2C3D4E5F6G7H8", connectionFixture());
+    const refreshed = await readRememberedConnection(stored.token);
+    expect(refreshed?.expiresAt).toBe(stored.expiresAt);
   });
 });
 

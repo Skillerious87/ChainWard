@@ -9,6 +9,7 @@ import { readRememberedConnection, REMEMBERED_CONNECTION_COOKIE } from "./rememb
 export interface CurrentConnectionScope {
   apiKey: string;
   tornFactionId: number;
+  tornUserId: number;
   keyFingerprint: string;
 }
 
@@ -27,6 +28,7 @@ export async function currentConnectionScope(): Promise<CurrentConnectionScope |
   return {
     apiKey: session.apiKey,
     tornFactionId: session.factionId,
+    tornUserId: session.tornUserId,
     keyFingerprint: encryptCredential(session.apiKey, credentialEncryptionSecret()).fingerprint,
   };
 }

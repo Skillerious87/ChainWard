@@ -6,6 +6,7 @@ import { z } from "zod";
 import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/request-body";
 import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security/request-origin";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
+import { recordAuthEvent } from "@/lib/torn/auth-audit";
 import { currentConnectionScope } from "@/lib/torn/current-connection-scope";
 import { decodeWebauthnChallenge, WEBAUTHN_CHALLENGE_COOKIE, webauthnChallengeCookieOptions } from "@/lib/torn/webauthn-challenge";
 import { registerWebauthnCredential } from "@/lib/torn/webauthn-credentials";
@@ -70,6 +71,14 @@ export async function POST(request: Request) {
     tornFactionId: scope.tornFactionId,
     keyFingerprint: scope.keyFingerprint,
     apiKey: scope.apiKey,
+  });
+  await recordAuthEvent("auth.passkey_enrolled", {
+    tornFactionId: scope.tornFactionId,
+    tornUserId: scope.tornUserId,
+    keyFingerprint: scope.keyFingerprint,
+    entityType: "WebAuthnCredential",
+    entityId: credential.id,
+    metadata: { deviceLabel: parsed.data.deviceLabel ?? null },
   });
 
   return clearChallenge(NextResponse.json({ registered: true }, { headers: { "cache-control": "no-store" } }));
