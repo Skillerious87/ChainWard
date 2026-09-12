@@ -505,12 +505,6 @@
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
-.welcome-plan__price-multiplier {
-  margin-right: 2px;
-  color: var(--text-muted);
-  font-size: 15px;
-  font-weight: 600;
-}
 .welcome-plan__price strong {
   margin-right: 4px;
   color: #f6faf6;
@@ -519,10 +513,20 @@
   letter-spacing: -2px;
   font-variant-numeric: tabular-nums;
 }
-.welcome-plan__price-icon {
-  width: 40px;
-  height: 20px;
-  margin-right: 7px;
+.welcome-plan__price-tile {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-right: 9px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.18));
+}
+.welcome-plan__price-tile img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
@@ -611,32 +615,44 @@
 .plan-dialog__body { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; overflow-y: auto; }
 .plan-dialog__cost {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 4px 14px;
+  column-gap: 16px;
+  row-gap: 10px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
-.plan-dialog__cost-amount {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
+.plan-dialog__cost-tile {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.18));
 }
-.plan-dialog__cost-multiplier {
-  color: var(--text-muted);
-  font-size: 22px;
-  font-weight: 640;
-  letter-spacing: -0.5px;
+.plan-dialog__cost-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5));
+}
+.plan-dialog__cost-detail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 2px;
 }
 .plan-dialog__cost-value {
-  position: relative;
   color: var(--text);
-  font-size: 60px;
+  font-size: 52px;
   font-weight: 780;
-  letter-spacing: -3px;
+  letter-spacing: -2.6px;
   line-height: 0.85;
   font-variant-numeric: tabular-nums;
-  filter: drop-shadow(0 0 22px rgba(var(--accent-rgb), 0.3));
+  filter: drop-shadow(0 0 20px rgba(var(--accent-rgb), 0.28));
 }
 @supports (background-clip: text) or (-webkit-background-clip: text) {
   .plan-dialog__cost-value {
@@ -646,15 +662,9 @@
     color: transparent;
   }
 }
-.plan-dialog__cost-icon {
-  width: 64px;
-  height: 32px;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.55));
-}
-.plan-dialog__cost > span { display: flex; flex-direction: column; }
-.plan-dialog__cost b { color: #a9d68e; font-size: 12px; font-weight: 720; letter-spacing: 0.4px; text-transform: uppercase; }
-.plan-dialog__cost small { margin-top: 2px; color: var(--text-muted); font-size: 11px; }
+.plan-dialog__cost-unit { display: flex; flex-direction: column; }
+.plan-dialog__cost-unit b { color: #a9d68e; font-size: 12px; font-weight: 720; letter-spacing: 0.4px; text-transform: uppercase; }
+.plan-dialog__cost-unit small { margin-top: 2px; color: var(--text-muted); font-size: 11px; }
 .plan-dialog__badge {
   display: inline-flex;
   grid-column: 1 / -1;
@@ -752,8 +762,7 @@
     from { opacity: 0; transform: translateY(100%); }
     to { opacity: 1; transform: translateY(0); }
   }
-  .plan-dialog__cost-value { font-size: 46px; letter-spacing: -2.2px; }
-  .plan-dialog__cost-multiplier { font-size: 18px; }
+  .plan-dialog__cost-value { font-size: 42px; letter-spacing: -2px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

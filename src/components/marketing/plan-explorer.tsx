@@ -102,8 +102,9 @@ export function PlanExplorer() {
               <span className="welcome-plan__eyebrow">{PLAN_EYEBROW[plan.id]}</span>
               <span className="welcome-plan__name">{plan.name}</span>
               <span className="welcome-plan__price">
-                <Image className="welcome-plan__price-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={40} height={20} unoptimized />
-                <span className="welcome-plan__price-multiplier" aria-hidden="true">×</span>
+                <span className="welcome-plan__price-tile">
+                  <Image src="/images/DonatorPackRemasterGPT.png" alt="" width={28} height={28} unoptimized />
+                </span>
                 <strong>{plan.itemQuantity}</strong> {pluralizeItemName(plan.itemQuantity, plan.itemName)}
               </span>
               <span className="welcome-plan__term">{plan.term}</span>
@@ -152,15 +153,16 @@ export function PlanExplorer() {
 
             <div className="dialog__body plan-dialog__body">
               <div className="plan-dialog__cost">
-                <Image className="plan-dialog__cost-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={64} height={32} unoptimized />
-                <span className="plan-dialog__cost-amount">
-                  <span className="plan-dialog__cost-multiplier" aria-hidden="true">×</span>
+                <div className="plan-dialog__cost-tile">
+                  <Image src="/images/DonatorPackRemasterGPT.png" alt="" width={64} height={32} unoptimized />
+                </div>
+                <div className="plan-dialog__cost-detail">
                   <span className="plan-dialog__cost-value">{economics.itemQuantity}</span>
-                </span>
-                <span>
-                  <b>{pluralizeItemName(economics.itemQuantity, economics.itemName)}</b>
-                  <small>{economics.durationDays === null ? "one payment" : `for ${economics.term}`}</small>
-                </span>
+                  <span className="plan-dialog__cost-unit">
+                    <b>{pluralizeItemName(economics.itemQuantity, economics.itemName)}</b>
+                    <small>{economics.durationDays === null ? "one payment" : `for ${economics.term}`}</small>
+                  </span>
+                </div>
                 {economics.savingPercent !== null && (
                   <em className="plan-dialog__badge">
                     <TrendingDown size={13} /> {economics.savingPercent}% less per day than monthly
