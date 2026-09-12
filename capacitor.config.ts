@@ -7,18 +7,6 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://chain-ward-ebon.vercel.app',
     cleartext: false
-  },
-  plugins: {
-    SplashScreen: {
-      launchShowDuration: 5000,
-      launchAutoHide: true,
-      launchFadeOutDuration: 450,
-      backgroundColor: '#080D0F',
-      androidScaleType: 'CENTER_CROP',
-      showSpinner: false,
-      splashFullScreen: true,
-      splashImmersive: true
-    }
   }
 };
 
