@@ -27,6 +27,9 @@
     "db:restore": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-database.ps1"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@prisma/adapter-pg": "7.9.1",
     "@prisma/client": "7.9.1",
     "@simplewebauthn/browser": "^14.0.0",

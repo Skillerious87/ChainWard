@@ -227,6 +227,22 @@
 }
 .login-card .api-key-field input::placeholder { color: #5c6960; letter-spacing: 0; }
 .login-card .api-key-field input:focus { outline: none; }
+/* Chrome/Samsung Internet paint recognised fields (this one offers saved
+   credentials via autoComplete="username webauthn") with their own pale
+   yellow background the instant the page loads, showing through the
+   transparent input background as a flash at the top of the card. The
+   long transition delay is the standard trick to stop it reappearing on
+   later autofill/focus events too. */
+.login-card .api-key-field input:-webkit-autofill,
+.login-card .api-key-field input:-webkit-autofill:hover,
+.login-card .api-key-field input:-webkit-autofill:focus,
+.login-card .api-key-field input:-webkit-autofill:active {
+  -webkit-text-fill-color: #e7ede9;
+  -webkit-box-shadow: 0 0 0 1000px #080c0e inset;
+  box-shadow: 0 0 0 1000px #080c0e inset;
+  caret-color: #e7ede9;
+  transition: background-color 5000s ease-in-out 0s;
+}
 .login-card .api-key-field > div button {
   display: grid;
   width: 50px;

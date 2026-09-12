@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.get_login_creds"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.chainward.app",
+    "sha256_cert_fingerprints": ["D9:93:CD:C4:06:EF:3B:F4:59:B2:86:4D:F5:5D:C5:EF:D3:17:19:C6:5D:FE:56:D9:39:FB:5A:40:61:68:5E:30"]
+  }
+}]
