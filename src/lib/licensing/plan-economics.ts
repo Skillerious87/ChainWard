@@ -1,4 +1,4 @@
-import { licensePlans, type LicensePlanId } from "./pricing";
+import { licensePlans, pluralizeItemName, type LicensePlanId } from "./pricing";
 
 /**
  * Marketing-surface economics for the published licence plans.
@@ -16,7 +16,7 @@ const DAYS_PER_MONTH = 30;
 export interface PlanEconomics {
   id: LicensePlanId;
   name: string;
-  /** Item currency, e.g. `"Xanax"`. */
+  /** Item currency, e.g. `"Donator Pack"`. */
   itemName: string;
   /** Whole items charged for the term. */
   itemQuantity: number;
@@ -24,7 +24,7 @@ export interface PlanEconomics {
   term: string;
   /** Coverage length in days; `null` for a permanent licence. */
   durationDays: number | null;
-  /** `"5 Xanax"` — the canonical cost label. */
+  /** `"2 Donator Packs"` — the canonical cost label. */
   costLabel: string;
   /**
    * Items per 30 days of coverage, rounded to one decimal. `null` for a
@@ -68,7 +68,7 @@ function monthlyRatePerDay(): number | null {
 export function planEconomicsById(id: LicensePlanId): PlanEconomics {
   const plan = licensePlans.find((entry) => entry.id === id) ?? licensePlans[1];
   const baseline = monthlyRatePerDay();
-  const costLabel = `${plan.itemQuantity} ${plan.itemName}`;
+  const costLabel = `${plan.itemQuantity} ${pluralizeItemName(plan.itemQuantity, plan.itemName)}`;
 
   if (plan.durationDays === null) {
     const breakEvenMonths =

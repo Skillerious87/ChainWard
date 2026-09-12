@@ -74,7 +74,7 @@ revoke it.
    `CW-{factionId}-{8 random characters}`. The server rejects a reference whose
    faction prefix does not match the currently verified faction.
 4. **Request reservation.** The member selects a term and reserves it. A server
-   transaction stores the faction, purchaser, term, expected Xanax amount,
+   transaction stores the faction, purchaser, term, expected Donator Pack amount,
    reference, and timestamp, then creates an audit event. It rejects a second
    open request or a faction that already has active access.
 5. **Manual Torn transfer.** The member sends the displayed items to

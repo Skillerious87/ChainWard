@@ -14,9 +14,10 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { licensePayment, licensePlans, type LicensePlanId } from "@/lib/licensing/pricing";
+import { licensePayment, licensePlans, pluralizeItemName, type LicensePlanId } from "@/lib/licensing/pricing";
 import { planEconomicsById } from "@/lib/licensing/plan-economics";
 
 const PLAN_ICON: Record<LicensePlanId, LucideIcon> = {
@@ -52,7 +53,7 @@ function rateSummary(id: LicensePlanId): string {
   if (economics.savingPercent === null || economics.monthlyEquivalent === null) {
     return `${economics.costLabel} every ${economics.term}. This is the baseline rate every longer term is measured against.`;
   }
-  return `Works out to about ${economics.monthlyEquivalent} ${economics.itemName} a month — ${economics.savingPercent}% below the monthly rate — paid ${economics.costLabel} up front.`;
+  return `Works out to about ${economics.monthlyEquivalent} ${pluralizeItemName(economics.monthlyEquivalent, economics.itemName)} a month — ${economics.savingPercent}% below the monthly rate — paid ${economics.costLabel} up front.`;
 }
 
 export function PlanExplorer() {
@@ -80,7 +81,7 @@ export function PlanExplorer() {
           const featured = plan.id === FEATURED;
           const saving =
             economicsForCard.savingVsMonthly !== null
-              ? `Save ${economicsForCard.savingVsMonthly} ${economicsForCard.itemName}`
+              ? `Save ${economicsForCard.savingVsMonthly} ${pluralizeItemName(economicsForCard.savingVsMonthly, economicsForCard.itemName)}`
               : economicsForCard.breakEvenMonths !== null
                 ? "Never renews"
                 : null;
@@ -101,7 +102,8 @@ export function PlanExplorer() {
               <span className="welcome-plan__eyebrow">{PLAN_EYEBROW[plan.id]}</span>
               <span className="welcome-plan__name">{plan.name}</span>
               <span className="welcome-plan__price">
-                <strong>{plan.itemQuantity}</strong> {plan.itemName}
+                <Image className="welcome-plan__price-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={40} height={20} unoptimized />
+                <strong>{plan.itemQuantity}</strong> {pluralizeItemName(plan.itemQuantity, plan.itemName)}
               </span>
               <span className="welcome-plan__term">{plan.term}</span>
               {saving && (
@@ -149,9 +151,10 @@ export function PlanExplorer() {
 
             <div className="dialog__body plan-dialog__body">
               <div className="plan-dialog__cost">
+                <Image className="plan-dialog__cost-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={64} height={32} unoptimized />
                 <strong>{economics.itemQuantity}</strong>
                 <span>
-                  <b>{economics.itemName}</b>
+                  <b>{pluralizeItemName(economics.itemQuantity, economics.itemName)}</b>
                   <small>{economics.durationDays === null ? "one payment" : `for ${economics.term}`}</small>
                 </span>
                 {economics.savingPercent !== null && (
@@ -184,7 +187,7 @@ export function PlanExplorer() {
                   <strong>Paid in Torn items, activated by hand.</strong>
                   Send{" "}
                   <b>
-                    {economics.itemQuantity} {economics.itemName}
+                    {economics.itemQuantity} {pluralizeItemName(economics.itemQuantity, economics.itemName)}
                   </b>{" "}
                   to{" "}
                   <a href={licensePayment.profileUrl} target="_blank" rel="noreferrer">

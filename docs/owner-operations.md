@@ -25,8 +25,8 @@ licence register. Local SQLite is not a shared production licence service.
 3. The member submits the request before sending items. Chainward stores the player, faction, plan,
    expected quantity, reference, and submission time in one database
    transaction and writes an audit event.
-4. From the locked pending view, the member sends the displayed Xanax quantity
-   to Skillerious [3212954] in Torn and includes that exact reference.
+4. From the locked pending view, the member sends the displayed Donator Pack
+   quantity to Skillerious [3212954] in Torn and includes that exact reference.
 5. The faction sees the review state. A second open request cannot be
    created for the same faction.
 
@@ -58,7 +58,7 @@ database identity and should not replace the payment reference in Torn.
 4. Press **Review payment** and compare all four facts:
    - the Torn sender matches the submitted player;
    - the request faction ID is correct;
-   - the transferred Xanax quantity matches the selected plan;
+   - the transferred Donator Pack quantity matches the selected plan;
    - the transfer contains the exact `CW-…` reference.
 5. Check the manual-verification box and type the payment reference exactly.
    The activation button remains locked until both checks pass.
@@ -80,10 +80,10 @@ reason. Neither action creates a licence.
 
 | Term | Expected payment | Access duration |
 | --- | ---: | ---: |
-| Monthly | 2 Xanax | 30 days from approval |
-| Quarterly | 5 Xanax | 90 days from approval |
-| Annual | 18 Xanax | 365 days from approval |
-| Lifetime | 60 Xanax | No expiry |
+| Monthly | 1 Donator Pack | 30 days from approval |
+| Quarterly | 2 Donator Packs | 90 days from approval |
+| Annual | 6 Donator Packs | 365 days from approval |
+| Lifetime | 15 Donator Packs | No expiry |
 
 Expiry begins at approval time, not request-submission time. A stored ACTIVE
 record whose expiry has passed is not treated as valid access.

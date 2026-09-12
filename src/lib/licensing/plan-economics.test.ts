@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { describePlanEconomics, planEconomicsById } from "./plan-economics";
-import { licensePlans } from "./pricing";
+import { licensePlans, pluralizeItemName } from "./pricing";
 
 describe("licence plan economics", () => {
   it("keeps the published price string aligned with the item quantity", () => {
     for (const plan of licensePlans) {
-      expect(plan.price).toBe(`${plan.itemQuantity} ${plan.itemName}`);
+      expect(plan.price).toBe(`${plan.itemQuantity} ${pluralizeItemName(plan.itemQuantity, plan.itemName)}`);
     }
   });
 
   it("treats the monthly plan as the zero-saving baseline", () => {
     expect(planEconomicsById("monthly")).toMatchObject({
-      monthlyEquivalent: 2,
+      monthlyEquivalent: 1,
       savingVsMonthly: null,
       savingPercent: null,
       breakEvenMonths: null,
@@ -21,10 +21,10 @@ describe("licence plan economics", () => {
 
   it("derives the quarterly saving from the plan table", () => {
     expect(planEconomicsById("quarterly")).toMatchObject({
-      costLabel: "5 Xanax",
-      monthlyEquivalent: 1.7,
+      costLabel: "2 Donator Packs",
+      monthlyEquivalent: 0.7,
       savingVsMonthly: 1,
-      savingPercent: 17,
+      savingPercent: 33,
       breakEvenMonths: null,
       isRecurring: true,
     });
@@ -32,9 +32,9 @@ describe("licence plan economics", () => {
 
   it("derives the annual saving from the plan table", () => {
     expect(planEconomicsById("annual")).toMatchObject({
-      monthlyEquivalent: 1.5,
+      monthlyEquivalent: 0.5,
       savingVsMonthly: 6,
-      savingPercent: 26,
+      savingPercent: 51,
       isRecurring: true,
     });
   });
@@ -45,7 +45,7 @@ describe("licence plan economics", () => {
       monthlyEquivalent: null,
       savingVsMonthly: null,
       savingPercent: null,
-      breakEvenMonths: 30,
+      breakEvenMonths: 15,
       isRecurring: false,
     });
   });

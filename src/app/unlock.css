@@ -177,7 +177,8 @@
 .licence-tier-card__identity small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11.5px !important; }
 .licence-tier-card__description { min-width: 0; color: #93a09a; font-size: 12.5px !important; line-height: 1.5; }
 .licence-tier-card__description strong { color: #c2ccc6; font-weight: 620; }
-.licence-tier-card__price { text-align: right; white-space: nowrap; }
+.licence-tier-card__price { display: flex; align-items: center; gap: 8px; text-align: right; white-space: nowrap; }
+.licence-tier-card__price-icon { width: 36px; height: 18px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
 .licence-tier-card__price strong,
 .licence-tier-card__price b {
   display: block;

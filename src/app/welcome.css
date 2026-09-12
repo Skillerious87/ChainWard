@@ -496,6 +496,8 @@
 }
 .welcome-plan__name { margin-top: 5px; color: #dce4df; font-size: 15px; font-weight: 660; }
 .welcome-plan__price {
+  display: flex;
+  align-items: center;
   margin-top: 14px;
   color: #9fd383;
   font-size: 11px;
@@ -510,6 +512,13 @@
   font-weight: 630;
   letter-spacing: -1.8px;
   font-variant-numeric: tabular-nums;
+}
+.welcome-plan__price-icon {
+  width: 40px;
+  height: 20px;
+  margin-right: 7px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 .welcome-plan__term { margin-top: 4px; color: #69766f; font-size: 11px; }
 .welcome-plan__saving {
@@ -596,7 +605,7 @@
 .plan-dialog__body { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; overflow-y: auto; }
 .plan-dialog__cost {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: 4px 12px;
   padding-bottom: 16px;
@@ -609,6 +618,12 @@
   letter-spacing: -2.4px;
   line-height: 0.9;
   font-variant-numeric: tabular-nums;
+}
+.plan-dialog__cost-icon {
+  width: 64px;
+  height: 32px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.55));
 }
 .plan-dialog__cost > span { display: flex; flex-direction: column; }
 .plan-dialog__cost b { color: #a9d68e; font-size: 12px; font-weight: 720; letter-spacing: 0.4px; text-transform: uppercase; }

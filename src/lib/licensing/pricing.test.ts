@@ -8,10 +8,10 @@ describe("licence identifiers and terms", () => {
 
   it("keeps displayed prices aligned with activation durations", () => {
     expect(licensePlans.map((plan) => [plan.id, plan.itemQuantity, plan.durationDays, plan.licenseTerm])).toEqual([
-      ["monthly", 2, 30, "MONTHLY"],
-      ["quarterly", 5, 90, "QUARTERLY"],
-      ["annual", 18, 365, "YEARLY"],
-      ["lifetime", 60, null, "PERMANENT"],
+      ["monthly", 1, 30, "MONTHLY"],
+      ["quarterly", 2, 90, "QUARTERLY"],
+      ["annual", 6, 365, "YEARLY"],
+      ["lifetime", 15, null, "PERMANENT"],
     ]);
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, BarChart3, CalendarClock, Check, CircleCheckBig, Clock3, Copy, Crown, ExternalLink, Fingerprint, Gem, History, LockKeyhole, MessageCircleQuestion, ShieldCheck, Sparkles, TriangleAlert, Users, WalletCards, ShieldAlert } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,7 +10,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { Spinner } from "@/components/ui/spinner";
 import { TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
-import { licensePayment, licensePlans, type LicensePlanId } from "@/lib/licensing/pricing";
+import { licensePayment, licensePlans, pluralizeItemName, type LicensePlanId } from "@/lib/licensing/pricing";
 import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
 import type { FactionAccessSummary } from "@/lib/licensing/types";
 
@@ -105,7 +106,7 @@ function InactiveAccess({ factionId, factionName, paymentReference }: { factionI
               <span className="licence-tier-card__selector">{active && <Check size={14} />}</span>
               <span className="licence-tier-card__identity"><strong>{plan.name}</strong><small>{plan.term}</small></span>
               <span className="licence-tier-card__description"><strong>{plan.detail}</strong><small><Check size={11} />Analytics, rewards, payouts, and member access</small></span>
-              <span className="licence-tier-card__price"><strong>{plan.itemQuantity}</strong><small>{plan.itemName}</small></span>
+              <span className="licence-tier-card__price"><Image className="licence-tier-card__price-icon" src="/images/DonatorPackRemasterGPT.png" alt="" width={36} height={18} unoptimized /><span><strong>{plan.itemQuantity}</strong><small>{pluralizeItemName(plan.itemQuantity, plan.itemName)}</small></span></span>
             </button>;
           })}
         </div>
