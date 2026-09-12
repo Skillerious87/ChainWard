@@ -12,6 +12,7 @@ import { getCurrentActor } from "@/lib/auth/current-actor";
 import { getFactionAccessWorkspace } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner, PLATFORM_OWNER } from "@/lib/auth/platform-owner";
 import { getDatabaseStatus } from "@/lib/data/database-status";
+import { extractPaymentCandidates } from "@/lib/licensing/payment-candidates";
 import { getAccessRequestQueue } from "@/lib/licensing/request-store";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
@@ -24,6 +25,11 @@ export default async function AdminPage() {
   if (!isPlatformOwner(actor)) notFound();
   const [queue, telemetry, database, connection, roster] = await Promise.all([getAccessRequestQueue(), getWorkspaceTelemetry(), getDatabaseStatus(), getConfiguredTornConnection(), getFactionRoster()]);
   const factionAccess = await getFactionAccessWorkspace(connection?.factionId ?? null);
+  // Best-effort only: a missing/failed read just means no suggestions show up
+  // next to a pending request, never a broken review flow.
+  const paymentCandidates = connection
+    ? await connection.client.getMyEvents().then((events) => extractPaymentCandidates(events, "Donator Pack")).catch(() => [])
+    : [];
   const licenceReviewCount = queue.requests.filter((request) => request.status === "Pending" || request.status === "Information").length;
   const memberReviewCount = factionAccess.requests.length;
   const reviewCount = licenceReviewCount + memberReviewCount;
@@ -52,7 +58,7 @@ export default async function AdminPage() {
           <AdminKpis factionCount={queue.factionCount} activeLicenseCount={queue.activeLicenseCount} licenceReviewCount={licenceReviewCount} memberReviewCount={memberReviewCount} telemetry={telemetry} />
           <AdminReviewQueue licenceRequests={queue.requests} memberRequests={factionAccess.requests} />
         </>}
-        requests={<AccessRequestTable initialRequests={queue.requests} databaseConfigured={queue.databaseConfigured} message={queue.message} />}
+        requests={<AccessRequestTable initialRequests={queue.requests} databaseConfigured={queue.databaseConfigured} message={queue.message} paymentCandidates={paymentCandidates} />}
         members={<MemberAccessControl access={factionAccess} rosterResult={roster} faction={telemetry.faction} />}
         licences={<>
           <div className="admin-workstream-heading">

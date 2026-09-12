@@ -57,6 +57,75 @@
 }
 .access-audit-event--approved .access-audit-event__icon { border-color: rgba(103, 211, 145, .26); background: rgba(103, 211, 145, .07); color: var(--success); }
 .access-audit-event--pending .access-audit-event__icon { border-color: rgba(98, 184, 232, .24); background: rgba(98, 184, 232, .06); color: var(--info); }
+.access-audit-event--rejected .access-audit-event__icon { border-color: rgba(242, 109, 109, .26); background: rgba(242, 109, 109, .07); color: var(--danger); }
+
+.access-audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 10px;
+}
+.access-audit-filters__search {
+  display: flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+.access-audit-filters__search input {
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+}
+.access-audit-filters__search input:focus { outline: none; }
+.access-audit-filters select {
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+}
+.access-audit-filters__date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.access-audit-filters__date input {
+  padding: 5px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-inter), Inter, "Segoe UI", sans-serif;
+}
+.access-audit-filters__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.access-audit-filters__clear:hover { color: var(--text); border-color: var(--text-muted); }
 
 .access-audit-event__body { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
 .access-audit-event__headline {

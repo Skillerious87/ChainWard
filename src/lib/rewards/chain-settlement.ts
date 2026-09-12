@@ -279,6 +279,90 @@ export function getLocalPayoutReverts(factionId: number, limit = 10): PayoutReve
   finally { database.close(); }
 }
 
+export interface PendingPayoutRevertRequest {
+  /** The requesting operator's stated reason. */
+  reason: string;
+  requestedByTornId: number;
+  requestedByName: string;
+  requestedAt: string;
+}
+
+/**
+ * Reverting a paid chain is a high-risk action — it retracts an assertion
+ * that members were already sent their reward — so it requires a second,
+ * different operator to confirm before it actually applies. This stores the
+ * first operator's request as an ordinary faction setting (the same
+ * mechanism already used for targets, member policy, and battle-stat
+ * caching) rather than a dedicated table, since it is small, keyed by chain,
+ * and cleared the moment it is either confirmed or cancelled.
+ */
+export async function getPendingPayoutRevertRequest(factionId: number, chainId: number): Promise<PendingPayoutRevertRequest | null> {
+  if (!process.env.DATABASE_URL?.trim()) return getLocalPendingPayoutRevertRequest(factionId, chainId);
+  try {
+    const { db } = await import("@/lib/db");
+    const setting = await db.factionSetting.findFirst({ where: { faction: { tornFactionId: factionId }, key: pendingRevertKey(chainId) } });
+    return setting ? parsePendingRevertRequest(setting.value) : null;
+  } catch { return null; }
+}
+
+export async function savePendingPayoutRevertRequest(factionId: number, chainId: number, request: PendingPayoutRevertRequest): Promise<void> {
+  if (!process.env.DATABASE_URL?.trim()) { saveLocalPendingPayoutRevertRequest(factionId, chainId, request); return; }
+  const { db } = await import("@/lib/db");
+  const faction = await db.faction.findUnique({ where: { tornFactionId: factionId } });
+  if (!faction) throw new Error("The connected faction is not stored in the database.");
+  const value = JSON.parse(JSON.stringify(request)) as Prisma.InputJsonValue;
+  await db.factionSetting.upsert({
+    where: { factionId_key: { factionId: faction.id, key: pendingRevertKey(chainId) } },
+    update: { value },
+    create: { factionId: faction.id, key: pendingRevertKey(chainId), value },
+  });
+}
+
+export async function clearPendingPayoutRevertRequest(factionId: number, chainId: number): Promise<void> {
+  if (!process.env.DATABASE_URL?.trim()) { clearLocalPendingPayoutRevertRequest(factionId, chainId); return; }
+  try {
+    const { db } = await import("@/lib/db");
+    await db.factionSetting.deleteMany({ where: { faction: { tornFactionId: factionId }, key: pendingRevertKey(chainId) } });
+  } catch { /* Best-effort cleanup: an orphaned setting is harmless and self-heals on the next request/confirm cycle. */ }
+}
+
+function getLocalPendingPayoutRevertRequest(factionId: number, chainId: number): PendingPayoutRevertRequest | null {
+  if (!localDatabaseExists()) return null;
+  const database = openLocalDatabase();
+  if (!database) return null;
+  try {
+    const row = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key = ?").get(factionId, pendingRevertKey(chainId)) as unknown as { value_json: string } | undefined;
+    return row ? parsePendingRevertRequest(JSON.parse(row.value_json)) : null;
+  } catch { return null; } finally { database.close(); }
+}
+
+function saveLocalPendingPayoutRevertRequest(factionId: number, chainId: number, request: PendingPayoutRevertRequest): void {
+  if (!localDatabaseExists()) throw new Error("The local database is unavailable.");
+  const database = openLocalDatabase();
+  if (!database) throw new Error("The local database is unavailable.");
+  try {
+    database.prepare("INSERT INTO faction_settings (faction_id, key, value_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(faction_id, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at")
+      .run(factionId, pendingRevertKey(chainId), JSON.stringify(request), new Date().toISOString());
+  } finally { database.close(); }
+}
+
+function clearLocalPendingPayoutRevertRequest(factionId: number, chainId: number): void {
+  if (!localDatabaseExists()) return;
+  const database = openLocalDatabase();
+  if (!database) return;
+  try { database.prepare("DELETE FROM faction_settings WHERE faction_id = ? AND key = ?").run(factionId, pendingRevertKey(chainId)); }
+  finally { database.close(); }
+}
+
+function pendingRevertKey(chainId: number): string { return `payoutRevertRequest.${chainId}`; }
+
+function parsePendingRevertRequest(value: unknown): PendingPayoutRevertRequest | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<PendingPayoutRevertRequest>;
+  if (typeof item.reason !== "string" || typeof item.requestedByTornId !== "number" || typeof item.requestedByName !== "string" || typeof item.requestedAt !== "string") return null;
+  return { reason: item.reason, requestedByTornId: item.requestedByTornId, requestedByName: item.requestedByName, requestedAt: item.requestedAt };
+}
+
 export function settlementFromPreview(preview: ChainRewardPreview, factionId: number, chainId: number, paidByTornId: number, now = new Date()): ChainSettlement {
   if (!preview.available || !preview.schemeId || !preview.schemeName || preview.schemeVersion === null || !preview.rewardUnit) throw new Error(preview.message);
   return { ...preview, factionId, chainId, status: "PAID", calculatedAt: now.toISOString(), paidAt: now.toISOString(), paidByTornId };

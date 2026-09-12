@@ -17,6 +17,7 @@ import {
   userAttacksResponseSchema,
   userBasicResponseSchema,
   userBountiesResponseSchema,
+  userEventsResponseSchema,
   userProfileByIdResponseSchema,
   userProfileResponseSchema,
   type ChainReportResponse,
@@ -28,6 +29,7 @@ import {
   type UserAttacksResponse,
   type UserBasicResponse,
   type UserBountiesResponse,
+  type UserEventsResponse,
   type UserProfileByIdResponse,
   type UserProfileResponse,
 } from "./schemas";
@@ -155,6 +157,16 @@ export class TornClient {
    */
   getUserBounties(tornUserId: number): Promise<{ value: UserBountiesResponse; fetchedAt: number }> {
     return this.requestWithMeta(`/user/${tornUserId}/bounties`, userBountiesResponseSchema, 10 * 60_000);
+  }
+
+  /**
+   * The key owner's own recent account activity - powers the platform
+   * owner's "possible matching transfers" assist on pending licence
+   * payments. Never used to approve anything automatically. `sort` is not
+   * supported on this selection per Torn's documentation.
+   */
+  getMyEvents(): Promise<UserEventsResponse> {
+    return this.request("/user/events", userEventsResponseSchema, 60_000, { limit: "100" });
   }
 
   getMyProfileDetails(): Promise<UserProfileResponse> {

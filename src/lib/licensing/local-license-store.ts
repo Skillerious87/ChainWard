@@ -267,12 +267,14 @@ export function getLocalAccessRequestQueue(): AccessQueueResult {
       WHERE l.status = 'ACTIVE' AND (l.expires_at IS NULL OR l.expires_at > ?)
       ORDER BY l.issued_at DESC
     `).all(now) as unknown as LicenseRow[];
+    // Filtering (actor/action/date) happens client-side over this window in
+    // AccessAuditTimeline, so it needs more than a handful of recent rows.
     const audits = database.prepare(`
       SELECT a.*, actor.name AS actor_name
       FROM licensing_audit a
       LEFT JOIN licensing_users actor ON actor.torn_user_id = a.actor_torn_user_id
       WHERE a.action LIKE 'ACCESS_REQUEST_%'
-      ORDER BY a.created_at DESC LIMIT 12
+      ORDER BY a.created_at DESC LIMIT 200
     `).all() as unknown as AuditRow[];
 
     return {

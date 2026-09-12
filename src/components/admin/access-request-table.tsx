@@ -7,12 +7,13 @@ import { reviewAccessRequest } from "@/app/(platform)/admin/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { TornUserName } from "@/components/ui/torn-user-link";
 import { notify } from "@/lib/client-actions";
+import type { PaymentCandidate } from "@/lib/licensing/payment-candidates";
 import type { AccessRequestView, AccessRequestViewStatus } from "@/lib/licensing/request-store";
 
 type QueueView = "Review" | "Approved" | "All";
 type ReviewDecision = "Approved" | "Information" | "Rejected";
 
-export function AccessRequestTable({ initialRequests, databaseConfigured, message }: { initialRequests: AccessRequestView[]; databaseConfigured: boolean; message: string }) {
+export function AccessRequestTable({ initialRequests, databaseConfigured, message, paymentCandidates = [] }: { initialRequests: AccessRequestView[]; databaseConfigured: boolean; message: string; paymentCandidates?: PaymentCandidate[] }) {
   const router = useRouter();
   const [requests, setRequests] = useState(initialRequests);
   const [query, setQuery] = useState("");
@@ -111,6 +112,18 @@ export function AccessRequestTable({ initialRequests, databaseConfigured, messag
         <dl className="access-review-facts"><div><dt>Requested plan</dt><dd>{selected.plan} · {selected.term}</dd></div><div><dt>Expected Torn items</dt><dd>{selected.payment}</dd></div><div><dt>Exact identifier</dt><dd><code>{selected.reference}</code><button onClick={() => void copyIdentifier(selected.reference)}><Copy size={12} /> Copy</button></dd></div></dl>
         {decision === "Approved" ? <div className="access-verification-checklist">
           <header><Fingerprint size={17} /><div><strong>Manual transfer verification</strong><small>Chainward cannot inspect Torn item transfers automatically.</small></div></header>
+          {paymentCandidates.length > 0 && <div className="payment-candidate-list">
+            <p className="payment-candidate-list__label">Possible matches in your recent Torn activity <em>— unverified, confirm in Torn yourself</em></p>
+            <ul>{paymentCandidates.map((candidate) => {
+              const expectedQuantity = leadingNumber(selected.payment);
+              const quantityMatches = expectedQuantity !== null && candidate.quantity === expectedQuantity;
+              return <li key={candidate.id} className={quantityMatches ? "payment-candidate--match" : undefined}>
+                <time dateTime={new Date(candidate.timestampMs).toISOString()}>{new Date(candidate.timestampMs).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
+                <span>{candidate.text}</span>
+                {quantityMatches && <BadgeCheck size={12} aria-label="Quantity matches this request" />}
+              </li>;
+            })}</ul>
+          </div>}
           <label><input type="checkbox" checked={paymentMatched} onChange={(event) => setPaymentMatched(event.target.checked)} /><span>{paymentMatched && <Check size={13} />}</span><p><strong>I found the item transfer in Torn</strong><small>The sender and quantity match {selected.contact.name} and {selected.payment}.</small></p></label>
           <label className="reference-confirmation"><span>Type the exact identifier to confirm</span><input value={referenceConfirmation} onChange={(event) => setReferenceConfirmation(event.target.value.toUpperCase())} placeholder={selected.reference} autoComplete="off" spellCheck={false} /><small className={referenceConfirmation && referenceConfirmation !== selected.reference ? "reference-confirmation__mismatch" : undefined}>{referenceConfirmation === selected.reference ? <><BadgeCheck size={12} /> Exact match</> : "Approval remains locked until this matches."}</small></label>
         </div> : <label className="access-review-note"><span>{decision === "Information" ? "Message shown to the requesting faction" : "Private rejection reason"}</span><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder={decision === "Information" ? "Describe exactly what must be clarified before approval…" : "Record why this request cannot be approved…"} /><small>{note.length}/500 · {decision === "Information" ? "visible on their pending-access page" : "stored for owner review"}</small></label>}
@@ -119,6 +132,11 @@ export function AccessRequestTable({ initialRequests, databaseConfigured, messag
       </div>}
     </Dialog>
   </>;
+}
+
+function leadingNumber(text: string): number | null {
+  const match = /^(\d+)/.exec(text.trim());
+  return match ? Number.parseInt(match[1]!, 10) : null;
 }
 
 function shortId(id: string): string { return id.slice(0, 8).toUpperCase(); }

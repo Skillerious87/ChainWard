@@ -1,4 +1,7 @@
-import { BadgeCheck, CalendarClock, Clock3, ExternalLink, Fingerprint, History, PackageCheck, Radio, ShieldCheck } from "lucide-react";
+"use client";
+
+import { BadgeCheck, CalendarClock, Clock3, ExternalLink, Fingerprint, History, PackageCheck, Radio, Search, ShieldCheck, ShieldX, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { TornUserName } from "@/components/ui/torn-user-link";
 import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
 import { getLicenseRenewalNotice } from "@/lib/licensing/renewal";
@@ -24,10 +27,46 @@ export function LicenseRegistry({ licenses }: { licenses: ActiveLicenseView[] })
   </section>;
 }
 
+const ACTION_FILTER_ALL = "__all__";
+
 export function AccessAuditTimeline({ events }: { events: AccessAuditView[] }) {
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState(ACTION_FILTER_ALL);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const actionOptions = useMemo(() => Array.from(new Set(events.map((event) => event.action))).sort(), [events]);
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toMs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+    return events.filter((event) => {
+      if (actionFilter !== ACTION_FILTER_ALL && event.action !== actionFilter) return false;
+      if (needle && !(event.actor?.name.toLowerCase().includes(needle) || event.reference?.toLowerCase().includes(needle))) return false;
+      const createdMs = new Date(event.createdAt).getTime();
+      if (fromMs !== null && createdMs < fromMs) return false;
+      if (toMs !== null && createdMs > toMs) return false;
+      return true;
+    });
+  }, [events, search, actionFilter, dateFrom, dateTo]);
+
+  const filtersActive = search.trim() !== "" || actionFilter !== ACTION_FILTER_ALL || dateFrom !== "" || dateTo !== "";
+  function clearFilters(): void { setSearch(""); setActionFilter(ACTION_FILTER_ALL); setDateFrom(""); setDateTo(""); }
+
   return <section className="panel access-audit-panel">
     <div className="section-heading"><div><h2>Recent access audit</h2><p>Immutable purchase and review events</p></div><span className="analytics-panel-icon"><History size={17} /></span></div>
-    {events.length ? <ol className="access-audit-list">{events.map((event) => (
+    {events.length > 0 && <div className="access-audit-filters">
+      <label className="access-audit-filters__search"><Search size={13} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search actor or reference" aria-label="Search by actor or payment reference" /></label>
+      <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} aria-label="Filter by action">
+        <option value={ACTION_FILTER_ALL}>Every action</option>
+        {actionOptions.map((action) => <option key={action} value={action}>{action}</option>)}
+      </select>
+      <label className="access-audit-filters__date">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} aria-label="From date" /></label>
+      <label className="access-audit-filters__date">To<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} aria-label="To date" /></label>
+      {filtersActive && <button type="button" className="access-audit-filters__clear" onClick={clearFilters}><X size={12} /> Clear</button>}
+    </div>}
+    {filtered.length ? <ol className="access-audit-list">{filtered.map((event) => (
       <li key={event.id} className={`access-audit-event access-audit-event--${auditTone(event.action)}`}>
         <span className="access-audit-event__icon">{auditIcon(event.action)}</span>
         <div className="access-audit-event__body">
@@ -43,13 +82,14 @@ export function AccessAuditTimeline({ events }: { events: AccessAuditView[] }) {
           </p>
         </div>
       </li>
-    ))}</ol> : <div className="table-empty">No access audit events have been recorded yet.</div>}
+    ))}</ol> : <div className="table-empty">{events.length ? "No audit events match these filters." : "No access audit events have been recorded yet."}</div>}
   </section>;
 }
 
-function auditTone(action: string): "approved" | "pending" | "neutral" {
+function auditTone(action: string): "approved" | "pending" | "rejected" | "neutral" {
   if (action === "Approved") return "approved";
   if (action === "Information requested" || action === "Submitted") return "pending";
+  if (action === "Rejected") return "rejected";
   return "neutral";
 }
 
@@ -57,5 +97,6 @@ function auditIcon(action: string) {
   if (action === "Approved") return <PackageCheck size={15} />;
   if (action === "Information requested") return <Clock3 size={15} />;
   if (action === "Submitted") return <Radio size={15} />;
+  if (action === "Rejected") return <ShieldX size={15} />;
   return <Fingerprint size={15} />;
 }

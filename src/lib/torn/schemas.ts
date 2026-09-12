@@ -270,6 +270,20 @@ export const userAttacksResponseSchema = z.object({
   }).loose()).default([]),
 }).loose();
 
+// `/user/events` - the operator's own recent account activity feed. Used only
+// to *suggest* which incoming Torn item transfer might match a pending
+// licence payment - never to assert one automatically. Torn's exact v2
+// per-event field names are not published, so this stays deliberately
+// unopinionated: each event is validated only as an id-keyed record of
+// loosely-shaped objects. `extractPaymentCandidates` (payment-candidates.ts)
+// tries several plausible key names at read time rather than this schema
+// asserting one, the same tolerance the bounties/attacks schemas above apply
+// to their own undocumented shapes.
+export const userEventsResponseSchema = z.object({
+  events: z.record(z.string(), z.record(z.string(), z.unknown())).catch({}),
+}).loose();
+
+export type UserEventsResponse = z.infer<typeof userEventsResponseSchema>;
 export type UserBasicResponse = z.infer<typeof userBasicResponseSchema>;
 export type UserProfileResponse = z.infer<typeof userProfileResponseSchema>;
 export type UserProfileByIdResponse = z.infer<typeof userProfileByIdResponseSchema>;

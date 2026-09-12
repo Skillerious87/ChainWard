@@ -77,7 +77,9 @@ export async function getAccessRequestQueue(): Promise<AccessQueueResult> {
       db.accessRequest.findMany({ include: { faction: true, submittedBy: true, reviewedBy: true }, orderBy: { createdAt: "desc" } }),
       db.faction.count(),
       db.factionLicense.findMany({ where: { status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, include: { faction: true, approvedBy: true }, orderBy: { issuedAt: "desc" } }),
-      db.auditLog.findMany({ where: { action: { startsWith: "ACCESS_REQUEST_" } }, include: { actor: true }, orderBy: { createdAt: "desc" }, take: 12 }),
+      // Filtering (actor/action/date) happens client-side over this window in
+      // AccessAuditTimeline, so it needs more than a handful of recent rows.
+      db.auditLog.findMany({ where: { action: { startsWith: "ACCESS_REQUEST_" } }, include: { actor: true }, orderBy: { createdAt: "desc" }, take: 200 }),
     ]);
     return {
       databaseConfigured: true,
