@@ -268,7 +268,15 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
         cache: "no-store",
         body: JSON.stringify({ response: registration, deviceLabel: deriveDeviceLabel(navigator.userAgent) }),
       });
-      if (verifyResponse.ok) markPasskeyReadyOnThisDevice(result.player.id);
+      if (verifyResponse.ok) {
+        markPasskeyReadyOnThisDevice(result.player.id);
+      } else {
+        // A non-ok response never throws on its own - log the server's
+        // reason directly, since without this the failure looked identical
+        // to a successful, silent no-op.
+        const verifyPayload: unknown = await verifyResponse.json().catch(() => null);
+        console.warn("[chainward] passkey registration-verify rejected", verifyResponse.status, verifyPayload);
+      }
     } catch (cause: unknown) {
       // Enrollment is a bonus, never a gate - a cancelled prompt or an
       // unsupported browser just means the user keeps using their key. Still
