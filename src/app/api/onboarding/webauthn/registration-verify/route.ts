@@ -8,6 +8,7 @@ import { isTrustedMutationRequest, mutationDeniedResponse } from "@/lib/security
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { recordAuthEvent } from "@/lib/torn/auth-audit";
 import { currentConnectionScope } from "@/lib/torn/current-connection-scope";
+import { passkeyDeviceCookieOptions, PASSKEY_DEVICE_COOKIE } from "@/lib/torn/passkey-device-cookie";
 import { decodeWebauthnChallenge, WEBAUTHN_CHALLENGE_COOKIE, webauthnChallengeCookieOptions } from "@/lib/torn/webauthn-challenge";
 import { registerWebauthnCredential } from "@/lib/torn/webauthn-credentials";
 import { webauthnExpectedOrigins, webauthnRpId } from "@/lib/torn/webauthn-rp";
@@ -89,7 +90,11 @@ export async function POST(request: Request) {
     metadata: { deviceLabel: parsed.data.deviceLabel ?? null },
   });
 
-  return clearChallenge(NextResponse.json({ registered: true }, { headers: { "cache-control": "no-store" } }));
+  const response = NextResponse.json({ registered: true }, { headers: { "cache-control": "no-store" } });
+  // A successful enrollment proves this exact device now has a working
+  // credential - definitive, unlike anything the client could claim.
+  response.cookies.set(PASSKEY_DEVICE_COOKIE, "1", passkeyDeviceCookieOptions());
+  return clearChallenge(response);
 }
 
 function clearChallenge(response: NextResponse): NextResponse {

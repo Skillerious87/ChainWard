@@ -7,6 +7,7 @@ import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import { recordAuthEvent } from "./auth-audit";
 import type { ValidatedTornConnection } from "./connection-service";
 import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession } from "./connection-session";
+import { passkeyDeviceCookieOptions, PASSKEY_DEVICE_COOKIE } from "./passkey-device-cookie";
 import { createRememberedConnection, REMEMBERED_CONNECTION_COOKIE, REMEMBERED_CONNECTION_COOKIE_MAX_AGE_SECONDS } from "./remembered-connection";
 
 export interface EstablishedConnectionOptions {
@@ -66,6 +67,10 @@ export async function respondWithEstablishedConnection(
     response.cookies.set(CONNECTION_COOKIE, session.value, connectionCookieOptions(CONNECTION_MAX_AGE_SECONDS));
     response.cookies.set(REMEMBERED_CONNECTION_COOKIE, "", connectionCookieOptions(0));
   }
+  // A successful passkey sign-in proves this exact device already has a
+  // working credential - definitive, unlike anything the client could
+  // claim about itself.
+  if (options.method === "passkey") response.cookies.set(PASSKEY_DEVICE_COOKIE, "1", passkeyDeviceCookieOptions());
 
   // Awaited, not fire-and-forget: a serverless runtime can freeze this
   // function as soon as the response is returned, which would silently drop
