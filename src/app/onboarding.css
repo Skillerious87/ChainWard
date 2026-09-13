@@ -3,6 +3,16 @@
    high-end mobile app sign-in than a marketing page.  Mobile-first.
    =========================================================================== */
 
+/* Mobile WebViews resolve `dvh` a frame or two after first paint, once the
+   real dynamic viewport (address bar / system bars) settles — until then the
+   page can briefly measure taller than the final viewport, flashing a
+   document-level scrollbar that shifts the whole screen before disappearing.
+   `.login-page` itself already clips everything via `overflow: hidden`
+   below; this clips the *document* the same way for as long as it's the
+   active page, so that brief mismatch has nothing to scroll in the first
+   place. */
+body:has(.login-page) { overflow: hidden; }
+
 .login-page {
   position: relative;
   display: flex;
