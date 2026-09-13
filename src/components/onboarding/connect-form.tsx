@@ -65,6 +65,42 @@ function hasSkippedPasskeyOffer(playerId: number): boolean {
   try { return localStorage.getItem(passkeySkipKey(playerId)) === "1"; } catch { return false; }
 }
 
+/**
+ * A platform passkey lives in *this device's* credential store - a passkey
+ * enrolled on a desktop is invisible to a phone and vice versa, even for the
+ * same Torn key. `hasWebauthnCredential` (from the server) only says whether
+ * *some* device has one, so it can't gate the enrollment offer on its own:
+ * that would silently strand every other device with no way back in short of
+ * digging through Settings. This device-local flag - set once a passkey
+ * genuinely works *here*, via either enrollment or a successful sign-in - is
+ * what actually decides whether this device still needs the offer.
+ */
+function passkeyReadyKey(playerId: number): string {
+  return `chainward-passkey-ready-${playerId}`;
+}
+
+function isPasskeyReadyOnThisDevice(playerId: number): boolean {
+  try { return localStorage.getItem(passkeyReadyKey(playerId)) === "1"; } catch { return false; }
+}
+
+function markPasskeyReadyOnThisDevice(playerId: number): void {
+  try { localStorage.setItem(passkeyReadyKey(playerId), "1"); } catch { /* private browsing - the offer just reappears next time */ }
+}
+
+/**
+ * Google's own WebView Credential Manager integration guide states outright
+ * that the WebKit library doesn't support `mediation:"conditional"` requests
+ * (https://developer.android.com/identity/sign-in/credential-manager-webview) -
+ * so the silent autofill-style flow below is unsupported inside the
+ * Capacitor app specifically, even though feature-detection may still claim
+ * otherwise. Forcing the explicit button path there is what's actually
+ * reliable on-device rather than relying on a check that can't tell the
+ * difference.
+ */
+function isNativeApp(): boolean {
+  try { return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()); } catch { return false; }
+}
+
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -111,7 +147,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       // NotAllowedError in several browsers, so the explicit unlock button
       // below is deliberately hidden for as long as this stays pending.
       // Browsers without autofill support fall back to that button instead.
-      const autofillReady = await browserSupportsWebAuthnAutofill().catch(() => false);
+      const autofillReady = isNativeApp() ? false : await browserSupportsWebAuthnAutofill().catch(() => false);
       if (!cancelled) setAutofillSupported(autofillReady);
       if (!autofillReady || cancelled) return;
       const optionsResponse = await fetch("/api/onboarding/webauthn/authentication-options", {
@@ -154,6 +190,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       if (isErrorPayload(payload)) passkeyError.code = payload.code;
       throw passkeyError;
     }
+    // A successful assertion proves this exact device already has a working
+    // local credential - never worth offering enrollment here again.
+    markPasskeyReadyOnThisDevice(payload.player.id);
     setOpening(true);
     enterConnectedWorkspace(connectionNextPath(payload));
   }
@@ -195,13 +234,14 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       const optionsPayload: unknown = await optionsResponse.json();
       if (!optionsResponse.ok || !isRegistrationOptionsPayload(optionsPayload)) throw new Error("registration-options-failed");
       const registration = await startRegistration({ optionsJSON: optionsPayload.options });
-      await fetch("/api/onboarding/webauthn/registration-verify", {
+      const verifyResponse = await fetch("/api/onboarding/webauthn/registration-verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
         body: JSON.stringify({ response: registration, deviceLabel: deriveDeviceLabel(navigator.userAgent) }),
       });
+      if (verifyResponse.ok) markPasskeyReadyOnThisDevice(result.player.id);
     } catch {
       // Enrollment is a bonus, never a gate - a cancelled prompt or an
       // unsupported browser just means the user keeps using their key.
@@ -250,10 +290,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       }
       formElement.reset();
       setVisible(false);
-      if (payload.hasWebauthnCredential === false && platformAuthAvailable && !hasSkippedPasskeyOffer(payload.player.id)) {
+      if (platformAuthAvailable && !isPasskeyReadyOnThisDevice(payload.player.id) && !hasSkippedPasskeyOffer(payload.player.id)) {
         // Offer to enroll a passkey before entering the workspace - skippable
-        // and never blocking, but this is the one moment the server knows
-        // for certain no passkey exists yet for this key.
+        // and never blocking. Gated on *this device* having no confirmed
+        // credential yet, not on whether the account has one anywhere -
+        // a passkey from another device is invisible to this one's platform
+        // authenticator, so this is also how a second/third device gets set
+        // up, right here, with no detour through Settings.
         setPasskeyPrompt(payload);
         return;
       }
