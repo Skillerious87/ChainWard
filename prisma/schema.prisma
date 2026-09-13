@@ -29,6 +29,17 @@ enum ApiCredentialStatus {
   DISCONNECTED
 }
 
+/**
+ * A browser tab receives WEB_PUSH via the standard Push API; the Capacitor
+ * Android app's WebView can't reliably be woken the same way once closed, so
+ * it registers an FCM device token instead - same alert pipeline, different
+ * transport at send time.
+ */
+enum PushTransport {
+  WEB_PUSH
+  FCM
+}
+
 enum LicenseStatus {
   PENDING
   ACTIVE
@@ -534,9 +545,12 @@ model ChainWatchRotation {
 }
 
 /**
- * One encrypted browser PushSubscription per device/browser profile. Push
- * endpoints are bearer capabilities, so the full endpoint and key material
- * are encrypted at rest; only a keyed hash is used for lookup.
+ * One encrypted device registration per device/browser profile - a browser
+ * PushSubscription (WEB_PUSH) or an FCM device token (FCM), named for the
+ * transport that shipped first. Either way it's a bearer capability, so the
+ * full payload is encrypted at rest; only a keyed hash is used for lookup.
+ * `encryptedSubscription` holds a `StoredPushSubscription` for WEB_PUSH or a
+ * `StoredFcmRegistration` for FCM - see push-types.ts.
  */
 model WebPushSubscription {
   id                    String            @id @default(uuid()) @db.Uuid
@@ -547,6 +561,7 @@ model WebPushSubscription {
   endpointHash          String            @unique
   encryptedSubscription Bytes
   encryptionIv          Bytes
+  transport             PushTransport     @default(WEB_PUSH)
   platform              String
   timezone              String
   preferences           Json

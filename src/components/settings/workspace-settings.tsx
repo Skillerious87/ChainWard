@@ -13,6 +13,15 @@ import { accentOptions, saveAppearancePreferences, useAppearancePreferences, typ
 import { notify } from "@/lib/client-actions";
 import { deriveDeviceLabel } from "@/lib/device-label";
 import { markDeviceHasPasskey } from "@/lib/passkey-device-flag";
+import {
+  hasActiveNativePushRegistration,
+  nativePushPermissionStatus,
+  nativePushSupported,
+  registerNativePushDevice,
+  syncNativePushPreferences,
+  testNativePushNotification,
+  unregisterNativePushDevice,
+} from "@/lib/notifications/native-push";
 import { waitForNextPaint } from "@/lib/wait-for-paint";
 import { decodeClientDataOrigin } from "@/lib/webauthn-client-data";
 import type { DatabaseStatus } from "@/lib/data/database-status";
@@ -78,6 +87,10 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermission>("unsupported");
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [installGuidance, setInstallGuidance] = useState<"ios-install" | "unsupported" | null>(null);
+  // The Capacitor app can't rely on Web Push (see native-push.ts) - an FCM
+  // device token stands in for the browser PushSubscription everywhere
+  // notification state is read or changed below.
+  const [nativePush, setNativePush] = useState(false);
   const [notificationWorking, setNotificationWorking] = useState(false);
   const [licenceWorking, setLicenceWorking] = useState(false);
   const [passkeys, setPasskeys] = useState(initialPasskeys);
@@ -97,9 +110,16 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setNotificationPermission(getBrowserNotificationPermission());
-      setInstallGuidance(deviceInstallGuidance());
-      void hasActivePushSubscription().then(setPushSubscribed);
+      const native = nativePushSupported();
+      setNativePush(native);
+      if (native) {
+        setPushSubscribed(hasActiveNativePushRegistration());
+        void nativePushPermissionStatus().then(setNotificationPermission);
+      } else {
+        setNotificationPermission(getBrowserNotificationPermission());
+        setInstallGuidance(deviceInstallGuidance());
+        void hasActivePushSubscription().then(setPushSubscribed);
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -107,8 +127,9 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   useEffect(() => {
     if (!notificationPreferences.enabled || notificationPreferences.chainWarningSeconds === preferences.chainWarningSeconds) return;
     const next = saveMemberNotificationPreferences({ chainWarningSeconds: preferences.chainWarningSeconds });
-    void syncDeviceNotificationPreferences(next).catch(() => undefined);
-  }, [notificationPreferences.chainWarningSeconds, notificationPreferences.enabled, preferences.chainWarningSeconds]);
+    const sync = nativePush ? syncNativePushPreferences(next) : syncDeviceNotificationPreferences(next);
+    void sync.catch(() => undefined);
+  }, [nativePush, notificationPreferences.chainWarningSeconds, notificationPreferences.enabled, preferences.chainWarningSeconds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,28 +323,36 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   }
 
   async function enableMemberNotifications(): Promise<void> {
-    if (deviceInstallGuidance() === "ios-install") {
+    if (!nativePush && deviceInstallGuidance() === "ios-install") {
       setInstallGuidance("ios-install");
       notify({ title: "Add Chainward to your Home Screen", description: "On iPhone or iPad, open Share, choose Add to Home Screen, then enable alerts from the installed app.", tone: "info" });
       return;
     }
     setNotificationWorking(true);
     try {
-      const permission = await requestBrowserNotificationPermission();
-      setNotificationPermission(permission);
-      if (permission !== "granted") {
-        saveMemberNotificationPreferences({ enabled: false });
-        notify({
-          title: permission === "denied" ? "Notifications are blocked" : "Notifications are unavailable",
-          description: permission === "denied" ? "Allow notifications for Chainward in your device or browser settings, then try again." : "Use the HTTPS app in a browser that supports Web Push.",
-          tone: "warning",
-        });
-        return;
-      }
       const next = saveMemberNotificationPreferences({ enabled: true, chainWarningSeconds: preferences.chainWarningSeconds });
-      await subscribeDeviceNotifications(next);
+      if (nativePush) {
+        // registerNativePushDevice requests permission itself - the OS
+        // prompt and the "granted" outcome are the same step here, unlike
+        // the browser flow's separate Notification.requestPermission() call.
+        await registerNativePushDevice(next);
+        setNotificationPermission("granted");
+      } else {
+        const permission = await requestBrowserNotificationPermission();
+        setNotificationPermission(permission);
+        if (permission !== "granted") {
+          saveMemberNotificationPreferences({ enabled: false });
+          notify({
+            title: permission === "denied" ? "Notifications are blocked" : "Notifications are unavailable",
+            description: permission === "denied" ? "Allow notifications for Chainward in your device or browser settings, then try again." : "Use the HTTPS app in a browser that supports Web Push.",
+            tone: "warning",
+          });
+          return;
+        }
+        await subscribeDeviceNotifications(next);
+      }
       setPushSubscribed(true);
-      await testDevicePushNotification();
+      if (nativePush) await testNativePushNotification(); else await testDevicePushNotification();
       notify({
         title: "Device notifications enabled",
         description: "This device is subscribed to chain alerts and any member alerts you are authorised to receive.",
@@ -331,10 +360,10 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
       });
     } catch (error) {
       saveMemberNotificationPreferences({ enabled: false });
-      setNotificationPermission(getBrowserNotificationPermission());
+      if (!nativePush) setNotificationPermission(getBrowserNotificationPermission());
       notify({
         title: "Notifications could not be enabled",
-        description: error instanceof Error ? error.message : "The browser notification request did not complete.",
+        description: error instanceof Error ? error.message : "The notification request did not complete.",
         tone: "danger",
       });
     } finally {
@@ -345,16 +374,16 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   async function testMemberNotification(): Promise<void> {
     setNotificationWorking(true);
     try {
-      await testDevicePushNotification();
+      if (nativePush) await testNativePushNotification(); else await testDevicePushNotification();
       notify({ title: "Test push sent", description: "The server handed an encrypted notification to this device's push service.", tone: "success" });
     } catch (error) {
       notify({
         title: "Test notification failed",
-        description: error instanceof Error ? error.message : "The browser could not send the notification.",
+        description: error instanceof Error ? error.message : "The device could not send the notification.",
         tone: "danger",
       });
     } finally {
-      setNotificationPermission(getBrowserNotificationPermission());
+      if (!nativePush) setNotificationPermission(getBrowserNotificationPermission());
       setNotificationWorking(false);
     }
   }
@@ -362,10 +391,10 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   async function disableMemberNotifications(): Promise<void> {
     setNotificationWorking(true);
     try {
-      await unsubscribeDeviceNotifications();
+      if (nativePush) await unregisterNativePushDevice(); else await unsubscribeDeviceNotifications();
       saveMemberNotificationPreferences({ enabled: false });
       setPushSubscribed(false);
-      notify({ title: "Device notifications paused", description: "This browser is no longer subscribed to background Chainward alerts.", tone: "info" });
+      notify({ title: "Device notifications paused", description: "This device is no longer subscribed to background Chainward alerts.", tone: "info" });
     } finally {
       setNotificationWorking(false);
     }
@@ -374,7 +403,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
   function updateNotificationPreferences(patch: Parameters<typeof saveMemberNotificationPreferences>[0]): void {
     const next = saveMemberNotificationPreferences(patch);
     if (!next.enabled || !pushSubscribed) return;
-    void syncDeviceNotificationPreferences(next).catch((error: unknown) => {
+    const sync = nativePush ? syncNativePushPreferences(next) : syncDeviceNotificationPreferences(next);
+    void sync.catch((error: unknown) => {
       notify({ title: "Alert preference not synced", description: error instanceof Error ? error.message : "Try again while online.", tone: "warning" });
     });
   }
@@ -437,7 +467,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         </section>}
 
         {activeView === "notifications" && <section className="settings-view-content">
-          <div className="settings-status-hero"><span>{pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? <BellRing size={22} /> : <BellOff size={22} />}</span><div><p className="eyebrow">Background device alerts</p><h3>{notificationStatusTitle(notificationPermission, notificationPreferences.enabled && pushSubscribed)}</h3><p>{notificationStatusDetail(notificationPermission, notificationPreferences.enabled && pushSubscribed)}</p></div><em className={`database-health database-health--${pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? "ready" : "attention"}`}><i />{pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? "Subscribed" : notificationPermission === "denied" ? "Blocked" : "Paused"}</em></div>
+          <div className="settings-status-hero"><span>{pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? <BellRing size={22} /> : <BellOff size={22} />}</span><div><p className="eyebrow">Background device alerts</p><h3>{notificationStatusTitle(notificationPermission, notificationPreferences.enabled && pushSubscribed, nativePush)}</h3><p>{notificationStatusDetail(notificationPermission, notificationPreferences.enabled && pushSubscribed, nativePush)}</p></div><em className={`database-health database-health--${pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? "ready" : "attention"}`}><i />{pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" ? "Subscribed" : notificationPermission === "denied" ? "Blocked" : "Paused"}</em></div>
           <div className="notification-permission-actions">
             {(!pushSubscribed || !notificationPreferences.enabled || notificationPermission !== "granted") && <button className="button button--primary" disabled={notificationWorking || notificationPermission === "denied" || installGuidance === "unsupported"} onClick={() => void enableMemberNotifications()}>{notificationWorking ? <Spinner size={15} label="Enabling notifications" /> : <BellRing size={15} />} Enable device notifications</button>}
             {pushSubscribed && notificationPreferences.enabled && notificationPermission === "granted" && <><button className="button button--secondary" disabled={notificationWorking} onClick={() => void testMemberNotification()}>{notificationWorking ? <Spinner size={15} label="Sending test notification" tone="muted" /> : <BellRing size={15} />} Send test push</button><button className="button button--quiet" disabled={notificationWorking} onClick={() => void disableMemberNotifications()}><BellOff size={15} /> Pause alerts</button></>}
@@ -544,20 +574,20 @@ function PreferenceToggle({ icon: Icon, title, description, checked, disabled = 
   return <label className="settings-preference"><span><Icon size={16} /></span><p><strong>{title}</strong><small>{description}</small></p><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
 }
 
-function notificationStatusTitle(permission: BrowserNotificationPermission, enabled: boolean): string {
-  if (permission === "unsupported") return "Secure browser notifications required";
-  if (permission === "denied") return "Notifications blocked by the browser";
+function notificationStatusTitle(permission: BrowserNotificationPermission, enabled: boolean, native: boolean): string {
+  if (permission === "unsupported") return native ? "Notifications are unavailable" : "Secure browser notifications required";
+  if (permission === "denied") return native ? "Notifications blocked for this app" : "Notifications blocked by the browser";
   if (permission === "granted" && enabled) return "Background device alerts are active";
   if (permission === "granted") return "Notification permission is ready";
   return "Enable permission when you are ready";
 }
 
-function notificationStatusDetail(permission: BrowserNotificationPermission, enabled: boolean): string {
-  if (permission === "unsupported") return "Open Chainward over HTTPS in a browser or installed web app with Web Push support.";
-  if (permission === "denied") return "The browser will not show the permission prompt again until its site setting is changed.";
+function notificationStatusDetail(permission: BrowserNotificationPermission, enabled: boolean, native: boolean): string {
+  if (permission === "unsupported") return native ? "This build of the app was not able to reach Firebase Cloud Messaging." : "Open Chainward over HTTPS in a browser or installed web app with Web Push support.";
+  if (permission === "denied") return native ? "Allow notifications for Chainward in your phone's app settings, then reopen Settings." : "The browser will not show the permission prompt again until its site setting is changed.";
   if (permission === "granted" && enabled) return "Encrypted push alerts can reach this device for chain danger and authorised member activity changes.";
-  if (permission === "granted") return "Permission is granted, but this browser is not currently subscribed.";
-  return "Chainward will ask this device for notification permission only after a deliberate click.";
+  if (permission === "granted") return native ? "Permission is granted, but this device is not currently subscribed." : "Permission is granted, but this browser is not currently subscribed.";
+  return native ? "Chainward will ask for notification permission only after a deliberate tap." : "Chainward will ask this device for notification permission only after a deliberate click.";
 }
 
 async function responseError(response: Response): Promise<string> { const payload: unknown = await response.json().catch(() => null); return isErrorPayload(payload) ? payload.error : "The server could not create a backup."; }

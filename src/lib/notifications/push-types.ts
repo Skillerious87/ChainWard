@@ -23,6 +23,11 @@ export interface StoredPushSubscription {
   keys: { p256dh: string; auth: string };
 }
 
+/** What's actually stored for a PushTransport.FCM registration. */
+export interface StoredFcmRegistration {
+  token: string;
+}
+
 export interface PushMessagePayload {
   title: string;
   body: string;

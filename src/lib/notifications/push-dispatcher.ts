@@ -8,7 +8,9 @@ import { decryptCredential } from "@/lib/security/credential-encryption";
 import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import { createTornClient } from "@/lib/torn/server-client";
 import { mapFactionMember } from "@/lib/torn/workspace-data-service";
+import { isPermanentFcmFailure, sendFcm } from "./push-fcm";
 import {
+  decryptFcmRegistration,
   decryptPushSubscription,
   preferencesFromDatabase,
   pushPersistenceConfigured,
@@ -22,6 +24,7 @@ interface PushTarget {
   id: string;
   encryptedSubscription: Uint8Array;
   encryptionIv: Uint8Array;
+  transport: "WEB_PUSH" | "FCM";
   timezone: string;
   preferences: unknown;
   lastMemberCheckAt: Date | null;
@@ -204,11 +207,15 @@ async function deliverOnce(target: PushTarget, eventKey: string, payload: PushMe
     throw error;
   }
   try {
-    await sendWebPush(decryptPushSubscription(target.encryptedSubscription, target.encryptionIv), payload);
+    if (target.transport === "FCM") {
+      await sendFcm(decryptFcmRegistration(target.encryptedSubscription, target.encryptionIv).token, payload);
+    } else {
+      await sendWebPush(decryptPushSubscription(target.encryptedSubscription, target.encryptionIv), payload);
+    }
     await recordPushSuccess(target.id);
     result.sent += 1;
   } catch (error) {
-    const permanent = isPermanentPushFailure(error);
+    const permanent = target.transport === "FCM" ? isPermanentFcmFailure(error) : isPermanentPushFailure(error);
     await recordPushFailure(target.id, permanent).catch(() => undefined);
     if (!permanent) {
       await db.webPushDelivery.deleteMany({ where: { subscriptionId: target.id, eventKey } }).catch(() => undefined);

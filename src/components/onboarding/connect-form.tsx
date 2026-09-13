@@ -26,6 +26,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
+import { isNativeApp } from "@/lib/is-native-app";
 import {
   hasAnyPasskeyEnrolledOnThisDevice,
   hasSkippedPasskeyOffer,
@@ -63,20 +64,6 @@ type PasskeyAssertion = Awaited<ReturnType<typeof startAuthentication>>;
  */
 function isMobileUserAgent(userAgent: string): boolean {
   return /android|iphone|ipad|ipod|mobile/i.test(userAgent);
-}
-
-/**
- * Google's own WebView Credential Manager integration guide states outright
- * that the WebKit library doesn't support `mediation:"conditional"` requests
- * (https://developer.android.com/identity/sign-in/credential-manager-webview) -
- * so the silent autofill-style flow below is unsupported inside the
- * Capacitor app specifically, even though feature-detection may still claim
- * otherwise. Forcing the explicit button path there is what's actually
- * reliable on-device rather than relying on a check that can't tell the
- * difference.
- */
-function isNativeApp(): boolean {
-  try { return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()); } catch { return false; }
 }
 
 export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boolean }) {
@@ -134,6 +121,15 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       // NotAllowedError in several browsers, so the explicit unlock button
       // below is deliberately hidden for as long as this stays pending.
       // Browsers without autofill support fall back to that button instead.
+      // Google's own WebView Credential Manager integration guide states
+      // outright that the WebKit library doesn't support
+      // `mediation:"conditional"` requests
+      // (https://developer.android.com/identity/sign-in/credential-manager-webview) -
+      // so the silent autofill-style flow here is unsupported inside the
+      // Capacitor app specifically, even though feature-detection may still
+      // claim otherwise. Forcing the explicit button path there is what's
+      // actually reliable on-device rather than relying on a check that
+      // can't tell the difference.
       const autofillReady = isNativeApp() ? false : await browserSupportsWebAuthnAutofill().catch(() => false);
       if (!cancelled) setAutofillSupported(autofillReady);
       if (!autofillReady || cancelled) return;
