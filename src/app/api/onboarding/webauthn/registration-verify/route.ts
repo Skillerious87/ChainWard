@@ -10,7 +10,7 @@ import { recordAuthEvent } from "@/lib/torn/auth-audit";
 import { currentConnectionScope } from "@/lib/torn/current-connection-scope";
 import { decodeWebauthnChallenge, WEBAUTHN_CHALLENGE_COOKIE, webauthnChallengeCookieOptions } from "@/lib/torn/webauthn-challenge";
 import { registerWebauthnCredential } from "@/lib/torn/webauthn-credentials";
-import { webauthnOrigin, webauthnRpId } from "@/lib/torn/webauthn-rp";
+import { webauthnExpectedOrigins, webauthnRpId } from "@/lib/torn/webauthn-rp";
 
 const requestSchema = z.object({
   // The full shape is a nested object produced by @simplewebauthn/browser;
@@ -42,9 +42,9 @@ export async function POST(request: Request) {
     return clearChallenge(errorResponse("This passkey setup has expired. Start again.", "CHALLENGE_EXPIRED", 400));
   }
 
-  const origin = webauthnOrigin();
+  const expectedOrigins = webauthnExpectedOrigins();
   const rpID = webauthnRpId();
-  if (!origin || !rpID) return errorResponse("Passkeys are unavailable until a public origin is configured.", "UNAVAILABLE", 503);
+  if (!expectedOrigins || !rpID) return errorResponse("Passkeys are unavailable until a public origin is configured.", "UNAVAILABLE", 503);
 
   let verified = false;
   let credential: { id: string; publicKey: Uint8Array; counter: number; transports?: string[] } | undefined;
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const verification = await verifyRegistrationResponse({
       response: parsed.data.response as unknown as RegistrationResponseJSON,
       expectedChallenge: challenge.challenge,
-      expectedOrigin: origin.origin,
+      expectedOrigin: expectedOrigins,
       expectedRPID: rpID,
     });
     verified = verification.verified;

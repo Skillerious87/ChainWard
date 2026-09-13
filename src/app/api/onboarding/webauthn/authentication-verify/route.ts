@@ -15,7 +15,7 @@ import {
   resolveWebauthnCandidate,
   updateWebauthnCounter,
 } from "@/lib/torn/webauthn-credentials";
-import { webauthnOrigin, webauthnRpId } from "@/lib/torn/webauthn-rp";
+import { webauthnExpectedOrigins, webauthnRpId } from "@/lib/torn/webauthn-rp";
 
 const requestSchema = z.object({
   response: z.object({ id: z.string().min(1).max(1024) }).catchall(z.unknown()),
@@ -53,17 +53,18 @@ export async function POST(request: Request) {
   const challenge = decodeWebauthnChallenge(cookieStore.get(WEBAUTHN_CHALLENGE_COOKIE)?.value, "authentication");
   if (!challenge) return clearChallenge(errorResponse("This sign-in attempt has expired. Try again.", "CHALLENGE_EXPIRED", 400));
 
-  const origin = webauthnOrigin();
+  const expectedOrigins = webauthnExpectedOrigins();
   const rpID = webauthnRpId();
-  if (!origin || !rpID) return errorResponse("Passkeys are unavailable until a public origin is configured.", "UNAVAILABLE", 503);
+  if (!expectedOrigins || !rpID) return errorResponse("Passkeys are unavailable until a public origin is configured.", "UNAVAILABLE", 503);
 
   let verified = false;
   let newCounter = candidate.counter;
+  let failureDetail: string | undefined;
   try {
     const verification = await verifyAuthenticationResponse({
       response: parsed.data.response as unknown as AuthenticationResponseJSON,
       expectedChallenge: challenge.challenge,
-      expectedOrigin: origin.origin,
+      expectedOrigin: expectedOrigins,
       expectedRPID: rpID,
       // Always backed by a plain heap ArrayBuffer (never shared) - the cast
       // only narrows the phantom buffer-kind type parameter @simplewebauthn expects.
@@ -71,10 +72,14 @@ export async function POST(request: Request) {
     });
     verified = verification.verified;
     newCounter = verification.authenticationInfo.newCounter;
-  } catch {
+  } catch (cause: unknown) {
     verified = false;
+    failureDetail = cause instanceof Error ? cause.message : undefined;
   }
-  if (!verified) return clearChallenge(errorResponse("The passkey could not be verified.", "VERIFICATION_FAILED", 400));
+  if (!verified) {
+    console.error("[webauthn] authentication verification failed", { failureDetail });
+    return clearChallenge(errorResponse("The passkey could not be verified.", "VERIFICATION_FAILED", 400, undefined, failureDetail));
+  }
   await updateWebauthnCounter(candidate.credentialId, newCounter);
 
   try {
@@ -112,9 +117,9 @@ function clearChallenge(response: NextResponse): NextResponse {
   return response;
 }
 
-function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number) {
+function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number, detail?: string) {
   return NextResponse.json(
-    { connected: false, error: message, code },
+    { connected: false, error: message, code, ...(detail ? { detail } : {}) },
     { status, headers: { "cache-control": "no-store", ...(retryAfterSeconds ? { "retry-after": String(retryAfterSeconds) } : {}) } },
   );
 }
