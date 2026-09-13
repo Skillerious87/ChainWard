@@ -83,8 +83,25 @@ function isPasskeyReadyOnThisDevice(playerId: number): boolean {
   try { return localStorage.getItem(passkeyReadyKey(playerId)) === "1"; } catch { return false; }
 }
 
+/**
+ * Player-independent: whether *any* profile has ever finished enrollment on
+ * this device. Unlike `passkeyReadyKey`, this must be checkable before the
+ * user has entered anything, so it can't be scoped to a player ID - it gates
+ * the explicit unlock button below, which otherwise has no way to tell "no
+ * passkey exists here yet" from "one does, try it" before firing an OS
+ * prompt.
+ */
+const DEVICE_HAS_PASSKEY_KEY = "chainward-passkey-ready-device";
+
+function hasAnyPasskeyEnrolledOnThisDevice(): boolean {
+  try { return localStorage.getItem(DEVICE_HAS_PASSKEY_KEY) === "1"; } catch { return false; }
+}
+
 function markPasskeyReadyOnThisDevice(playerId: number): void {
-  try { localStorage.setItem(passkeyReadyKey(playerId), "1"); } catch { /* private browsing - the offer just reappears next time */ }
+  try {
+    localStorage.setItem(passkeyReadyKey(playerId), "1");
+    localStorage.setItem(DEVICE_HAS_PASSKEY_KEY, "1");
+  } catch { /* private browsing - the offer just reappears next time */ }
 }
 
 /**
@@ -109,6 +126,14 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const [networkOffline, setNetworkOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
   const [platformAuthAvailable, setPlatformAuthAvailable] = useState(false);
   const [autofillSupported, setAutofillSupported] = useState(false);
+  // Distinct from `platformAuthAvailable`, which only says the device *has* a
+  // fingerprint/PIN sensor - not that a passkey for this app is actually
+  // saved there yet. Without this gate the explicit unlock button below would
+  // show up for a brand-new device with nothing enrolled, and tapping it
+  // would fire a real OS prompt that (having no local credential to offer)
+  // falls back to "use a passkey on another device" - a confusing dead end
+  // this app never intended as a first-run path.
+  const [deviceHasEnrolledPasskey, setDeviceHasEnrolledPasskey] = useState(false);
   const [passkeyPrompt, setPasskeyPrompt] = useState<ConnectionResult | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   // Kept separate from `loading` (the key-submit flow) so tapping the
@@ -139,6 +164,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     (async () => {
       const available = await platformAuthenticatorIsAvailable().catch(() => false);
       if (!cancelled) setPlatformAuthAvailable(available);
+      if (!cancelled) setDeviceHasEnrolledPasskey(hasAnyPasskeyEnrolledOnThisDevice());
       // A discoverable passkey can surface as a native autofill suggestion on
       // the key field itself, with no explicit button. This is the *only*
       // passkey entry point wherever it's available (most current mobile
@@ -217,6 +243,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       const assertion = await startAuthentication({ optionsJSON: optionsPayload.options });
       await completePasskeyAuthentication(assertion);
     } catch (cause: unknown) {
+      console.warn("[chainward] passkey unlock failed", cause);
       setError(connectionErrorFrom(cause, "The passkey could not be used."));
     } finally {
       setPasskeyBusy(false);
@@ -242,9 +269,13 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
         body: JSON.stringify({ response: registration, deviceLabel: deriveDeviceLabel(navigator.userAgent) }),
       });
       if (verifyResponse.ok) markPasskeyReadyOnThisDevice(result.player.id);
-    } catch {
+    } catch (cause: unknown) {
       // Enrollment is a bonus, never a gate - a cancelled prompt or an
-      // unsupported browser just means the user keeps using their key.
+      // unsupported browser just means the user keeps using their key. Still
+      // logged (not surfaced in the UI) since this is otherwise completely
+      // silent, which made a real on-device failure indistinguishable from a
+      // user just declining the OS prompt.
+      console.warn("[chainward] passkey enrollment did not complete", cause);
     } finally {
       setEnrolling(false);
       proceedToWorkspace(result);
@@ -375,7 +406,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
           </div>
         ) : (
           <>
-            {platformAuthAvailable && !autofillSupported && (
+            {platformAuthAvailable && !autofillSupported && deviceHasEnrolledPasskey && (
               <button type="button" className="connect-passkey-unlock connect-passkey-unlock--in" data-busy={passkeyBusy ? "true" : "false"} disabled={loading || opening || passkeyBusy || networkOffline} onClick={() => void unlockWithPasskey()}>
                 {passkeyBusy ? <Spinner size={16} label={`Waiting for ${passkeyNoun}`} tone="muted" /> : <PasskeyIcon size={16} />}
                 {passkeyBusy ? "Waiting for you to confirm…" : `Unlock with ${passkeyNoun}`}
