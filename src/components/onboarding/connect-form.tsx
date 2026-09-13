@@ -275,7 +275,11 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
         // reason directly, since without this the failure looked identical
         // to a successful, silent no-op.
         const verifyPayload: unknown = await verifyResponse.json().catch(() => null);
-        console.warn("[chainward] passkey registration-verify rejected", verifyResponse.status, verifyPayload);
+        // The native WebView console bridge stringifies each argument with a
+        // bare toString(), which turns an object into a useless
+        // "[object Object]" - serializing it ourselves is what actually
+        // survives into logcat.
+        console.warn("[chainward] passkey registration-verify rejected", verifyResponse.status, JSON.stringify(verifyPayload));
       }
     } catch (cause: unknown) {
       // Enrollment is a bonus, never a gate - a cancelled prompt or an
