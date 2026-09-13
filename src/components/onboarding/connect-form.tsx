@@ -273,6 +273,12 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       // silent, which made a real on-device failure indistinguishable from a
       // user just declining the OS prompt.
       console.warn("[chainward] passkey enrollment did not complete", cause);
+      // A platform authenticator refusing to create a *second* resident
+      // credential for this exact (rpId, userHandle) is itself proof one
+      // already works right here - e.g. enrolled through Settings before
+      // this device-local flag existed. Treat it as confirmation instead of
+      // leaving the device with no way to ever set the flag.
+      if (cause instanceof Error && cause.name === "InvalidStateError") markPasskeyReadyOnThisDevice(result.player.id);
     } finally {
       setEnrolling(false);
       proceedToWorkspace(result);

@@ -144,7 +144,19 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
       setPasskeys(await listMyPasskeys());
       notify({ title: "Passkey added", description: "This device can now unlock Chainward without your API key.", tone: "success" });
     } catch (error: unknown) {
-      notify({ title: "Passkey not added", description: error instanceof Error ? error.message : "Try again.", tone: "warning" });
+      // A platform authenticator refusing to create a *second* resident
+      // credential for this exact (rpId, userHandle) is itself proof one
+      // already works on this device - most likely one enrolled here before
+      // the device-ready flag below existed. Confirm that instead of
+      // reporting a failure for what is, from the device's perspective, a
+      // pre-existing success.
+      if (error instanceof Error && error.name === "InvalidStateError") {
+        markDeviceHasPasskey();
+        setPasskeys(await listMyPasskeys());
+        notify({ title: "Passkey already set up", description: "This device already has a working passkey for Chainward.", tone: "success" });
+      } else {
+        notify({ title: "Passkey not added", description: error instanceof Error ? error.message : "Try again.", tone: "warning" });
+      }
     } finally {
       setPasskeyWorking(null);
     }
