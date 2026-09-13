@@ -13,6 +13,7 @@ import { accentOptions, saveAppearancePreferences, useAppearancePreferences, typ
 import { notify } from "@/lib/client-actions";
 import { deriveDeviceLabel } from "@/lib/device-label";
 import { waitForNextPaint } from "@/lib/wait-for-paint";
+import { decodeClientDataOrigin } from "@/lib/webauthn-client-data";
 import type { DatabaseStatus } from "@/lib/data/database-status";
 import type { WebauthnCredentialSummary } from "@/lib/torn/webauthn-credentials";
 import {
@@ -124,6 +125,8 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
       const optionsPayload: unknown = await optionsResponse.json();
       if (!optionsResponse.ok || !isRegistrationOptionsPayload(optionsPayload)) throw new Error(isErrorPayload(optionsPayload) ? optionsPayload.error : "Passkeys are unavailable right now.");
       const registration = await startRegistration({ optionsJSON: optionsPayload.options });
+      const clientData = decodeClientDataOrigin(registration.response.clientDataJSON);
+      console.warn("[chainward] passkey registration clientData", JSON.stringify(clientData));
       const verifyResponse = await fetch("/api/onboarding/webauthn/registration-verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -132,7 +135,10 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         body: JSON.stringify({ response: registration, deviceLabel: deriveDeviceLabel(navigator.userAgent) }),
       });
       const verifyPayload: unknown = await verifyResponse.json();
-      if (!verifyResponse.ok) throw new Error(isErrorPayload(verifyPayload) ? verifyPayload.error : "The passkey could not be verified.");
+      if (!verifyResponse.ok) {
+        console.warn("[chainward] passkey registration-verify rejected", verifyResponse.status, JSON.stringify(verifyPayload));
+        throw new Error(isErrorPayload(verifyPayload) ? verifyPayload.error : "The passkey could not be verified.");
+      }
       setPasskeys(await listMyPasskeys());
       notify({ title: "Passkey added", description: "This device can now unlock Chainward without your API key.", tone: "success" });
     } catch (error: unknown) {

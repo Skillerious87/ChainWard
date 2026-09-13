@@ -27,6 +27,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
 import { waitForNextPaint } from "@/lib/wait-for-paint";
+import { decodeClientDataOrigin } from "@/lib/webauthn-client-data";
 import { enterConnectedWorkspace } from "./workspace-navigation";
 
 type ConnectionResult = {
@@ -261,6 +262,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       const optionsPayload: unknown = await optionsResponse.json();
       if (!optionsResponse.ok || !isRegistrationOptionsPayload(optionsPayload)) throw new Error("registration-options-failed");
       const registration = await startRegistration({ optionsJSON: optionsPayload.options });
+      const clientData = decodeClientDataOrigin(registration.response.clientDataJSON);
+      console.warn("[chainward] passkey registration clientData", JSON.stringify(clientData));
       const verifyResponse = await fetch("/api/onboarding/webauthn/registration-verify", {
         method: "POST",
         headers: { "content-type": "application/json" },

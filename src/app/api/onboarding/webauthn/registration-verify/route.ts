@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 
   let verified = false;
   let credential: { id: string; publicKey: Uint8Array; counter: number; transports?: string[] } | undefined;
+  let failureDetail: string | undefined;
   try {
     const verification = await verifyRegistrationResponse({
       response: parsed.data.response as unknown as RegistrationResponseJSON,
@@ -57,10 +58,17 @@ export async function POST(request: Request) {
     });
     verified = verification.verified;
     credential = verification.registrationInfo?.credential;
-  } catch {
+  } catch (cause: unknown) {
     verified = false;
+    // @simplewebauthn's own message (e.g. an origin/challenge/rpID mismatch)
+    // is a protocol-level detail, not a secret - surfacing it is what made a
+    // stuck-on-one-device passkey failure diagnosable at all.
+    failureDetail = cause instanceof Error ? cause.message : undefined;
   }
-  if (!verified || !credential) return clearChallenge(errorResponse("The passkey could not be verified.", "VERIFICATION_FAILED", 400));
+  if (!verified || !credential) {
+    console.error("[webauthn] registration verification failed", { failureDetail });
+    return clearChallenge(errorResponse("The passkey could not be verified.", "VERIFICATION_FAILED", 400, undefined, failureDetail));
+  }
 
   await registerWebauthnCredential({
     credentialId: credential.id,
@@ -89,9 +97,9 @@ function clearChallenge(response: NextResponse): NextResponse {
   return response;
 }
 
-function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number) {
+function errorResponse(message: string, code: string, status: number, retryAfterSeconds?: number, detail?: string) {
   return NextResponse.json(
-    { error: message, code },
+    { error: message, code, ...(detail ? { detail } : {}) },
     { status, headers: { "cache-control": "no-store", ...(retryAfterSeconds ? { "retry-after": String(retryAfterSeconds) } : {}) } },
   );
 }
