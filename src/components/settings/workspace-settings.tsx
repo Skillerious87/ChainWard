@@ -12,6 +12,7 @@ import { listMyPasskeys, removeMyPasskey } from "@/app/(platform)/settings/passk
 import { accentOptions, saveAppearancePreferences, useAppearancePreferences, type AccentOption } from "@/lib/appearance-preferences";
 import { notify } from "@/lib/client-actions";
 import { deriveDeviceLabel } from "@/lib/device-label";
+import { markDeviceHasPasskey } from "@/lib/passkey-device-flag";
 import { waitForNextPaint } from "@/lib/wait-for-paint";
 import { decodeClientDataOrigin } from "@/lib/webauthn-client-data";
 import type { DatabaseStatus } from "@/lib/data/database-status";
@@ -139,6 +140,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
         console.warn("[chainward] passkey registration-verify rejected", verifyResponse.status, JSON.stringify(verifyPayload));
         throw new Error(isErrorPayload(verifyPayload) ? verifyPayload.error : "The passkey could not be verified.");
       }
+      markDeviceHasPasskey();
       setPasskeys(await listMyPasskeys());
       notify({ title: "Passkey added", description: "This device can now unlock Chainward without your API key.", tone: "success" });
     } catch (error: unknown) {

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   browserSupportsWebAuthnAutofill,
   platformAuthenticatorIsAvailable,
@@ -26,6 +26,13 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
+import {
+  hasAnyPasskeyEnrolledOnThisDevice,
+  hasSkippedPasskeyOffer,
+  isPasskeyReadyOnThisDevice,
+  markPasskeyReadyOnThisDevice,
+  skipPasskeyOffer,
+} from "@/lib/passkey-device-flag";
 import { waitForNextPaint } from "@/lib/wait-for-paint";
 import { decodeClientDataOrigin } from "@/lib/webauthn-client-data";
 import { enterConnectedWorkspace } from "./workspace-navigation";
@@ -56,53 +63,6 @@ type PasskeyAssertion = Awaited<ReturnType<typeof startAuthentication>>;
  */
 function isMobileUserAgent(userAgent: string): boolean {
   return /android|iphone|ipad|ipod|mobile/i.test(userAgent);
-}
-
-function passkeySkipKey(playerId: number): string {
-  return `chainward-passkey-skip-${playerId}`;
-}
-
-function hasSkippedPasskeyOffer(playerId: number): boolean {
-  try { return localStorage.getItem(passkeySkipKey(playerId)) === "1"; } catch { return false; }
-}
-
-/**
- * A platform passkey lives in *this device's* credential store - a passkey
- * enrolled on a desktop is invisible to a phone and vice versa, even for the
- * same Torn key. `hasWebauthnCredential` (from the server) only says whether
- * *some* device has one, so it can't gate the enrollment offer on its own:
- * that would silently strand every other device with no way back in short of
- * digging through Settings. This device-local flag - set once a passkey
- * genuinely works *here*, via either enrollment or a successful sign-in - is
- * what actually decides whether this device still needs the offer.
- */
-function passkeyReadyKey(playerId: number): string {
-  return `chainward-passkey-ready-${playerId}`;
-}
-
-function isPasskeyReadyOnThisDevice(playerId: number): boolean {
-  try { return localStorage.getItem(passkeyReadyKey(playerId)) === "1"; } catch { return false; }
-}
-
-/**
- * Player-independent: whether *any* profile has ever finished enrollment on
- * this device. Unlike `passkeyReadyKey`, this must be checkable before the
- * user has entered anything, so it can't be scoped to a player ID - it gates
- * the explicit unlock button below, which otherwise has no way to tell "no
- * passkey exists here yet" from "one does, try it" before firing an OS
- * prompt.
- */
-const DEVICE_HAS_PASSKEY_KEY = "chainward-passkey-ready-device";
-
-function hasAnyPasskeyEnrolledOnThisDevice(): boolean {
-  try { return localStorage.getItem(DEVICE_HAS_PASSKEY_KEY) === "1"; } catch { return false; }
-}
-
-function markPasskeyReadyOnThisDevice(playerId: number): void {
-  try {
-    localStorage.setItem(passkeyReadyKey(playerId), "1");
-    localStorage.setItem(DEVICE_HAS_PASSKEY_KEY, "1");
-  } catch { /* private browsing - the offer just reappears next time */ }
 }
 
 /**
@@ -202,6 +162,25 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     return () => { cancelled = true; };
   }, []);
 
+  // Autofill's conditional `get()` already surfaces as a passive suggestion
+  // wherever it's supported; inside the native app (where it isn't, so the
+  // effect above short-circuits it) a device with a confirmed working
+  // passkey should instead feel like reopening a banking app - the
+  // biometric sheet appears on its own instead of waiting for a tap. Fires
+  // once per mount, and silently steps aside on any failure (a decline, or
+  // a genuine error) straight back to the ordinary key field and button.
+  const autoUnlockAttempted = useRef(false);
+  useEffect(() => {
+    if (autoUnlockAttempted.current) return;
+    if (!isNativeApp() || !platformAuthAvailable || autofillSupported || !deviceHasEnrolledPasskey) return;
+    autoUnlockAttempted.current = true;
+    void unlockWithPasskey({ silent: true });
+    // `autoUnlockAttempted` makes this deliberately fire at most once per
+    // mount regardless of `unlockWithPasskey`'s identity, which is why it's
+    // intentionally left out of the dependency list rather than memoized.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformAuthAvailable, autofillSupported, deviceHasEnrolledPasskey]);
+
   async function completePasskeyAuthentication(assertion: PasskeyAssertion): Promise<void> {
     const response = await fetch("/api/onboarding/webauthn/authentication-verify", {
       method: "POST",
@@ -224,9 +203,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     enterConnectedWorkspace(connectionNextPath(payload));
   }
 
-  async function unlockWithPasskey(): Promise<void> {
+  async function unlockWithPasskey(options: { silent?: boolean } = {}): Promise<void> {
     if (loading || opening || passkeyBusy) return;
-    setError(null);
+    if (!options.silent) setError(null);
     setPasskeyBusy(true);
     // The native biometric sheet can seize the main thread as soon as
     // startAuthentication fires, even after a network await - on some mobile
@@ -245,7 +224,10 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       await completePasskeyAuthentication(assertion);
     } catch (cause: unknown) {
       console.warn("[chainward] passkey unlock failed", cause);
-      setError(connectionErrorFrom(cause, "The passkey could not be used."));
+      // An auto-triggered attempt failing (a decline, or no real error at
+      // all) isn't worth an alarming error box - the key field is right
+      // there either way. Only a tap the user made themselves earns one.
+      if (!options.silent) setError(connectionErrorFrom(cause, "The passkey could not be used."));
     } finally {
       setPasskeyBusy(false);
     }
@@ -301,7 +283,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     // A permanent per-browser dismissal, not a cooldown - Settings offers a
     // manual "Add a passkey" entry point from now on, so declining here no
     // longer forecloses the feature, it just stops the repeat nagging.
-    try { localStorage.setItem(passkeySkipKey(result.player.id), "1"); } catch { /* private browsing - the prompt just reappears next time */ }
+    skipPasskeyOffer(result.player.id);
     proceedToWorkspace(result);
   }
 
