@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { ApiKeyHelpDialog } from "@/components/onboarding/api-key-help-dialog";
 import { ConnectForm } from "@/components/onboarding/connect-form";
+import { ConnectHomeLink } from "@/components/onboarding/connect-home-link";
 import { InstallPrompt } from "@/components/onboarding/install-prompt";
 import { LoginBackdrop } from "@/components/onboarding/login-backdrop";
 import { offlineTestModeEnabled } from "@/lib/torn/offline-fixture";
@@ -17,7 +16,7 @@ export default function ConnectPage() {
     <main className="connect-page login-page">
       <LoginBackdrop />
 
-      <Link className="login-home" href="/"><ArrowLeft size={14} /> Home</Link>
+      <ConnectHomeLink />
       <ApiKeyHelpDialog />
 
       <div className="login-shell">
