@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "915127149575",
+    "project_id": "chainward-b5dab",
+    "storage_bucket": "chainward-b5dab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:915127149575:android:909c503f64d294f587b6a2",
+        "android_client_info": {
+          "package_name": "com.chainward.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWkKUCGsfXwuBzZoVvYBgoes1Vp_VFf-Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
