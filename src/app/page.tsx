@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
+import { CookieDebug } from "@/components/marketing/cookie-debug";
 import { LoginBackdrop } from "@/components/onboarding/login-backdrop";
 import { PlanExplorer } from "@/components/marketing/plan-explorer";
 
@@ -76,6 +77,7 @@ const steps = [
 export default function HomePage() {
   return (
     <main className="welcome-page">
+      <CookieDebug />
       <LoginBackdrop />
 
       <header className="welcome-nav">
