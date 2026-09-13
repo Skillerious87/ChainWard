@@ -9,6 +9,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,6 +20,8 @@ import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.view.animation.OvershootInterpolator;
+import android.widget.TextView;
+import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
@@ -28,8 +33,8 @@ public class MainActivity extends BridgeActivity {
 
     private static final long MIN_SPLASH_DISPLAY_MS = 3000;
     private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
-    private static final long PING_DURATION_MS = 2200;
-    private static final long PING_STAGGER_MS = 1100;
+    private static final long PING_DURATION_MS = 2600;
+    private static final long PING_STAGGER_MS = 1300;
 
     private volatile boolean splashOverlayAttached = false;
     private View splashOverlay;
@@ -74,24 +79,40 @@ public class MainActivity extends BridgeActivity {
         splashOverlay = overlay;
         splashShownAtElapsed = SystemClock.elapsedRealtime();
 
+        View glowOuter = overlay.findViewById(R.id.splash_glow_outer);
         View pingOuter = overlay.findViewById(R.id.splash_ping_outer);
         View pingInner = overlay.findViewById(R.id.splash_ping_inner);
         View glow = overlay.findViewById(R.id.splash_glow);
         View logo = overlay.findViewById(R.id.splash_logo);
-        View title = overlay.findViewById(R.id.splash_title);
+        TextView title = overlay.findViewById(R.id.splash_title);
         View tagline = overlay.findViewById(R.id.splash_tagline);
         View progressTrack = overlay.findViewById(R.id.splash_progress_track);
         View progressRunner = overlay.findViewById(R.id.splash_progress_runner);
+
+        title.setText(buildTitleText());
 
         logo.setScaleX(0.82f);
         logo.setScaleY(0.82f);
         logo.setRotation(-6f);
         glow.setScaleX(0.85f);
         glow.setScaleY(0.85f);
+        glowOuter.setScaleX(0.85f);
+        glowOuter.setScaleY(0.85f);
         title.setTranslationY(22f);
         tagline.setTranslationY(16f);
 
-        // Soft halo fades in first, settling into a slow ambient breathing loop.
+        // Two soft halos fade in first, settling into slow ambient breathing
+        // loops at slightly different paces for an organic, layered glow.
+        glowOuter.animate()
+            .alpha(0.55f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setStartDelay(20)
+            .setDuration(750)
+            .setInterpolator(new DecelerateInterpolator())
+            .withEndAction(() -> startGlowBreathing(glowOuter, 1f, 1.1f, 0.4f, 0.65f, 2600))
+            .start();
+
         glow.animate()
             .alpha(0.85f)
             .scaleX(1f)
@@ -99,23 +120,26 @@ public class MainActivity extends BridgeActivity {
             .setStartDelay(60)
             .setDuration(650)
             .setInterpolator(new DecelerateInterpolator())
-            .withEndAction(() -> startGlowBreathing(glow))
+            .withEndAction(() -> startGlowBreathing(glow, 1f, 1.07f, 0.68f, 0.9f, 1900))
             .start();
 
         // Radar-style pings radiate outward from behind the shield, staggered
-        // so a new ring appears roughly every half a pulse cycle.
+        // so a new ring appears roughly every half a pulse cycle. Kept subtle
+        // (modest scale/alpha) so it reads as an ambient security cue rather
+        // than a busy loading animation.
         startPingLoop(pingOuter, 500);
         startPingLoop(pingInner, 500 + PING_STAGGER_MS);
 
-        // The shield settles in with a gentle overshoot for a premium "pop".
+        // The shield settles in with a restrained, barely-there overshoot —
+        // a refined settle rather than a bounce.
         logo.animate()
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
             .rotation(0f)
             .setStartDelay(120)
-            .setDuration(680)
-            .setInterpolator(new OvershootInterpolator(1.6f))
+            .setDuration(700)
+            .setInterpolator(new OvershootInterpolator(1.05f))
             .start();
 
         title.animate()
@@ -148,15 +172,24 @@ public class MainActivity extends BridgeActivity {
         splashHandler.postDelayed(splashSafetyRunnable, SPLASH_SAFETY_TIMEOUT_MS);
     }
 
-    private void startGlowBreathing(View glow) {
+    /** Renders "CHAIN" in the primary title color and "WARD" in the brand accent, matching the in-app wordmark. */
+    private SpannableString buildTitleText() {
+        String text = "CHAINWARD";
+        SpannableString spanned = new SpannableString(text);
+        int accentColor = ContextCompat.getColor(this, R.color.splash_accent);
+        spanned.setSpan(new ForegroundColorSpan(accentColor), 5, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return spanned;
+    }
+
+    private void startGlowBreathing(View glow, float scaleFrom, float scaleTo, float alphaFrom, float alphaTo, long duration) {
         if (splashOverlay == null) {
             return;
         }
-        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.08f);
-        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.08f);
-        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, 0.65f, 0.9f);
+        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, scaleFrom, scaleTo);
+        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, scaleFrom, scaleTo);
+        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, alphaFrom, alphaTo);
         ObjectAnimator breathe = ObjectAnimator.ofPropertyValuesHolder(glow, scaleX, scaleY, alpha);
-        breathe.setDuration(1700);
+        breathe.setDuration(duration);
         breathe.setRepeatMode(ValueAnimator.REVERSE);
         breathe.setRepeatCount(ValueAnimator.INFINITE);
         breathe.setInterpolator(new AccelerateDecelerateInterpolator());
@@ -165,9 +198,9 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void startPingLoop(View ring, long startDelay) {
-        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 0.7f, 1.45f);
-        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.7f, 1.45f);
-        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, 0.55f, 0f);
+        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 0.75f, 1.28f);
+        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.75f, 1.28f);
+        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, 0.42f, 0f);
         ObjectAnimator ping = ObjectAnimator.ofPropertyValuesHolder(ring, scaleX, scaleY, alpha);
         ping.setStartDelay(startDelay);
         ping.setDuration(PING_DURATION_MS);
@@ -187,7 +220,7 @@ public class MainActivity extends BridgeActivity {
             float endX = track.getWidth();
             runner.setTranslationX(startX);
             ObjectAnimator shimmer = ObjectAnimator.ofFloat(runner, View.TRANSLATION_X, startX, endX);
-            shimmer.setDuration(1100);
+            shimmer.setDuration(1300);
             shimmer.setInterpolator(new LinearInterpolator());
             shimmer.setRepeatMode(ValueAnimator.RESTART);
             shimmer.setRepeatCount(ValueAnimator.INFINITE);

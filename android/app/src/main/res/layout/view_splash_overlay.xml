@@ -15,8 +15,16 @@
         android:gravity="center_horizontal">
 
         <FrameLayout
-            android:layout_width="220dp"
-            android:layout_height="220dp">
+            android:layout_width="248dp"
+            android:layout_height="248dp">
+
+            <View
+                android:id="@+id/splash_glow_outer"
+                android:layout_width="236dp"
+                android:layout_height="236dp"
+                android:layout_gravity="center"
+                android:background="@drawable/splash_glow_outer"
+                android:alpha="0" />
 
             <View
                 android:id="@+id/splash_ping_outer"
@@ -62,7 +70,7 @@
             android:textColor="@color/splash_title_text"
             android:textSize="24sp"
             android:textStyle="bold"
-            android:letterSpacing="0.32"
+            android:letterSpacing="0.26"
             android:fontFamily="sans-serif-medium"
             android:alpha="0" />
 
@@ -71,7 +79,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="FACTION CHAIN &amp; REWARD OPS"
+            android:text="INDEPENDENT TORN FACTION PLATFORM"
             android:textColor="@color/splash_tagline_text"
             android:textSize="11sp"
             android:letterSpacing="0.22"
