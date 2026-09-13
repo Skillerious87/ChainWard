@@ -2,4 +2,10 @@
 <resources>
     <color name="splash_accent">#91E653</color>
     <color name="splash_title_text">#F5FBF0</color>
+    <color name="splash_tagline_text">#8FA89B</color>
+    <color name="splash_bg_center">#101C16</color>
+    <color name="splash_bg_edge">#05080A</color>
+    <color name="splash_glow_start">#5C91E653</color>
+    <color name="splash_glow_end">#0091E653</color>
+    <color name="splash_progress_track">#1AF5FBF0</color>
 </resources>

@@ -1,7 +1,10 @@
 package com.chainward.app;
 
+import android.animation.Animator;
 import android.animation.ObjectAnimator;
+import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -9,17 +12,24 @@ import android.os.SystemClock;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
+import android.view.animation.OvershootInterpolator;
 import androidx.core.splashscreen.SplashScreen;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
 import com.getcapacitor.BridgeActivity;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends BridgeActivity {
 
     private static final long MIN_SPLASH_DISPLAY_MS = 3000;
     private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
+    private static final long PING_DURATION_MS = 2200;
+    private static final long PING_STAGGER_MS = 1100;
 
     private volatile boolean splashOverlayAttached = false;
     private View splashOverlay;
@@ -28,6 +38,7 @@ public class MainActivity extends BridgeActivity {
 
     private final Handler splashHandler = new Handler(Looper.getMainLooper());
     private final Runnable splashSafetyRunnable = this::performSplashHide;
+    private final List<Animator> loopingAnimators = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +50,12 @@ public class MainActivity extends BridgeActivity {
 
         registerPlugin(AppSplashPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // androidx.core.splashscreen swaps in postSplashScreenTheme right as
+        // the icon splash dismisses; reasserting transparent bars here covers
+        // that instant regardless of what the theme swap briefly restores.
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
             WebSettingsCompat.setWebAuthenticationSupport(
@@ -57,19 +74,72 @@ public class MainActivity extends BridgeActivity {
         splashOverlay = overlay;
         splashShownAtElapsed = SystemClock.elapsedRealtime();
 
+        View pingOuter = overlay.findViewById(R.id.splash_ping_outer);
+        View pingInner = overlay.findViewById(R.id.splash_ping_inner);
+        View glow = overlay.findViewById(R.id.splash_glow);
         View logo = overlay.findViewById(R.id.splash_logo);
         View title = overlay.findViewById(R.id.splash_title);
-        View pulseBar = overlay.findViewById(R.id.splash_pulse_bar);
+        View tagline = overlay.findViewById(R.id.splash_tagline);
+        View progressTrack = overlay.findViewById(R.id.splash_progress_track);
+        View progressRunner = overlay.findViewById(R.id.splash_progress_runner);
 
-        logo.setScaleX(0.85f);
-        logo.setScaleY(0.85f);
-        title.setTranslationY(24f);
+        logo.setScaleX(0.82f);
+        logo.setScaleY(0.82f);
+        logo.setRotation(-6f);
+        glow.setScaleX(0.85f);
+        glow.setScaleY(0.85f);
+        title.setTranslationY(22f);
+        tagline.setTranslationY(16f);
 
-        logo.animate().alpha(1f).scaleX(1f).scaleY(1f).setStartDelay(80).setDuration(520).setInterpolator(new DecelerateInterpolator()).start();
+        // Soft halo fades in first, settling into a slow ambient breathing loop.
+        glow.animate()
+            .alpha(0.85f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setStartDelay(60)
+            .setDuration(650)
+            .setInterpolator(new DecelerateInterpolator())
+            .withEndAction(() -> startGlowBreathing(glow))
+            .start();
 
-        title.animate().alpha(1f).translationY(0f).setStartDelay(280).setDuration(480).setInterpolator(new DecelerateInterpolator()).start();
+        // Radar-style pings radiate outward from behind the shield, staggered
+        // so a new ring appears roughly every half a pulse cycle.
+        startPingLoop(pingOuter, 500);
+        startPingLoop(pingInner, 500 + PING_STAGGER_MS);
 
-        pulseBar.animate().alpha(1f).setStartDelay(600).setDuration(300).withEndAction(() -> startPulseLoop(pulseBar)).start();
+        // The shield settles in with a gentle overshoot for a premium "pop".
+        logo.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .rotation(0f)
+            .setStartDelay(120)
+            .setDuration(680)
+            .setInterpolator(new OvershootInterpolator(1.6f))
+            .start();
+
+        title.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setStartDelay(340)
+            .setDuration(520)
+            .setInterpolator(new DecelerateInterpolator())
+            .start();
+
+        tagline.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setStartDelay(440)
+            .setDuration(520)
+            .setInterpolator(new DecelerateInterpolator())
+            .start();
+
+        progressTrack.animate()
+            .alpha(1f)
+            .setStartDelay(680)
+            .setDuration(320)
+            .withEndAction(() -> startProgressShimmer(progressTrack, progressRunner))
+            .start();
 
         // Releases Android's own splash now that ours is in place behind it;
         // ours is fully opaque from frame one, so the handoff is seamless.
@@ -78,15 +148,52 @@ public class MainActivity extends BridgeActivity {
         splashHandler.postDelayed(splashSafetyRunnable, SPLASH_SAFETY_TIMEOUT_MS);
     }
 
-    private void startPulseLoop(View pulseBar) {
+    private void startGlowBreathing(View glow) {
         if (splashOverlay == null) {
             return;
         }
-        ObjectAnimator pulse = ObjectAnimator.ofFloat(pulseBar, View.ALPHA, 1f, 0.25f);
-        pulse.setDuration(900);
-        pulse.setRepeatMode(ValueAnimator.REVERSE);
-        pulse.setRepeatCount(ValueAnimator.INFINITE);
-        pulse.start();
+        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.08f);
+        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.08f);
+        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, 0.65f, 0.9f);
+        ObjectAnimator breathe = ObjectAnimator.ofPropertyValuesHolder(glow, scaleX, scaleY, alpha);
+        breathe.setDuration(1700);
+        breathe.setRepeatMode(ValueAnimator.REVERSE);
+        breathe.setRepeatCount(ValueAnimator.INFINITE);
+        breathe.setInterpolator(new AccelerateDecelerateInterpolator());
+        loopingAnimators.add(breathe);
+        breathe.start();
+    }
+
+    private void startPingLoop(View ring, long startDelay) {
+        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 0.7f, 1.45f);
+        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.7f, 1.45f);
+        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, 0.55f, 0f);
+        ObjectAnimator ping = ObjectAnimator.ofPropertyValuesHolder(ring, scaleX, scaleY, alpha);
+        ping.setStartDelay(startDelay);
+        ping.setDuration(PING_DURATION_MS);
+        ping.setRepeatMode(ValueAnimator.RESTART);
+        ping.setRepeatCount(ValueAnimator.INFINITE);
+        ping.setInterpolator(new DecelerateInterpolator());
+        loopingAnimators.add(ping);
+        ping.start();
+    }
+
+    private void startProgressShimmer(View track, View runner) {
+        track.post(() -> {
+            if (splashOverlay == null) {
+                return;
+            }
+            float startX = -runner.getWidth();
+            float endX = track.getWidth();
+            runner.setTranslationX(startX);
+            ObjectAnimator shimmer = ObjectAnimator.ofFloat(runner, View.TRANSLATION_X, startX, endX);
+            shimmer.setDuration(1100);
+            shimmer.setInterpolator(new LinearInterpolator());
+            shimmer.setRepeatMode(ValueAnimator.RESTART);
+            shimmer.setRepeatCount(ValueAnimator.INFINITE);
+            loopingAnimators.add(shimmer);
+            shimmer.start();
+        });
     }
 
     /**
@@ -119,6 +226,11 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         splashOverlay = null;
+
+        for (Animator animator : loopingAnimators) {
+            animator.cancel();
+        }
+        loopingAnimators.clear();
 
         overlay.animate()
             .alpha(0f)

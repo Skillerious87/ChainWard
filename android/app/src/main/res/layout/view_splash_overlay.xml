@@ -3,7 +3,7 @@
     android:id="@+id/splash_overlay_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/ic_launcher_background"
+    android:background="@drawable/splash_background"
     android:clickable="true"
     android:focusable="true">
 
@@ -14,34 +14,86 @@
         android:orientation="vertical"
         android:gravity="center_horizontal">
 
-        <ImageView
-            android:id="@+id/splash_logo"
-            android:layout_width="170dp"
-            android:layout_height="170dp"
-            android:src="@drawable/splash_logo"
-            android:contentDescription="@null"
-            android:alpha="0" />
+        <FrameLayout
+            android:layout_width="220dp"
+            android:layout_height="220dp">
+
+            <View
+                android:id="@+id/splash_ping_outer"
+                android:layout_width="192dp"
+                android:layout_height="192dp"
+                android:layout_gravity="center"
+                android:background="@drawable/splash_ping_ring"
+                android:alpha="0" />
+
+            <View
+                android:id="@+id/splash_ping_inner"
+                android:layout_width="192dp"
+                android:layout_height="192dp"
+                android:layout_gravity="center"
+                android:background="@drawable/splash_ping_ring"
+                android:alpha="0" />
+
+            <View
+                android:id="@+id/splash_glow"
+                android:layout_width="190dp"
+                android:layout_height="190dp"
+                android:layout_gravity="center"
+                android:background="@drawable/splash_glow"
+                android:alpha="0" />
+
+            <ImageView
+                android:id="@+id/splash_logo"
+                android:layout_width="170dp"
+                android:layout_height="170dp"
+                android:layout_gravity="center"
+                android:src="@drawable/splash_logo"
+                android:contentDescription="@null"
+                android:alpha="0" />
+
+        </FrameLayout>
 
         <TextView
             android:id="@+id/splash_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
+            android:layout_marginTop="10dp"
             android:text="CHAINWARD"
             android:textColor="@color/splash_title_text"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:textStyle="bold"
             android:letterSpacing="0.32"
             android:fontFamily="sans-serif-medium"
             android:alpha="0" />
 
-        <View
-            android:id="@+id/splash_pulse_bar"
-            android:layout_width="56dp"
-            android:layout_height="3dp"
-            android:layout_marginTop="18dp"
-            android:background="@drawable/splash_pulse_bar"
+        <TextView
+            android:id="@+id/splash_tagline"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="FACTION CHAIN &amp; REWARD OPS"
+            android:textColor="@color/splash_tagline_text"
+            android:textSize="11sp"
+            android:letterSpacing="0.22"
+            android:fontFamily="sans-serif"
             android:alpha="0" />
+
+        <FrameLayout
+            android:id="@+id/splash_progress_track"
+            android:layout_width="140dp"
+            android:layout_height="3dp"
+            android:layout_marginTop="26dp"
+            android:background="@drawable/splash_progress_track"
+            android:clipChildren="true"
+            android:alpha="0">
+
+            <View
+                android:id="@+id/splash_progress_runner"
+                android:layout_width="56dp"
+                android:layout_height="3dp"
+                android:background="@drawable/splash_progress_runner" />
+
+        </FrameLayout>
 
     </LinearLayout>
 </FrameLayout>
