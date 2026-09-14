@@ -27,6 +27,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
 import { isNativeApp } from "@/lib/is-native-app";
+import { waitForNativeSplashHidden } from "@/lib/native-splash-state";
 import {
   hasAnyPasskeyEnrolledOnThisDevice,
   hasSkippedPasskeyOffer,
@@ -170,7 +171,17 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     if (autoUnlockAttempted.current) return;
     if (!isNativeApp() || !platformAuthAvailable || autofillSupported || !deviceHasEnrolledPasskey) return;
     autoUnlockAttempted.current = true;
-    void unlockWithPasskey({ silent: true });
+    let cancelled = false;
+    // The biometric sheet is an OS-level window that renders above
+    // everything, including the native splash overlay - wait for
+    // MainActivity to confirm the splash is actually gone before raising it,
+    // or the two visibly collide.
+    void waitForNativeSplashHidden().then(() => {
+      if (!cancelled) void unlockWithPasskey({ silent: true });
+    });
+    return () => {
+      cancelled = true;
+    };
     // `autoUnlockAttempted` makes this deliberately fire at most once per
     // mount regardless of `unlockWithPasskey`'s identity, which is why it's
     // intentionally left out of the dependency list rather than memoized.

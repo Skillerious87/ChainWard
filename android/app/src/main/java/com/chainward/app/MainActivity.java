@@ -34,10 +34,14 @@ public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "ChainwardSplash";
 
-    // Settles by ~600ms (see startEntranceChoreography); this floor is a
-    // short ambient hold on top of that, not padding to "let the animation
-    // finish" - a splash that outlasts ~1-1.5s measurably loses users.
-    private static final long MIN_SPLASH_DISPLAY_MS = 950;
+    // Held at a hard 4s floor: the web app may auto-trigger the biometric
+    // system prompt right after mount (see connect-form.tsx's auto-unlock
+    // effect), and that prompt is an OS-level window that renders above
+    // everything, including this overlay. Giving the entrance choreography
+    // and the page's own boot work a wide margin here is what keeps that
+    // prompt from ever appearing mid-splash - independent of and in addition
+    // to the JS-side wait on AppSplash.hide() actually completing.
+    private static final long MIN_SPLASH_DISPLAY_MS = 4000;
     private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
     private static final long PING_DURATION_MS = 2200;
 
@@ -58,6 +62,8 @@ public class MainActivity extends BridgeActivity {
     private boolean entranceStarted = false;
     private boolean hideRequestedBeforeEntrance = false;
     private boolean reduceMotionPreferred = false;
+    private boolean splashHidden = false;
+    private Runnable splashHiddenCallback;
 
     private final Handler splashHandler = new Handler(Looper.getMainLooper());
     private final Runnable splashSafetyRunnable = () -> {
@@ -211,7 +217,7 @@ public class MainActivity extends BridgeActivity {
         entranceStarted = true;
         if (hideRequestedBeforeEntrance) {
             hideRequestedBeforeEntrance = false;
-            hideNativeSplash();
+            hideNativeSplash(null);
         }
     }
 
@@ -256,16 +262,36 @@ public class MainActivity extends BridgeActivity {
 
     /**
      * Called from {@link AppSplashPlugin} once the live page has mounted.
-     * Enforces a short minimum display time from the moment the overlay's
-     * entrance actually started (not from when it was merely attached): if
-     * that hasn't elapsed yet, the actual hide is scheduled for whatever
-     * time remains instead of firing immediately. A call arriving before the
+     * Enforces a minimum display time from the moment the overlay's entrance
+     * actually started (not from when it was merely attached): if that
+     * hasn't elapsed yet, the actual hide is scheduled for whatever time
+     * remains instead of firing immediately. A call arriving before the
      * entrance has even started (the JS bridge mounting unusually fast) is
      * deferred until it has, since there is no meaningful elapsed time to
      * measure against yet.
+     *
+     * {@code onHidden}, if given, fires only once the overlay has actually
+     * been removed from the view hierarchy - not when this method returns.
+     * That's what lets the JS side (see AppSplashPlugin and
+     * native-splash-hide.tsx) know the splash is truly gone before it does
+     * anything, like triggering the biometric prompt, that must not overlap
+     * it. Calling this more than once (or after the splash already finished)
+     * is safe: callbacks are chained rather than dropped, and a call arriving
+     * after the splash is gone fires its callback immediately.
      */
-    public void hideNativeSplash() {
+    public void hideNativeSplash(Runnable onHidden) {
         runOnUiThread(() -> {
+            if (splashHidden) {
+                if (onHidden != null) onHidden.run();
+                return;
+            }
+            if (onHidden != null) {
+                Runnable previous = splashHiddenCallback;
+                splashHiddenCallback = previous == null ? onHidden : () -> {
+                    previous.run();
+                    onHidden.run();
+                };
+            }
             if (splashOverlay == null || splashHideRequested) {
                 return;
             }
@@ -311,6 +337,12 @@ public class MainActivity extends BridgeActivity {
                 ViewGroup parent = (ViewGroup) overlay.getParent();
                 if (parent != null) {
                     parent.removeView(overlay);
+                }
+                splashHidden = true;
+                Runnable callback = splashHiddenCallback;
+                splashHiddenCallback = null;
+                if (callback != null) {
+                    callback.run();
                 }
             })
             .start();
