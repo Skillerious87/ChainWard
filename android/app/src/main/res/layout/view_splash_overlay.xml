@@ -19,23 +19,7 @@
             android:layout_height="248dp">
 
             <View
-                android:id="@+id/splash_glow_outer"
-                android:layout_width="236dp"
-                android:layout_height="236dp"
-                android:layout_gravity="center"
-                android:background="@drawable/splash_glow_outer"
-                android:alpha="0" />
-
-            <View
-                android:id="@+id/splash_ping_outer"
-                android:layout_width="192dp"
-                android:layout_height="192dp"
-                android:layout_gravity="center"
-                android:background="@drawable/splash_ping_ring"
-                android:alpha="0" />
-
-            <View
-                android:id="@+id/splash_ping_inner"
+                android:id="@+id/splash_ping_ring"
                 android:layout_width="192dp"
                 android:layout_height="192dp"
                 android:layout_gravity="center"
@@ -85,23 +69,6 @@
             android:letterSpacing="0.22"
             android:fontFamily="sans-serif"
             android:alpha="0" />
-
-        <FrameLayout
-            android:id="@+id/splash_progress_track"
-            android:layout_width="140dp"
-            android:layout_height="3dp"
-            android:layout_marginTop="26dp"
-            android:background="@drawable/splash_progress_track"
-            android:clipChildren="true"
-            android:alpha="0">
-
-            <View
-                android:id="@+id/splash_progress_runner"
-                android:layout_width="56dp"
-                android:layout_height="3dp"
-                android:background="@drawable/splash_progress_runner" />
-
-        </FrameLayout>
 
     </LinearLayout>
 </FrameLayout>

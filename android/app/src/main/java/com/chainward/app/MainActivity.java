@@ -5,6 +5,7 @@ import android.animation.ObjectAnimator;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,14 +13,14 @@ import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.animation.AccelerateDecelerateInterpolator;
-import android.view.animation.AccelerateInterpolator;
-import android.view.animation.DecelerateInterpolator;
-import android.view.animation.LinearInterpolator;
-import android.view.animation.OvershootInterpolator;
+import android.view.animation.Interpolator;
+import android.view.animation.PathInterpolator;
 import android.widget.TextView;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
@@ -31,27 +32,62 @@ import java.util.List;
 
 public class MainActivity extends BridgeActivity {
 
-    private static final long MIN_SPLASH_DISPLAY_MS = 3000;
-    private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
-    private static final long PING_DURATION_MS = 2600;
-    private static final long PING_STAGGER_MS = 1300;
+    private static final String TAG = "ChainwardSplash";
 
-    private volatile boolean splashOverlayAttached = false;
+    // Settles by ~600ms (see startEntranceChoreography); this floor is a
+    // short ambient hold on top of that, not padding to "let the animation
+    // finish" - a splash that outlasts ~1-1.5s measurably loses users.
+    private static final long MIN_SPLASH_DISPLAY_MS = 950;
+    private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
+    private static final long PING_DURATION_MS = 2200;
+
+    // Material 3's easing tokens, expressed as the platform's own
+    // PathInterpolator (available since API 21, no extra dependency needed).
+    // Entrances get Emphasized Decelerate ("snappy" arrival, no overshoot);
+    // the ambient ping loop gets the gentler Standard curve so it never
+    // competes with an entrance for attention; the exit gets Emphasized
+    // Accelerate, matched in kind (not just alpha) to the entrance.
+    private static final Interpolator EMPHASIZED_DECELERATE = new PathInterpolator(0.05f, 0.7f, 0.1f, 1f);
+    private static final Interpolator STANDARD = new PathInterpolator(0.4f, 0f, 0.2f, 1f);
+    private static final Interpolator EMPHASIZED_ACCELERATE = new PathInterpolator(0.3f, 0f, 0.8f, 0.15f);
+
+    private volatile boolean splashOverlayLaidOut = false;
     private View splashOverlay;
     private long splashShownAtElapsed;
     private boolean splashHideRequested = false;
+    private boolean entranceStarted = false;
+    private boolean hideRequestedBeforeEntrance = false;
+    private boolean reduceMotionPreferred = false;
 
     private final Handler splashHandler = new Handler(Looper.getMainLooper());
-    private final Runnable splashSafetyRunnable = this::performSplashHide;
+    private final Runnable splashSafetyRunnable = () -> {
+        Log.w(TAG, "Safety timeout fired - the web app never called AppSplash.hide() within " + SPLASH_SAFETY_TIMEOUT_MS + "ms");
+        performSplashHide();
+    };
     private final List<Animator> loopingAnimators = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
-        // Keeps Android's own pre-app splash frozen on screen until our custom
-        // overlay is fully attached underneath it, so the handoff between the
-        // two has zero gap instead of flashing bare content in between.
-        splashScreen.setKeepOnScreenCondition(() -> !splashOverlayAttached);
+        // Keeps Android's own pre-app splash frozen on screen until our
+        // overlay has actually painted a frame underneath it (see the
+        // OnPreDrawListener in attachNativeSplashOverlay) - not merely
+        // "attached to the view hierarchy", which doesn't guarantee a draw
+        // pass has happened yet.
+        splashScreen.setKeepOnScreenCondition(() -> !splashOverlayLaidOut);
+        // The only sanctioned point to touch the OS splash before it exits.
+        // Registered before any async work per Google's own guidance -
+        // registering it late means it can silently never fire, falling
+        // back to an uncustomized abrupt dismissal instead.
+        splashScreen.setOnExitAnimationListener(provider -> {
+            startEntranceChoreography();
+            // Once this listener is set, the framework will not auto-dismiss
+            // the OS splash - remove() is mandatory, not optional cleanup.
+            // Our overlay is already fully painted underneath (guaranteed by
+            // the OnPreDrawListener gate above), so there is nothing to wait
+            // on: remove it in the same frame the choreography starts.
+            provider.remove();
+        });
 
         registerPlugin(AppSplashPlugin.class);
         super.onCreate(savedInstanceState);
@@ -69,107 +105,114 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
-        showNativeSplash();
+        attachNativeSplashOverlay();
     }
 
-    private void showNativeSplash() {
+    /** Inflates the overlay and sets its pre-entrance view states, but starts no animation yet - that begins only once the OS splash is actually exiting (see the exit-animation listener in onCreate). */
+    private void attachNativeSplashOverlay() {
         View overlay = LayoutInflater.from(this).inflate(R.layout.view_splash_overlay, null);
         ViewGroup decorView = (ViewGroup) getWindow().getDecorView();
         decorView.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         splashOverlay = overlay;
-        splashShownAtElapsed = SystemClock.elapsedRealtime();
 
-        View glowOuter = overlay.findViewById(R.id.splash_glow_outer);
-        View pingOuter = overlay.findViewById(R.id.splash_ping_outer);
-        View pingInner = overlay.findViewById(R.id.splash_ping_inner);
         View glow = overlay.findViewById(R.id.splash_glow);
         View logo = overlay.findViewById(R.id.splash_logo);
         TextView title = overlay.findViewById(R.id.splash_title);
         View tagline = overlay.findViewById(R.id.splash_tagline);
-        View progressTrack = overlay.findViewById(R.id.splash_progress_track);
-        View progressRunner = overlay.findViewById(R.id.splash_progress_runner);
 
         title.setText(buildTitleText());
 
-        logo.setScaleX(0.82f);
-        logo.setScaleY(0.82f);
-        logo.setRotation(-6f);
+        logo.setScaleX(0.88f);
+        logo.setScaleY(0.88f);
         glow.setScaleX(0.85f);
         glow.setScaleY(0.85f);
-        glowOuter.setScaleX(0.85f);
-        glowOuter.setScaleY(0.85f);
-        title.setTranslationY(22f);
-        tagline.setTranslationY(16f);
+        title.setTranslationY(16f);
+        tagline.setTranslationY(12f);
 
-        // Two soft halos fade in first, settling into slow ambient breathing
-        // loops at slightly different paces for an organic, layered glow.
-        glowOuter.animate()
-            .alpha(0.55f)
-            .scaleX(1f)
-            .scaleY(1f)
-            .setStartDelay(20)
-            .setDuration(750)
-            .setInterpolator(new DecelerateInterpolator())
-            .withEndAction(() -> startGlowBreathing(glowOuter, 1f, 1.1f, 0.4f, 0.65f, 2600))
-            .start();
+        // Armed here, not from the entrance choreography, so the ceiling
+        // covers the whole splash-showing window - including a scenario
+        // where the predraw gate below never fires - not just the part
+        // after the OS splash agrees to exit.
+        splashHandler.postDelayed(splashSafetyRunnable, SPLASH_SAFETY_TIMEOUT_MS);
 
+        // Gates the OS splash's exit on a real draw pass, not just on the
+        // view having been added to the hierarchy - guarantees our overlay
+        // is genuinely painted underneath before the system tears its own
+        // splash down, so the handoff has nothing to visibly jump past.
+        overlay.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                overlay.getViewTreeObserver().removeOnPreDrawListener(this);
+                splashOverlayLaidOut = true;
+                return true;
+            }
+        });
+    }
+
+    /** Fired from the OS splash's exit-animation listener - this is the actual first visible moment of our overlay's own motion. */
+    private void startEntranceChoreography() {
+        View overlay = splashOverlay;
+        if (overlay == null) {
+            return;
+        }
+        splashShownAtElapsed = SystemClock.elapsedRealtime();
+        reduceMotionPreferred = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled();
+
+        View glow = overlay.findViewById(R.id.splash_glow);
+        View ping = overlay.findViewById(R.id.splash_ping_ring);
+        View logo = overlay.findViewById(R.id.splash_logo);
+        View title = overlay.findViewById(R.id.splash_title);
+        View tagline = overlay.findViewById(R.id.splash_tagline);
+
+        // One soft halo behind the shield - a single accent motion reads as
+        // confident; layering a second, near-identical glow just erodes that.
         glow.animate()
             .alpha(0.85f)
             .scaleX(1f)
             .scaleY(1f)
-            .setStartDelay(60)
-            .setDuration(650)
-            .setInterpolator(new DecelerateInterpolator())
-            .withEndAction(() -> startGlowBreathing(glow, 1f, 1.07f, 0.68f, 0.9f, 1900))
+            .setStartDelay(0)
+            .setDuration(450)
+            .setInterpolator(EMPHASIZED_DECELERATE)
+            .withEndAction(() -> { if (!reduceMotionPreferred) startGlowBreathing(glow); })
             .start();
 
-        // Radar-style pings radiate outward from behind the shield, staggered
-        // so a new ring appears roughly every half a pulse cycle. Kept subtle
-        // (modest scale/alpha) so it reads as an ambient security cue rather
-        // than a busy loading animation.
-        startPingLoop(pingOuter, 500);
-        startPingLoop(pingInner, 500 + PING_STAGGER_MS);
+        // A single radar-style pulse radiates outward once the halo has
+        // settled - an ambient "actively securing" cue, not a busy loader.
+        if (!reduceMotionPreferred) startPingLoop(ping, 450);
 
-        // The shield settles in with a restrained, barely-there overshoot —
-        // a refined settle rather than a bounce.
+        // A restrained ease-out settle - arrives with energy, decelerates,
+        // stops. No overshoot: that liveliness belongs to interactive
+        // moments the user's own gesture drives, not a passive brand reveal.
         logo.animate()
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
-            .rotation(0f)
-            .setStartDelay(120)
-            .setDuration(700)
-            .setInterpolator(new OvershootInterpolator(1.05f))
+            .setStartDelay(80)
+            .setDuration(450)
+            .setInterpolator(EMPHASIZED_DECELERATE)
             .start();
 
         title.animate()
             .alpha(1f)
             .translationY(0f)
-            .setStartDelay(340)
-            .setDuration(520)
-            .setInterpolator(new DecelerateInterpolator())
+            .setStartDelay(180)
+            .setDuration(300)
+            .setInterpolator(EMPHASIZED_DECELERATE)
             .start();
 
         tagline.animate()
             .alpha(1f)
             .translationY(0f)
-            .setStartDelay(440)
-            .setDuration(520)
-            .setInterpolator(new DecelerateInterpolator())
+            .setStartDelay(260)
+            .setDuration(300)
+            .setInterpolator(EMPHASIZED_DECELERATE)
             .start();
 
-        progressTrack.animate()
-            .alpha(1f)
-            .setStartDelay(680)
-            .setDuration(320)
-            .withEndAction(() -> startProgressShimmer(progressTrack, progressRunner))
-            .start();
-
-        // Releases Android's own splash now that ours is in place behind it;
-        // ours is fully opaque from frame one, so the handoff is seamless.
-        splashOverlayAttached = true;
-
-        splashHandler.postDelayed(splashSafetyRunnable, SPLASH_SAFETY_TIMEOUT_MS);
+        entranceStarted = true;
+        if (hideRequestedBeforeEntrance) {
+            hideRequestedBeforeEntrance = false;
+            hideNativeSplash();
+        }
     }
 
     /** Renders "CHAIN" in the primary title color and "WARD" in the brand accent, matching the in-app wordmark. */
@@ -181,15 +224,15 @@ public class MainActivity extends BridgeActivity {
         return spanned;
     }
 
-    private void startGlowBreathing(View glow, float scaleFrom, float scaleTo, float alphaFrom, float alphaTo, long duration) {
+    private void startGlowBreathing(View glow) {
         if (splashOverlay == null) {
             return;
         }
-        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, scaleFrom, scaleTo);
-        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, scaleFrom, scaleTo);
-        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, alphaFrom, alphaTo);
+        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.07f);
+        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.07f);
+        PropertyValuesHolder alpha = PropertyValuesHolder.ofFloat(View.ALPHA, 0.68f, 0.9f);
         ObjectAnimator breathe = ObjectAnimator.ofPropertyValuesHolder(glow, scaleX, scaleY, alpha);
-        breathe.setDuration(duration);
+        breathe.setDuration(1900);
         breathe.setRepeatMode(ValueAnimator.REVERSE);
         breathe.setRepeatCount(ValueAnimator.INFINITE);
         breathe.setInterpolator(new AccelerateDecelerateInterpolator());
@@ -206,38 +249,28 @@ public class MainActivity extends BridgeActivity {
         ping.setDuration(PING_DURATION_MS);
         ping.setRepeatMode(ValueAnimator.RESTART);
         ping.setRepeatCount(ValueAnimator.INFINITE);
-        ping.setInterpolator(new DecelerateInterpolator());
+        ping.setInterpolator(STANDARD);
         loopingAnimators.add(ping);
         ping.start();
     }
 
-    private void startProgressShimmer(View track, View runner) {
-        track.post(() -> {
-            if (splashOverlay == null) {
-                return;
-            }
-            float startX = -runner.getWidth();
-            float endX = track.getWidth();
-            runner.setTranslationX(startX);
-            ObjectAnimator shimmer = ObjectAnimator.ofFloat(runner, View.TRANSLATION_X, startX, endX);
-            shimmer.setDuration(1300);
-            shimmer.setInterpolator(new LinearInterpolator());
-            shimmer.setRepeatMode(ValueAnimator.RESTART);
-            shimmer.setRepeatCount(ValueAnimator.INFINITE);
-            loopingAnimators.add(shimmer);
-            shimmer.start();
-        });
-    }
-
     /**
      * Called from {@link AppSplashPlugin} once the live page has mounted.
-     * Enforces a 3s minimum display time: if that hasn't elapsed yet, the
-     * actual hide is scheduled for whatever time remains instead of firing
-     * immediately.
+     * Enforces a short minimum display time from the moment the overlay's
+     * entrance actually started (not from when it was merely attached): if
+     * that hasn't elapsed yet, the actual hide is scheduled for whatever
+     * time remains instead of firing immediately. A call arriving before the
+     * entrance has even started (the JS bridge mounting unusually fast) is
+     * deferred until it has, since there is no meaningful elapsed time to
+     * measure against yet.
      */
     public void hideNativeSplash() {
         runOnUiThread(() -> {
             if (splashOverlay == null || splashHideRequested) {
+                return;
+            }
+            if (!entranceStarted) {
+                hideRequestedBeforeEntrance = true;
                 return;
             }
             splashHideRequested = true;
@@ -265,10 +298,15 @@ public class MainActivity extends BridgeActivity {
         }
         loopingAnimators.clear();
 
+        // Motion parity with the entrance: a matched Emphasized Accelerate
+        // curve and a small scale-down, not just a flat alpha dissolve -
+        // exits deserve as much intention as entrances.
         overlay.animate()
             .alpha(0f)
-            .setDuration(450)
-            .setInterpolator(new AccelerateInterpolator())
+            .scaleX(0.96f)
+            .scaleY(0.96f)
+            .setDuration(280)
+            .setInterpolator(EMPHASIZED_ACCELERATE)
             .withEndAction(() -> {
                 ViewGroup parent = (ViewGroup) overlay.getParent();
                 if (parent != null) {
@@ -276,5 +314,21 @@ public class MainActivity extends BridgeActivity {
                 }
             })
             .start();
+    }
+
+    @Override
+    public void onDestroy() {
+        // Belt-and-suspenders: performSplashHide() already cancels these on
+        // the normal path, but if the Activity is torn down before that ever
+        // runs (a JS bridge error that never calls hide(), or the process
+        // being trimmed mid-splash), nothing else releases these infinite
+        // animators and pending Handler callbacks from holding the splash
+        // Views - and transitively this Activity - alive.
+        splashHandler.removeCallbacksAndMessages(null);
+        for (Animator animator : loopingAnimators) {
+            animator.cancel();
+        }
+        loopingAnimators.clear();
+        super.onDestroy();
     }
 }

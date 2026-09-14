@@ -7,7 +7,4 @@
     <color name="splash_bg_edge">#05080A</color>
     <color name="splash_glow_start">#5C91E653</color>
     <color name="splash_glow_end">#0091E653</color>
-    <color name="splash_glow_outer_start">#2691E653</color>
-    <color name="splash_glow_outer_end">#0091E653</color>
-    <color name="splash_progress_track">#1AF5FBF0</color>
 </resources>
