@@ -9,6 +9,7 @@ import {
   DollarSign,
   ExternalLink,
   Gauge,
+  History,
   Info,
   KeyRound,
   Pencil,
@@ -25,11 +26,13 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   addTargetAction,
   importFactionTargetsAction,
+  importFromAttackLogAction,
   importTargetsAction,
   removeTargetAction,
   saveFfscouterKeyAction,
@@ -47,14 +50,40 @@ import { notify } from "@/lib/client-actions";
 import { getBrowserNotificationPermission, showWindowsNotification } from "@/lib/member-notification-preferences";
 import type { FairFightInfo } from "@/lib/targets/ffscouter";
 import { scoreTarget, type PriorityResult } from "@/lib/targets/priority";
-import { fairFightDifficulty, isAttackableState, MAX_TAGS_PER_TARGET, MAX_TARGETS, normaliseTag, type TargetEntry, type TargetSnapshot } from "@/lib/targets/types";
+import { ATTACK_LOG_IMPORT_LIMIT, fairFightDifficulty, isAttackableState, MAX_TAGS_PER_TARGET, MAX_TARGETS, normaliseTag, type TargetEntry, type TargetSnapshot } from "@/lib/targets/types";
 import type { SafeChainTelemetry } from "@/lib/torn/telemetry-types";
 
 type SortKey = "priority" | "readiness" | "lastAction" | "lastHit" | "level" | "name" | "added" | "fairFight";
 type StatusFilter = "all" | "attackable" | "hospital" | "abroad" | "other";
 type View = "list" | "chain" | "abroad";
-type AddMode = "single" | "paste" | "faction";
+type AddMode = "single" | "paste" | "faction" | "attacks";
 const VIEWS: readonly View[] = ["list", "chain", "abroad"];
+const ADD_MODE_COPY: Record<AddMode, { title: string; description: string; confirmLabel: string; hint: string }> = {
+  single: {
+    title: "Add a target",
+    description: "Paste a Torn profile link or type a player ID.",
+    confirmLabel: "Add target",
+    hint: "Snapshots are read once now with your key; Live keeps them current after that.",
+  },
+  paste: {
+    title: "Import a list of targets",
+    description: "Paste Torn player IDs or profile links — one per line, or comma-separated.",
+    confirmLabel: "Import",
+    hint: "Big lists add instantly — live status, life, bounties and history stream in over the next minute or two, with a progress bar.",
+  },
+  faction: {
+    title: "Import a faction's roster",
+    description: "Adds every current member of that faction as a target — useful for a whole enemy roster during a war.",
+    confirmLabel: "Import faction",
+    hint: "Full status and life are read on the next refresh — importing itself only costs two Torn calls. Want players you've personally fought instead of a whole faction? Use \"From attack log\" — no faction ID needed.",
+  },
+  attacks: {
+    title: "Import from your attack log",
+    description: `Adds up to ${ATTACK_LOG_IMPORT_LIMIT} players from your own recent attacks as targets — no faction ID needed.`,
+    confirmLabel: "Import from attacks",
+    hint: `Reads your last ~100 attacks and adds everyone you've personally hit who isn't already on your list, up to ${ATTACK_LOG_IMPORT_LIMIT} at a time. Full status and life are read on the next refresh.`,
+  },
+};
 const STALE_MS = 5 * 60_000;
 const POLL_MS = 60_000;
 /** Tighter cadence used while a target is within ~2 min of clearing hospital/jail. */
@@ -490,9 +519,14 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   // cadence tightens to POLL_FAST_MS while a target is within ~2 min of
   // clearing, so the "attackable" alert lands promptly; it relaxes again once
   // nothing is imminent. Paused while the catch-up loop owns the refresh path.
+  // Kept running even with an empty target list: the response still carries
+  // fresh chain telemetry (see the API route), and without this the chain
+  // status strip above an empty watchlist just freezes at whatever the page
+  // loaded with — including while the add-target dialog is open, since that
+  // doesn't pause anything here.
   const pollIntervalMs = imminentClear ? POLL_FAST_MS : POLL_MS;
   useEffect(() => {
-    if (!live || !connected || entries.length === 0 || catchingUp) return;
+    if (!live || !connected || catchingUp) return;
     let stopped = false;
     let lastPoll = Date.parse(fetchedAt ?? "") || Date.now();
 
@@ -521,7 +555,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);
     };
-  }, [live, connected, entries.length, fetchedAt, applyPoll, pollIntervalMs, catchingUp]);
+  }, [live, connected, fetchedAt, applyPoll, pollIntervalMs, catchingUp]);
 
   // The page no longer pre-refreshes on the server, so pull once on mount:
   // `runCatchUp` returns immediately when nothing is due, or shows the bar and
@@ -600,7 +634,9 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       ? await importTargetsAction({ text: importText })
       : addMode === "faction"
         ? await importFactionTargetsAction({ factionId: Number(factionId) })
-        : await addTargetAction({ reference, note: addNote });
+        : addMode === "attacks"
+          ? await importFromAttackLogAction()
+          : await addTargetAction({ reference, note: addNote });
     notify({ title: result.message, tone: result.ok ? "success" : "warning" });
     if (!result.ok) throw new Error(result.message);
     setReference(""); setAddNote(""); setImportText(""); setFactionId("");
@@ -730,6 +766,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
           cooldownMs={chainCooldownMs}
           bestPick={nextReady}
           readyCount={counts.attackable}
+          totalTargets={entries.length}
         />
       )}
 
@@ -759,6 +796,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
               <button className="button button--primary" onClick={() => { setAddMode("single"); setAddOpen(true); }}><Plus size={15} /> Add a target</button>
               <button className="button button--secondary" onClick={() => { setAddMode("paste"); setAddOpen(true); }}><Tag size={15} /> Paste a list</button>
               <button className="button button--secondary" onClick={() => { setAddMode("faction"); setAddOpen(true); }}><Building2 size={15} /> Import a faction</button>
+              <button className="button button--secondary" onClick={() => { setAddMode("attacks"); setAddOpen(true); }}><History size={15} /> From attack log</button>
             </div>
           </div>
         </section>
@@ -950,17 +988,14 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
       <Dialog
         open={addOpen}
         className="dialog--targets-add"
-        title={addMode === "paste" ? "Import a list of targets" : addMode === "faction" ? "Import a faction's roster" : "Add a target"}
-        description={
-          addMode === "paste" ? "Paste Torn player IDs or profile links — one per line, or comma-separated."
-            : addMode === "faction" ? "Adds every current member of that faction as a target — useful for a whole enemy roster during a war."
-              : "Paste a Torn profile link or type a player ID."
-        }
-        confirmLabel={addMode === "paste" ? "Import" : addMode === "faction" ? "Import faction" : "Add target"}
+        title={ADD_MODE_COPY[addMode].title}
+        description={ADD_MODE_COPY[addMode].description}
+        confirmLabel={ADD_MODE_COPY[addMode].confirmLabel}
         confirmDisabled={
           addMode === "paste" ? importText.trim().length === 0
             : addMode === "faction" ? !/^\d+$/.test(factionId.trim())
-              : reference.trim().length === 0
+              : addMode === "single" ? reference.trim().length === 0
+                : false
         }
         onConfirm={submitAdd}
         onClose={() => setAddOpen(false)}
@@ -970,6 +1005,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
             <button type="button" aria-pressed={addMode === "single"} className={addMode === "single" ? "targets-add-mode--active" : undefined} onClick={() => setAddMode("single")}>One target</button>
             <button type="button" aria-pressed={addMode === "paste"} className={addMode === "paste" ? "targets-add-mode--active" : undefined} onClick={() => setAddMode("paste")}>Paste a list</button>
             <button type="button" aria-pressed={addMode === "faction"} className={addMode === "faction" ? "targets-add-mode--active" : undefined} onClick={() => setAddMode("faction")}>Import a faction</button>
+            <button type="button" aria-pressed={addMode === "attacks"} className={addMode === "attacks" ? "targets-add-mode--active" : undefined} onClick={() => setAddMode("attacks")}>From attack log</button>
           </div>
           {addMode === "paste" ? (
             <label>
@@ -981,6 +1017,12 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
               <span>Torn faction ID</span>
               <input value={factionId} onChange={(event) => setFactionId(event.target.value.replace(/\D/g, ""))} placeholder="e.g. 12345" inputMode="numeric" autoFocus />
             </label>
+          ) : addMode === "attacks" ? (
+            <p className="targets-add-attacks-info">
+              Nothing to fill in — this reads the same attack log Chainward already uses for hit history, and adds
+              whoever you&rsquo;ve hit that isn&rsquo;t already on your list. Best for pulling in scattered fights into one
+              watchlist without knowing which faction they&rsquo;re in.
+            </p>
           ) : (
             <>
               <label>
@@ -993,7 +1035,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
               </label>
             </>
           )}
-          <p className="targets-add-hint"><Info size={12} /> {addMode === "faction" ? "Full status and life are read on the next refresh — importing itself only costs two Torn calls." : addMode === "paste" ? "Big lists add instantly — live status, life, bounties and history stream in over the next minute or two, with a progress bar." : "Snapshots are read once now with your key; Live keeps them current after that."}</p>
+          <p className="targets-add-hint"><Info size={12} /> {ADD_MODE_COPY[addMode].hint}</p>
         </div>
       </Dialog>
 
@@ -1032,12 +1074,13 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
 
 /* ----------------------------------------------------------------- chain === */
 
-function ChainStrip({ chain, timeoutMs, cooldownMs, bestPick, readyCount }: {
+function ChainStrip({ chain, timeoutMs, cooldownMs, bestPick, readyCount, totalTargets }: {
   chain: SafeChainTelemetry;
   timeoutMs: number;
   cooldownMs: number;
   bestPick: Row | null;
   readyCount: number;
+  totalTargets: number;
 }) {
   const active = chain.state === "active" && chain.current > 0;
   const tone = !active ? "idle" : timeoutMs <= 60_000 ? "danger" : timeoutMs <= 300_000 ? "warn" : "ok";
@@ -1053,7 +1096,16 @@ function ChainStrip({ chain, timeoutMs, cooldownMs, bestPick, readyCount }: {
           {chain.modifier > 1 && <span className="targets-chainbar__mod">×{chain.modifier.toFixed(2)}</span>}
           <span className="targets-chainbar__timer"><Clock3 size={13} /> {formatCountdown(timeoutMs)} to timeout</span>
           {atRisk && (readyCount === 0 || !bestPick) && (
-            <span className="targets-chainbar__risk"><TriangleAlert size={12} /> nobody ready</span>
+            totalTargets === 0 ? (
+              // "Nobody ready" is trivially true with an empty list and reads
+              // like an alarm about the chain rather than the actual gap —
+              // point at the fuller live view instead of alarming over it.
+              <Link className="targets-chainbar__risk targets-chainbar__risk--link" href="/live-chain">
+                <TriangleAlert size={12} /> No targets tracked — view live chain
+              </Link>
+            ) : (
+              <span className="targets-chainbar__risk"><TriangleAlert size={12} /> nobody ready</span>
+            )
           )}
           {bestPick && bestName && (
             <a

@@ -11,7 +11,7 @@ import {
   type TargetSnapshot,
 } from "./types";
 
-interface Faction { id: number; name: string; tag: string }
+export interface Faction { id: number; name: string; tag: string }
 
 // A personal, per-operator list carrying the operator's own curation choices, so
 // — like the retired `oc.private.` keys — it uses a prefix OUTSIDE the

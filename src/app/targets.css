@@ -46,6 +46,8 @@
 .targets-chainbar--idle { border-left-color: var(--border-strong); }
 .targets-chainbar--idle .targets-chainbar__count { color: var(--text-muted); }
 .targets-chainbar__risk { display: inline-flex; align-items: center; gap: 4px; color: var(--danger); font-weight: 680; }
+.targets-chainbar__risk--link { text-decoration: none; }
+.targets-chainbar__risk--link:hover { text-decoration: underline; }
 .targets-chainbar__hit {
   display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
   padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border-strong);
@@ -308,6 +310,7 @@
 }
 .targets-add-form textarea { min-height: 68px; resize: vertical; }
 .targets-add-form input:focus-visible, .targets-add-form textarea:focus-visible { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 1px; }
+.targets-add-attacks-info { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
 .targets-add-hint { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text-muted); font-size: 11px; }
 
 /* ===========================================================================
@@ -329,6 +332,8 @@
   .targets-chainbar__timer { margin-left: 0; }
   .targets-empty__actions { flex-direction: column; }
   .targets-empty__actions .button { width: 100%; justify-content: center; }
+  .targets-add-mode { flex-wrap: wrap; }
+  .targets-add-mode button { flex: 1 1 calc(50% - 4px); }
   .targets-card__toggle { gap: 10px; padding: 9px 10px; }
   .targets-card__facts { grid-template-columns: 1fr 1fr; }
   .targets-card__actions .button { flex: 1 1 100%; min-height: 42px; }

@@ -2,10 +2,15 @@ import "server-only";
 
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
+import { refreshDueTargetsForList } from "./data-service";
 import { enrichWithFairFight } from "./ffscouter";
 import { scoreTarget } from "./priority";
 import { readTargetList } from "./store";
 import { isAttackableState, type TargetSnapshot } from "./types";
+
+/** Small enough to cost nothing on a page that renders every few seconds —
+ *  see `refreshDueTargetsForList`; most calls find nothing due anyway. */
+const LIVE_REFRESH_BUDGET = 8;
 
 export interface BestChainTarget {
   tornUserId: number;
@@ -48,6 +53,17 @@ export async function getBestChainTarget(): Promise<BestChainTargetResult> {
     return NONE;
   }
   if (entries.length === 0) return NONE;
+
+  // Nobody else is guaranteed to be polling: a candidate that looked
+  // attackable a few refreshes ago may already be in hospital. Closing that
+  // gap here (not just leaning on the Targets page's own poll) is what lets
+  // this suggestion actually change once the top pick gets hit.
+  try {
+    const faction = { id: factionId, name: connection.factionName ?? "", tag: connection.factionTag ?? "" };
+    snapshots = await refreshDueTargetsForList(faction, actor.tornUserId, entries, snapshots, LIVE_REFRESH_BUDGET);
+  } catch {
+    /* Stale data beats blocking the suggestion on a Torn hiccup. */
+  }
 
   const attackable = Object.values(snapshots).filter((snapshot) => isAttackableState(snapshot.status.state));
   if (attackable.length === 0) return { target: null, targetCount: entries.length };

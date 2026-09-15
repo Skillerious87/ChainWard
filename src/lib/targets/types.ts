@@ -10,6 +10,9 @@ import { z } from "zod";
 export const MAX_TARGETS = 300;
 export const MAX_TAGS_PER_TARGET = 6;
 export const MAX_TAG_LENGTH = 24;
+/** Cap on one "Import from attack log" run — matches what an operator can
+ *  meaningfully review at once, not a Torn or storage limit. */
+export const ATTACK_LOG_IMPORT_LIMIT = 50;
 /** A snapshot older than this is refreshed on the next page load. */
 export const TARGET_STALE_MS = 90_000;
 

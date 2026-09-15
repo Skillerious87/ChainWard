@@ -7,7 +7,15 @@ import { z } from "zod";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { consumePartitionRateLimit } from "@/lib/security/rate-limit";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
-import { fetchTargetSnapshot, loadHitIndex, placeholderSnapshot, refreshTargets, snapshotFromFactionMember } from "@/lib/targets/data-service";
+import {
+  collectAttackedOpponents,
+  fetchTargetSnapshot,
+  loadHitIndex,
+  placeholderSnapshot,
+  refreshTargets,
+  snapshotFromAttackLogOpponent,
+  snapshotFromFactionMember,
+} from "@/lib/targets/data-service";
 import { clearFfscouterKey, saveFfscouterKey } from "@/lib/targets/ffscouter-key-store";
 import {
   addTargetEntries,
@@ -23,6 +31,7 @@ import {
   writeTargetList,
 } from "@/lib/targets/store";
 import {
+  ATTACK_LOG_IMPORT_LIMIT,
   MAX_TAGS_PER_TARGET,
   MAX_TARGETS,
   normaliseTag,
@@ -198,6 +207,51 @@ export async function importFactionTargetsAction(input: unknown): Promise<Target
     if (skipped + alreadyListed > 0) parts.push(`${skipped + alreadyListed} already listed`);
     if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
     return { ok: added > 0, message: `${parts.join(", ")}.`, added };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error) };
+  }
+}
+
+/**
+ * Adds players straight from the operator's own recent attack log — the fast
+ * path for "everyone I've been hitting" that needs no faction ID and no
+ * per-target Torn call (name/faction come from the log itself, same trick as
+ * the faction-roster import). Torn's `/user/attacks` only covers the last
+ * ~100 attacks in either direction, so this naturally cannot see further
+ * back than that window.
+ */
+export async function importFromAttackLogAction(): Promise<TargetsActionResult> {
+  try {
+    const { operatorId, faction, client } = await operatorContext();
+    const list = await readTargetList(faction.id, operatorId);
+    const known = new Set(list.entries.map((entry) => entry.tornUserId));
+
+    let attacks;
+    try {
+      ({ value: attacks } = await client.getMyAttacks());
+    } catch {
+      return { ok: false, message: "Torn did not return your attack log. Try again in a moment." };
+    }
+
+    const opponents = collectAttackedOpponents(attacks, operatorId).filter((opponent) => !known.has(opponent.tornUserId));
+    if (opponents.length === 0) return { ok: false, message: "No new opponents were found in your recent attacks." };
+
+    const toAdd = opponents.slice(0, ATTACK_LOG_IMPORT_LIMIT);
+    const fetchedAtMs = Date.now();
+    const newEntries: TargetEntry[] = toAdd.map((opponent) => ({
+      tornUserId: opponent.tornUserId, label: opponent.name, note: "", pinned: false, tags: [], addedAt: new Date().toISOString(),
+    }));
+    const snapshots = toAdd.map((opponent) => snapshotFromAttackLogOpponent(opponent, fetchedAtMs));
+
+    const { list: withEntries, added, capped } = addTargetEntries(list, newEntries);
+    if (added > 0) await writeTargetList(faction, operatorId, mergeSnapshots(withEntries, snapshots));
+    revalidatePath("/targets");
+
+    const parts = [`Added ${added} from your recent attacks`];
+    if (opponents.length > toAdd.length) parts.push(`${opponents.length - toAdd.length} more available — import again once you've made room`);
+    if (capped > 0) parts.push(`${capped} over the ${MAX_TARGETS}-target cap`);
+    const suffix = added > 0 ? " — loading live data…" : "";
+    return { ok: added > 0, message: `${parts.join(", ")}.${suffix}`, added };
   } catch (error) {
     return { ok: false, message: safeMessage(error) };
   }

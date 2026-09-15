@@ -32,12 +32,32 @@ export function LiveChainWorkspace({ report: initialReport, reportMessage, bestT
     previousChainKey.current = chainKey;
     startRefresh(() => router.refresh());
   }, [chainKey, router]);
+  // Re-derives `bestTarget` (the "Suggested target" card) on the server, so
+  // this is also what lets that suggestion move on once the current pick has
+  // been hit. Without a focus/visibility trigger, switching to Torn to attack
+  // and back left it showing the last-fetched pick for up to a full interval
+  // — the "didn't update after I hit them" gap this closes.
   useEffect(() => {
     if (!preferences.autoRefresh || refreshing) return;
-    const refresh = () => { if (navigator.onLine) startRefresh(() => router.refresh()); };
+    let lastRefreshAt = Date.now();
+    const refresh = () => {
+      if (!navigator.onLine) return;
+      lastRefreshAt = Date.now();
+      startRefresh(() => router.refresh());
+    };
+    const refreshOnFocus = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastRefreshAt < preferences.refreshIntervalSeconds * 1_000) return;
+      refresh();
+    };
     const interval = window.setInterval(refresh, preferences.refreshIntervalSeconds * 1_000);
+    document.addEventListener("visibilitychange", refreshOnFocus);
     window.addEventListener("online", refresh);
-    return () => { window.clearInterval(interval); window.removeEventListener("online", refresh); };
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+      window.removeEventListener("online", refresh);
+    };
   }, [preferences.autoRefresh, preferences.refreshIntervalSeconds, refreshing, router]);
   const [viewMode, setViewMode] = useState<ViewMode>("comfortable");
   // Hide the old chain immediately while the new server report is loading.

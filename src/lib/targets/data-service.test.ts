@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/torn/server-client", () => ({ getConfiguredTornConnection: mocks.getConfiguredTornConnection }));
 
-import { buildHitStats, placeholderSnapshot, refreshTargets } from "./data-service";
+import { buildHitStats, collectAttackedOpponents, placeholderSnapshot, refreshTargets } from "./data-service";
 import type { TargetEntry, TargetSnapshot } from "./types";
 
 function profile(id: number, overrides: Record<string, unknown> = {}) {
@@ -178,6 +178,31 @@ describe("refreshTargets", () => {
     expect(result.snapshots).toHaveLength(2);
     // pinned (id 2) and bountied (id 3) outrank the two plain entries.
     expect(result.snapshots.map((s) => s.tornUserId).sort()).toEqual([2, 3]);
+  });
+});
+
+describe("collectAttackedOpponents", () => {
+  it("keeps only players the operator attacked, most-recent occurrence first, deduplicated", () => {
+    const response = {
+      attacks: [
+        { id: 3, started: 300, ended: 360, attacker: { id: 999 }, defender: { id: 30, name: "Third", faction: { id: 5, name: "Rivals" } }, result: "Hospitalized", respect_gain: 6, respect_loss: 0, chain: 0 },
+        { id: 2, started: 200, ended: 260, attacker: { id: 30 }, defender: { id: 999 }, result: "Attacked", respect_gain: 0, respect_loss: 4, chain: 0 },
+        { id: 1, started: 100, ended: 160, attacker: { id: 999 }, defender: { id: 30, name: "Stale name", faction: { id: 5, name: "Rivals" } }, result: "Mugged", respect_gain: 3, respect_loss: 0, chain: 0 },
+      ],
+    };
+    const opponents = collectAttackedOpponents(response as never, 999);
+    expect(opponents).toEqual([{ tornUserId: 30, name: "Third", factionId: 5, factionName: "Rivals" }]);
+  });
+
+  it("excludes hits taken (not landed), self-hits and rows with no defender", () => {
+    const response = {
+      attacks: [
+        { id: 1, started: 100, ended: 160, attacker: { id: 30 }, defender: { id: 999 }, result: "Attacked", respect_gain: 0, respect_loss: 4, chain: 0 },
+        { id: 2, started: 200, ended: 260, attacker: { id: 999 }, defender: { id: 999 }, result: "Stalemate", respect_gain: 0, respect_loss: 0, chain: 0 },
+        { id: 3, started: 300, ended: 360, attacker: { id: 999 }, defender: null, result: "Escape", respect_gain: 0, respect_loss: 0, chain: 0 },
+      ],
+    };
+    expect(collectAttackedOpponents(response as never, 999)).toEqual([]);
   });
 });
 

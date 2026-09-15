@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   fetchTargetSnapshots: vi.fn(),
   loadHitIndex: vi.fn(),
   snapshotFromFactionMember: vi.fn(),
+  snapshotFromAttackLogOpponent: vi.fn(),
+  collectAttackedOpponents: vi.fn(),
   placeholderSnapshot: vi.fn(),
   refreshTargets: vi.fn(),
   saveFfscouterKey: vi.fn(),
@@ -25,6 +27,8 @@ vi.mock("@/lib/targets/data-service", () => ({
   fetchTargetSnapshots: mocks.fetchTargetSnapshots,
   loadHitIndex: mocks.loadHitIndex,
   snapshotFromFactionMember: mocks.snapshotFromFactionMember,
+  snapshotFromAttackLogOpponent: mocks.snapshotFromAttackLogOpponent,
+  collectAttackedOpponents: mocks.collectAttackedOpponents,
   placeholderSnapshot: mocks.placeholderSnapshot,
   refreshTargets: mocks.refreshTargets,
 }));
@@ -45,6 +49,7 @@ vi.mock("@/lib/targets/store", async () => {
 import {
   addTargetAction,
   importFactionTargetsAction,
+  importFromAttackLogAction,
   importTargetsAction,
   refreshTargetsAction,
   removeTargetAction,
@@ -60,6 +65,7 @@ const CLIENT = {
   dataMode: "torn" as const,
   getFactionBasic: vi.fn(),
   getFactionMembers: vi.fn(),
+  getMyAttacks: vi.fn(),
 };
 
 function snapshot(tornUserId: number, name = `Target ${tornUserId}`) {
@@ -75,6 +81,7 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   CLIENT.getFactionBasic.mockReset();
   CLIENT.getFactionMembers.mockReset();
+  CLIENT.getMyAttacks.mockReset();
   mocks.requireFactionPermission.mockResolvedValue(AUTH);
   mocks.getConfiguredTornConnection.mockResolvedValue({ factionId: 42, factionName: "Faction", factionTag: "F", client: CLIENT });
   mocks.targetsStorageAvailable.mockReturnValue(true);
@@ -286,6 +293,62 @@ describe("importFactionTargetsAction", () => {
     const result = await importFactionTargetsAction({ factionId: 42 });
     expect(result.ok).toBe(false);
     expect(CLIENT.getFactionMembers).not.toHaveBeenCalled();
+  });
+});
+
+describe("importFromAttackLogAction", () => {
+  it("adds distinct opponents straight from the attack log with no per-target Torn call", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [], snapshots: {} });
+    CLIENT.getMyAttacks.mockResolvedValue({ value: { attacks: [] }, fetchedAt: Date.now() });
+    mocks.collectAttackedOpponents.mockReturnValue([
+      { tornUserId: 900, name: "Rival One", factionId: 77, factionName: "Rival Faction" },
+      { tornUserId: 901, name: "Rival Two", factionId: 77, factionName: "Rival Faction" },
+    ]);
+    mocks.snapshotFromAttackLogOpponent.mockImplementation((opponent: { tornUserId: number; name: string }) => snapshot(opponent.tornUserId, opponent.name));
+
+    const result = await importFromAttackLogAction();
+
+    expect(result.ok).toBe(true);
+    expect(result.added).toBe(2);
+    expect(CLIENT.getMyAttacks).toHaveBeenCalled();
+    expect(mocks.fetchTargetSnapshot).not.toHaveBeenCalled();
+    const [, , written] = mocks.writeTargetList.mock.calls[0]!;
+    expect(written.entries.map((e: { tornUserId: number }) => e.tornUserId).sort()).toEqual([900, 901]);
+  });
+
+  it("skips opponents already on the list and self-hits", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [entry(900)], snapshots: {} });
+    CLIENT.getMyAttacks.mockResolvedValue({ value: { attacks: [] }, fetchedAt: Date.now() });
+    mocks.collectAttackedOpponents.mockReturnValue([
+      { tornUserId: 900, name: "Already listed", factionId: null, factionName: "" },
+      { tornUserId: 902, name: "New one", factionId: null, factionName: "" },
+    ]);
+    mocks.snapshotFromAttackLogOpponent.mockImplementation((opponent: { tornUserId: number; name: string }) => snapshot(opponent.tornUserId, opponent.name));
+
+    const result = await importFromAttackLogAction();
+
+    expect(result.added).toBe(1);
+    const [, , written] = mocks.writeTargetList.mock.calls[0]!;
+    expect(written.entries.map((e: { tornUserId: number }) => e.tornUserId).sort()).toEqual([900, 902]);
+  });
+
+  it("reports when the attack log has no new opponents", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [], snapshots: {} });
+    CLIENT.getMyAttacks.mockResolvedValue({ value: { attacks: [] }, fetchedAt: Date.now() });
+    mocks.collectAttackedOpponents.mockReturnValue([]);
+
+    const result = await importFromAttackLogAction();
+    expect(result.ok).toBe(false);
+    expect(mocks.writeTargetList).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a friendly message when Torn won't return the attack log", async () => {
+    mocks.readTargetList.mockResolvedValue({ entries: [], snapshots: {} });
+    CLIENT.getMyAttacks.mockRejectedValue(new Error("network error"));
+
+    const result = await importFromAttackLogAction();
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/attack log/i);
   });
 });
 

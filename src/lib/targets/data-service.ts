@@ -5,6 +5,7 @@ import { acquireConcurrencySlot } from "@/lib/security/rate-limit";
 import type { TornClient } from "@/lib/torn/client";
 import type { FactionMembersResponse, UserAttacksResponse, UserBountiesResponse } from "@/lib/torn/schemas";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
+import { type Faction, writeTargetList } from "./store";
 import { isAttackableState, TARGET_STALE_MS, type TargetEntry, type TargetHitStats, type TargetLastHit, type TargetSnapshot } from "./types";
 
 export interface TargetRefreshResult {
@@ -201,6 +202,38 @@ export function buildHitStats(response: UserAttacksResponse, operatorId: number)
 /** @deprecated Use {@link buildHitStats}. Kept as a name-only alias for existing callers. */
 export const buildHitIndex = buildHitStats;
 
+export interface AttackLogOpponent {
+  tornUserId: number;
+  name: string;
+  factionId: number | null;
+  factionName: string;
+}
+
+/**
+ * Distinct players the operator has personally attacked, read straight off
+ * their own recent log (the same `/user/attacks` window `buildHitStats`
+ * reads), most-recent first. Powers the Targets "Import from attack log" mode
+ * — the fast path for "everyone I've been hitting" that needs no faction ID
+ * and no per-target Torn call, since name/faction come from the log itself.
+ */
+export function collectAttackedOpponents(response: UserAttacksResponse, operatorId: number): AttackLogOpponent[] {
+  const seen = new Set<number>();
+  const opponents: AttackLogOpponent[] = [];
+  for (const attack of response.attacks) {
+    const attackerId = attack.attacker?.id ?? 0;
+    const defenderId = attack.defender?.id ?? 0;
+    if (attackerId !== operatorId || defenderId <= 0 || defenderId === operatorId || seen.has(defenderId)) continue;
+    seen.add(defenderId);
+    opponents.push({
+      tornUserId: defenderId,
+      name: attack.defender?.name ?? "",
+      factionId: attack.defender?.faction?.id || null,
+      factionName: attack.defender?.faction?.name ?? "",
+    });
+  }
+  return opponents;
+}
+
 /** Builds the hit index once per batch — every caller that fetches one or
  *  more target profiles shares this instead of re-reading the attack log. */
 export async function loadHitIndex(client: TornClient, operatorId: number): Promise<Map<number, HitInfo>> {
@@ -365,6 +398,37 @@ export function snapshotFromFactionMember(
 }
 
 /**
+ * Builds a target snapshot straight from one attack-log opponent — same trick
+ * as `snapshotFromFactionMember`: name and faction are already known from the
+ * log, so the import costs no extra Torn call, and `fetchedAt` is backdated
+ * past `TARGET_STALE_MS` so the next ordinary refresh backfills real
+ * status/level/life through the normal bounded profile fetch.
+ */
+export function snapshotFromAttackLogOpponent(opponent: AttackLogOpponent, fetchedAtMs: number): TargetSnapshot {
+  return {
+    tornUserId: opponent.tornUserId,
+    name: opponent.name,
+    level: 0,
+    factionId: opponent.factionId,
+    factionName: opponent.factionName,
+    position: "",
+    status: { description: "", state: "", until: null, color: "" },
+    lastActionAt: 0,
+    lastActionRelative: "",
+    lastActionStatus: "",
+    lifeCurrent: 0,
+    lifeMaximum: 0,
+    attackable: false,
+    lastHit: null,
+    hitYouBack: false,
+    hitStats: null,
+    bountyTotal: 0,
+    bountyCount: 0,
+    fetchedAt: new Date(fetchedAtMs - TARGET_STALE_MS - 1_000).toISOString(),
+  };
+}
+
+/**
  * Refreshes target snapshots that are due, enriched with the operator's own
  * recent attacks and bounties. "Due" is per-state (see `tierMaxAgeMs`): an
  * attackable or about-to-clear target is re-read within a minute, a long
@@ -414,4 +478,31 @@ export async function refreshTargets(
   const { snapshots, errors } = await fetchTargetSnapshots(connection.client, picked.map(({ entry }) => entry.tornUserId), hitIndex, connection.tornUserId);
 
   return { snapshots, errors, fetchedAt: new Date(nowMs).toISOString(), source, disconnected: false, dueTotal };
+}
+
+/**
+ * A small, bounded live-check used by readers that score the stored list on
+ * their own schedule (currently just `getBestChainTarget`) instead of
+ * through the Targets workspace's own poll. That poll is what normally keeps
+ * snapshots current, but it only runs while the Targets page itself is open
+ * — a suggestion shown elsewhere (the Active Chain page) would otherwise keep
+ * recommending a target the operator already knocked into hospital, because
+ * nothing ever told Torn to check again. `budget` keeps this cheap: an
+ * attackable target is only "due" every 45s (see `tierMaxAgeMs`), so most
+ * calls here find nothing due and cost zero Torn requests. Best-effort —
+ * a read path must not fail just because the follow-up write did.
+ */
+export async function refreshDueTargetsForList(
+  faction: Faction,
+  operatorId: number,
+  entries: TargetEntry[],
+  snapshots: Record<string, TargetSnapshot>,
+  budget: number,
+): Promise<Record<string, TargetSnapshot>> {
+  const result = await refreshTargets(entries, snapshots, { budget });
+  if (result.snapshots.length === 0) return snapshots;
+  const merged = { ...snapshots };
+  for (const snapshot of result.snapshots) merged[String(snapshot.tornUserId)] = snapshot;
+  await writeTargetList(faction, operatorId, { entries, snapshots: merged }).catch(() => undefined);
+  return merged;
 }
