@@ -2,12 +2,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+
+        <!-- FCM's own display path (app backgrounded/killed) needs these to
+             render a proper branded icon/color/channel instead of falling
+             back to the full-color adaptive launcher icon, which renders as
+             a plain white blob in the status bar. The channel referenced
+             here is created up front in MainActivity.onCreate with
+             IMPORTANCE_HIGH so the very first notification already gets
+             heads-up treatment, rather than whatever default channel
+             Firebase's own fallback would otherwise auto-create. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_chainward" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="chainward_default" />
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"

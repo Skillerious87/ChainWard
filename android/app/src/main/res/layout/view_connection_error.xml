@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown by MainActivity's WebViewListener when the remote page fails to
+     load (no connectivity, DNS failure, 5xx) - without this, the user was
+     looking at Chromium's bare unbranded net-error interstitial with no
+     retry action. Reuses the splash's background/mark for visual continuity
+     since this is the only other native-chrome screen the app ever shows. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/connection_error_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/splash_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingStart="40dp"
+        android:paddingEnd="40dp">
+
+        <ImageView
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:src="@drawable/splash_logo"
+            android:contentDescription="@null"
+            android:alpha="0.92" />
+
+        <TextView
+            android:id="@+id/connection_error_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Can't reach ChainWard"
+            android:textColor="@color/splash_title_text"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Check your connection and try again."
+            android:textColor="@color/splash_tagline_text"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif"
+            android:gravity="center" />
+
+        <Button
+            android:id="@+id/connection_error_retry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:minWidth="160dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:text="Retry"
+            android:textAllCaps="false"
+            android:textColor="@color/splash_bg_edge"
+            android:textStyle="bold"
+            android:backgroundTint="@color/splash_accent"
+            android:elevation="0dp" />
+
+    </LinearLayout>
+</FrameLayout>

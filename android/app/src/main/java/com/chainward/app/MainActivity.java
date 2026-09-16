@@ -4,6 +4,8 @@ import android.animation.Animator;
 import android.animation.ObjectAnimator;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -21,12 +23,17 @@ import android.view.ViewTreeObserver;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.view.animation.PathInterpolator;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebView;
+import android.widget.Button;
 import android.widget.TextView;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.WebViewListener;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,6 +51,13 @@ public class MainActivity extends BridgeActivity {
     private static final long MIN_SPLASH_DISPLAY_MS = 4000;
     private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
     private static final long PING_DURATION_MS = 2200;
+
+    // Must match the com.google.firebase.messaging.default_notification_channel_id
+    // meta-data in AndroidManifest.xml - that's what FCM falls back to for any
+    // push arriving while this channel hasn't been created yet, so it's
+    // created eagerly here rather than left to Firebase's own generic
+    // auto-created channel (which defaults to IMPORTANCE_DEFAULT, no heads-up).
+    private static final String NOTIFICATION_CHANNEL_ID = "chainward_default";
 
     // Material 3's easing tokens, expressed as the platform's own
     // PathInterpolator (available since API 21, no extra dependency needed).
@@ -64,6 +78,7 @@ public class MainActivity extends BridgeActivity {
     private boolean reduceMotionPreferred = false;
     private boolean splashHidden = false;
     private Runnable splashHiddenCallback;
+    private View connectionErrorOverlay;
 
     private final Handler splashHandler = new Handler(Looper.getMainLooper());
     private final Runnable splashSafetyRunnable = () -> {
@@ -111,7 +126,106 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
+        createNotificationChannel();
+        attachBackNavigationHandling();
+        attachWebViewFailureHandling();
         attachNativeSplashOverlay();
+    }
+
+    /** Creates the channel FCM pushes land in up front, at IMPORTANCE_HIGH - see NOTIFICATION_CHANNEL_ID. */
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        NotificationChannel channel = new NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "ChainWard alerts",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        channel.setDescription("Chain warnings, hits, and faction activity alerts.");
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.createNotificationChannel(channel);
+        }
+    }
+
+    /**
+     * Without this, the hardware/gesture back button falls straight through
+     * to stock Activity behaviour and finishes the app from any screen -
+     * Capacitor itself has no back-button handling built in (that only
+     * exists in the separate @capacitor/app plugin, which isn't installed
+     * here). This steps back through the WebView's own history first, for a
+     * workspace-style SPA where a bare back press should navigate, not exit.
+     */
+    private void attachBackNavigationHandling() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView webView = bridge.getWebView();
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        });
+    }
+
+    /**
+     * Registers for the two failure modes Capacitor otherwise leaves
+     * unhandled: a failed remote load (no connectivity, DNS failure, a
+     * Vercel 5xx - shows a branded retry overlay instead of Chromium's bare
+     * net-error interstitial) and a crashed WebView renderer (returning
+     * false here, the default, means the OS kills the whole app process
+     * outright instead of just this Activity).
+     */
+    private void attachWebViewFailureHandling() {
+        bridge.addWebViewListener(new WebViewListener() {
+            @Override
+            public void onPageLoaded(WebView webView) {
+                hideConnectionError();
+            }
+
+            @Override
+            public void onReceivedError(WebView webView) {
+                showConnectionError();
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView webView) {
+                showConnectionError();
+            }
+
+            @Override
+            public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail detail) {
+                Log.w(TAG, "WebView renderer process gone (didCrash=" + detail.didCrash() + ") - finishing gracefully instead of letting the OS kill the app.");
+                finish();
+                return true;
+            }
+        });
+    }
+
+    private void showConnectionError() {
+        if (connectionErrorOverlay == null) {
+            View overlay = LayoutInflater.from(this).inflate(R.layout.view_connection_error, null);
+            ViewGroup decorView = (ViewGroup) getWindow().getDecorView();
+            decorView.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            Button retry = overlay.findViewById(R.id.connection_error_retry);
+            retry.setOnClickListener(v -> {
+                overlay.setVisibility(View.GONE);
+                bridge.getWebView().reload();
+            });
+            connectionErrorOverlay = overlay;
+        }
+        connectionErrorOverlay.bringToFront();
+        connectionErrorOverlay.setVisibility(View.VISIBLE);
+    }
+
+    private void hideConnectionError() {
+        if (connectionErrorOverlay != null) {
+            connectionErrorOverlay.setVisibility(View.GONE);
+        }
     }
 
     /** Inflates the overlay and sets its pre-entrance view states, but starts no animation yet - that begins only once the OS splash is actually exiting (see the exit-animation listener in onCreate). */

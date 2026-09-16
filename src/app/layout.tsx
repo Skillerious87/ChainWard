@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AppearanceBootScript } from "@/components/appearance-boot-script";
+import { NativePushBootstrap } from "@/components/native-push-bootstrap";
 import { NativeSplashHide } from "@/components/native-splash-hide";
 import { deploymentOrigin } from "@/lib/metadata/public-origin";
 import "./globals.css";
@@ -107,6 +108,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <AppearanceBootScript />
         <NativeSplashHide />
+        <NativePushBootstrap />
         {children}
       </body>
     </html>

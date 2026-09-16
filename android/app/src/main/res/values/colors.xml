@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base AppTheme colors - previously unset, silently falling back to
+         AppCompat's stock teal/purple Material defaults instead of
+         ChainWard's actual brand. These drive whatever native chrome paints
+         with the app theme outside the WebView (e.g. the Recents/Overview
+         task-switcher card color), matching splash_colors.xml's palette. -->
+    <color name="colorPrimary">#080D0F</color>
+    <color name="colorPrimaryDark">#05080A</color>
+    <color name="colorAccent">#91E653</color>
+
+    <color name="notification_accent">#91E653</color>
+</resources>
