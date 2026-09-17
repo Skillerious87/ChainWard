@@ -27,12 +27,24 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="chainward_default" />
 
+        <!-- launchMode was "singleTask" (the Capacitor template default) until
+             it was traced as the cause of a real crash: the WebView's
+             Credential Manager passkey bridge opens CredentialSelectorActivity
+             as a transient overlay "inside" this task, and on this device
+             (and reproducibly, not an isolated fluke) singleTask's task-affinity
+             reparenting made WindowManager tear the whole task down - visibly
+             logged as "ActivityManager: Killing ... remove task" - the instant
+             that overlay closed, instead of resuming MainActivity normally.
+             singleTop keeps the one property singleTask was actually here for
+             (a second launch, e.g. a notification tap, reuses this instance via
+             onNewIntent instead of stacking a duplicate) without singleTask's
+             task-affinity reparenting, which is what triggered the bug. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:exported="true">
 
             <intent-filter>

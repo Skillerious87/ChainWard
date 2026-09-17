@@ -7,15 +7,14 @@ import android.animation.ValueAnimator;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.text.SpannableString;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,6 +25,7 @@ import android.view.animation.PathInterpolator;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebView;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.content.ContextCompat;
@@ -41,15 +41,17 @@ public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "ChainwardSplash";
 
-    // Held at a hard 4s floor: the web app may auto-trigger the biometric
+    // Held at a hard 4.5s floor: the web app may auto-trigger the biometric
     // system prompt right after mount (see connect-form.tsx's auto-unlock
     // effect), and that prompt is an OS-level window that renders above
     // everything, including this overlay. Giving the entrance choreography
     // and the page's own boot work a wide margin here is what keeps that
     // prompt from ever appearing mid-splash - independent of and in addition
-    // to the JS-side wait on AppSplash.hide() actually completing.
-    private static final long MIN_SPLASH_DISPLAY_MS = 4000;
-    private static final long SPLASH_SAFETY_TIMEOUT_MS = 8000;
+    // to the JS-side wait on AppSplash.hide() actually completing. 4.5s also
+    // gives the glow/ping choreography enough room to read as deliberate
+    // rather than rushed, without drifting into "why is this taking so long".
+    private static final long MIN_SPLASH_DISPLAY_MS = 4500;
+    private static final long SPLASH_SAFETY_TIMEOUT_MS = 8500;
     private static final long PING_DURATION_MS = 2200;
 
     // Must match the com.google.firebase.messaging.default_notification_channel_id
@@ -68,6 +70,14 @@ public class MainActivity extends BridgeActivity {
     private static final Interpolator EMPHASIZED_DECELERATE = new PathInterpolator(0.05f, 0.7f, 0.1f, 1f);
     private static final Interpolator STANDARD = new PathInterpolator(0.4f, 0f, 0.2f, 1f);
     private static final Interpolator EMPHASIZED_ACCELERATE = new PathInterpolator(0.3f, 0f, 0.8f, 0.15f);
+    // Emphasized Decelerate's near-instant 0->70% jump (by x=0.05) is what
+    // read as a "pop" rather than a glide once it was on individual letters
+    // at a short duration - fine for a single icon arriving with energy, too
+    // abrupt for nine of them in quick succession. Material 3's Standard
+    // Decelerate has no fast-start snap at all: velocity eases in smoothly
+    // from zero and bleeds off just as smoothly, which is what a calm,
+    // professional letter-by-letter reveal actually wants.
+    private static final Interpolator STANDARD_DECELERATE = new PathInterpolator(0f, 0f, 0f, 1f);
 
     private volatile boolean splashOverlayLaidOut = false;
     private View splashOverlay;
@@ -237,16 +247,14 @@ public class MainActivity extends BridgeActivity {
 
         View glow = overlay.findViewById(R.id.splash_glow);
         View logo = overlay.findViewById(R.id.splash_logo);
-        TextView title = overlay.findViewById(R.id.splash_title);
+        LinearLayout titleRow = overlay.findViewById(R.id.splash_title_row);
         View tagline = overlay.findViewById(R.id.splash_tagline);
-
-        title.setText(buildTitleText());
 
         logo.setScaleX(0.88f);
         logo.setScaleY(0.88f);
         glow.setScaleX(0.85f);
         glow.setScaleY(0.85f);
-        title.setTranslationY(16f);
+        buildTitleLetters(titleRow);
         tagline.setTranslationY(12f);
 
         // Armed here, not from the entrance choreography, so the ceiling
@@ -269,6 +277,34 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    /**
+     * Populates the title row with one TextView per letter of "CHAINWARD" -
+     * "CHAIN" in the primary title color, "WARD" in the brand accent,
+     * matching the in-app wordmark - so the entrance choreography can cascade
+     * them in individually instead of animating the word as one flat block.
+     * Each starts pre-entrance: invisible, settled slightly low and small.
+     */
+    private void buildTitleLetters(LinearLayout row) {
+        row.removeAllViews();
+        String word = "CHAINWARD";
+        int titleColor = ContextCompat.getColor(this, R.color.splash_title_text);
+        int accentColor = ContextCompat.getColor(this, R.color.splash_accent);
+        Typeface typeface = Typeface.create("sans-serif-medium", Typeface.BOLD);
+        for (int i = 0; i < word.length(); i++) {
+            TextView letter = new TextView(this);
+            letter.setText(String.valueOf(word.charAt(i)));
+            letter.setTextColor(i < 5 ? titleColor : accentColor);
+            letter.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+            letter.setTypeface(typeface);
+            letter.setLetterSpacing(0.26f);
+            letter.setAlpha(0f);
+            letter.setTranslationY(10f);
+            letter.setScaleX(0.94f);
+            letter.setScaleY(0.94f);
+            row.addView(letter);
+        }
+    }
+
     /** Fired from the OS splash's exit-animation listener - this is the actual first visible moment of our overlay's own motion. */
     private void startEntranceChoreography() {
         View overlay = splashOverlay;
@@ -281,7 +317,8 @@ public class MainActivity extends BridgeActivity {
         View glow = overlay.findViewById(R.id.splash_glow);
         View ping = overlay.findViewById(R.id.splash_ping_ring);
         View logo = overlay.findViewById(R.id.splash_logo);
-        View title = overlay.findViewById(R.id.splash_title);
+        View iconGroup = overlay.findViewById(R.id.splash_icon_group);
+        LinearLayout titleRow = overlay.findViewById(R.id.splash_title_row);
         View tagline = overlay.findViewById(R.id.splash_tagline);
 
         // One soft halo behind the shield - a single accent motion reads as
@@ -293,7 +330,12 @@ public class MainActivity extends BridgeActivity {
             .setStartDelay(0)
             .setDuration(450)
             .setInterpolator(EMPHASIZED_DECELERATE)
-            .withEndAction(() -> { if (!reduceMotionPreferred) startGlowBreathing(glow); })
+            .withEndAction(() -> {
+                if (!reduceMotionPreferred) {
+                    startGlowBreathing(glow);
+                    startIconFloat(iconGroup);
+                }
+            })
             .start();
 
         // A single radar-style pulse radiates outward once the halo has
@@ -312,20 +354,32 @@ public class MainActivity extends BridgeActivity {
             .setInterpolator(EMPHASIZED_DECELERATE)
             .start();
 
-        title.animate()
-            .alpha(1f)
-            .translationY(0f)
-            .setStartDelay(180)
-            .setDuration(300)
-            .setInterpolator(EMPHASIZED_DECELERATE)
-            .start();
+        // The wordmark cascades in letter by letter rather than as one flat
+        // block - each glides up from barely below and barely smaller, well
+        // overlapped with its neighbours (a long per-letter duration against
+        // a much shorter stagger) so the sequence reads as one continuous
+        // wave passing through the word, not a rapid staccato of individual
+        // pops. Standard Decelerate keeps that wave smooth throughout rather
+        // than snapping most of the way there instantly.
+        int letterCount = titleRow.getChildCount();
+        for (int i = 0; i < letterCount; i++) {
+            titleRow.getChildAt(i).animate()
+                .alpha(1f)
+                .translationY(0f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setStartDelay(220 + i * 55L)
+                .setDuration(620)
+                .setInterpolator(STANDARD_DECELERATE)
+                .start();
+        }
 
         tagline.animate()
             .alpha(1f)
             .translationY(0f)
-            .setStartDelay(260)
-            .setDuration(300)
-            .setInterpolator(EMPHASIZED_DECELERATE)
+            .setStartDelay(220 + letterCount * 55L + 120)
+            .setDuration(500)
+            .setInterpolator(STANDARD_DECELERATE)
             .start();
 
         entranceStarted = true;
@@ -333,15 +387,6 @@ public class MainActivity extends BridgeActivity {
             hideRequestedBeforeEntrance = false;
             hideNativeSplash(null);
         }
-    }
-
-    /** Renders "CHAIN" in the primary title color and "WARD" in the brand accent, matching the in-app wordmark. */
-    private SpannableString buildTitleText() {
-        String text = "CHAINWARD";
-        SpannableString spanned = new SpannableString(text);
-        int accentColor = ContextCompat.getColor(this, R.color.splash_accent);
-        spanned.setSpan(new ForegroundColorSpan(accentColor), 5, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return spanned;
     }
 
     private void startGlowBreathing(View glow) {
@@ -358,6 +403,20 @@ public class MainActivity extends BridgeActivity {
         breathe.setInterpolator(new AccelerateDecelerateInterpolator());
         loopingAnimators.add(breathe);
         breathe.start();
+    }
+
+    /** A very slow, small vertical drift on the whole icon group - layered under the glow's breathing scale/alpha (a different property, so the two never fight) for a quietly "alive" idle state rather than a static hang. */
+    private void startIconFloat(View iconGroup) {
+        if (splashOverlay == null) {
+            return;
+        }
+        ObjectAnimator floatAnim = ObjectAnimator.ofFloat(iconGroup, View.TRANSLATION_Y, 0f, -7f);
+        floatAnim.setDuration(3400);
+        floatAnim.setRepeatMode(ValueAnimator.REVERSE);
+        floatAnim.setRepeatCount(ValueAnimator.INFINITE);
+        floatAnim.setInterpolator(new AccelerateDecelerateInterpolator());
+        loopingAnimators.add(floatAnim);
+        floatAnim.start();
     }
 
     private void startPingLoop(View ring, long startDelay) {

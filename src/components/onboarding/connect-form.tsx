@@ -22,6 +22,7 @@ import {
   platformAuthenticatorIsAvailable,
   startAuthentication,
   startRegistration,
+  WebAuthnAbortService,
 } from "@simplewebauthn/browser";
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
@@ -219,6 +220,19 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
     // browsers that happens before the busy state above ever gets painted.
     // Force a frame first so the spinner is actually visible.
     await waitForNextPaint();
+    // Android's WebView-hosted Credential Manager bridge has a real native
+    // bug (confirmed on-device, see MainActivity.java's launchMode comment):
+    // letting its OWN biometric prompt run out the clock - a decline, a
+    // timeout, nobody's finger actually on the sensor for the silent
+    // auto-attempt - can tear down the *entire app task*, not just dismiss
+    // the prompt. Racing it with our own shorter, app-initiated cancel
+    // resolves the promise through the ordinary rejection path below
+    // instead, which sidesteps whatever native teardown code path the
+    // system's own expiry takes. Generous for a tap the user made themselves
+    // (they can see they're mid-ceremony); tight for the silent attempt,
+    // which is a passive convenience nobody's watching for.
+    const guardMs = options.silent ? 2500 : 20_000;
+    const guardTimer = window.setTimeout(() => WebAuthnAbortService.cancelCeremony(), guardMs);
     try {
       const optionsResponse = await fetch("/api/onboarding/webauthn/authentication-options", {
         method: "POST",
@@ -236,6 +250,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       // there either way. Only a tap the user made themselves earns one.
       if (!options.silent) setError(connectionErrorFrom(cause, "The passkey could not be used."));
     } finally {
+      window.clearTimeout(guardTimer);
       setPasskeyBusy(false);
     }
   }

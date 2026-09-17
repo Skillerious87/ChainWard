@@ -5,7 +5,11 @@ const config: CapacitorConfig = {
   appName: 'ChainWard',
   webDir: 'capacitor-www',
   server: {
-    url: 'https://chain-ward-ebon.vercel.app',
+    // Native launches skip the marketing homepage entirely and open straight
+    // on sign-in - an installed app doesn't need the pitch a browser visitor
+    // does, and /connect's own auto-unlock effect (connect-form.tsx) is what
+    // makes a returning device with an enrolled passkey feel instant anyway.
+    url: 'https://chain-ward-ebon.vercel.app/connect',
     cleartext: false
   },
   plugins: {

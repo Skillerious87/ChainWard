@@ -7,6 +7,11 @@
     android:clickable="true"
     android:focusable="true">
 
+    <com.chainward.app.ChainFieldView
+        android:id="@+id/splash_chain_field"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -15,6 +20,7 @@
         android:gravity="center_horizontal">
 
         <FrameLayout
+            android:id="@+id/splash_icon_group"
             android:layout_width="248dp"
             android:layout_height="248dp">
 
@@ -45,18 +51,12 @@
 
         </FrameLayout>
 
-        <TextView
-            android:id="@+id/splash_title"
+        <LinearLayout
+            android:id="@+id/splash_title_row"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:text="CHAINWARD"
-            android:textColor="@color/splash_title_text"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.26"
-            android:fontFamily="sans-serif-medium"
-            android:alpha="0" />
+            android:orientation="horizontal" />
 
         <TextView
             android:id="@+id/splash_tagline"
