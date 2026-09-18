@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher-shortcut icon for "Members" - two overlapping figures, centered
+     the same way as ic_shortcut_chain.xml. The back figure is drawn first so
+     the front one overlaps it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="@color/ic_launcher_background"
+        android:pathData="M0,24 A24,24 0 1,0 48,24 A24,24 0 1,0 0,24 Z" />
+    <group
+        android:translateX="12"
+        android:translateY="12">
+        <path
+            android:fillColor="@color/splash_accent"
+            android:fillAlpha="0.55"
+            android:pathData="M8,7.5 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 Z M4,19 L4,15.5 A4,4 0 0,1 12,15.5 L12,19 Z" />
+        <path
+            android:fillColor="@color/splash_accent"
+            android:pathData="M16,9 m-2.8,0 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0 Z M11,20 L11,16 A5,5 0 0,1 21,16 L21,20 Z" />
+    </group>
+</vector>

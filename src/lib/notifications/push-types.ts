@@ -28,6 +28,9 @@ export interface StoredFcmRegistration {
   token: string;
 }
 
+/** Maps to one of the Android notification channels MainActivity creates up front - see push-fcm.ts. Omitted for anything that should land in the general/fallback channel (e.g. the Settings test notification). */
+export type PushNotificationCategory = "chain" | "members";
+
 export interface PushMessagePayload {
   title: string;
   body: string;
@@ -35,6 +38,7 @@ export interface PushMessagePayload {
   url: string;
   requireInteraction?: boolean;
   critical?: boolean;
+  category?: PushNotificationCategory;
 }
 
 export const defaultPushNotificationPreferences: PushNotificationPreferences = {

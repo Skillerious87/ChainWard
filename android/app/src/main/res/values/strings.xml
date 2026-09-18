@@ -4,4 +4,14 @@
     <string name="title_activity_main">ChainWard</string>
     <string name="package_name">com.chainward.app</string>
     <string name="custom_url_scheme">com.chainward.app</string>
+
+    <!-- Launcher shortcut labels (res/xml/shortcuts.xml) -->
+    <string name="shortcut_live_chain_short">Live Chain</string>
+    <string name="shortcut_live_chain_long">Open Live Chain</string>
+    <string name="shortcut_targets_short">Targets</string>
+    <string name="shortcut_targets_long">Open Targets</string>
+    <string name="shortcut_members_short">Members</string>
+    <string name="shortcut_members_long">Open Members</string>
+    <string name="shortcut_dashboard_short">Dashboard</string>
+    <string name="shortcut_dashboard_long">Open Dashboard</string>
 </resources>

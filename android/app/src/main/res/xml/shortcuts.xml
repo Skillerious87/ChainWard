@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static launcher shortcuts (long-press the app icon). Each targets
+     MainActivity directly by component with an ACTION_VIEW + https data URI
+     matching DEEP_LINK_HOST, reusing the exact same handleIncomingIntent()
+     path that verified App Links use - see AndroidManifest.xml and
+     MainActivity.java. Capped at four: Android only guarantees the first
+     four are reachable on every launcher/device combination. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="live_chain"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_chain"
+        android:shortcutShortLabel="@string/shortcut_live_chain_short"
+        android:shortcutLongLabel="@string/shortcut_live_chain_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.chainward.app"
+            android:targetClass="com.chainward.app.MainActivity"
+            android:data="https://chain-ward-ebon.vercel.app/live-chain" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="targets"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_target"
+        android:shortcutShortLabel="@string/shortcut_targets_short"
+        android:shortcutLongLabel="@string/shortcut_targets_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.chainward.app"
+            android:targetClass="com.chainward.app.MainActivity"
+            android:data="https://chain-ward-ebon.vercel.app/targets" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="members"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_members"
+        android:shortcutShortLabel="@string/shortcut_members_short"
+        android:shortcutLongLabel="@string/shortcut_members_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.chainward.app"
+            android:targetClass="com.chainward.app.MainActivity"
+            android:data="https://chain-ward-ebon.vercel.app/members" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="dashboard"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_dashboard"
+        android:shortcutShortLabel="@string/shortcut_dashboard_short"
+        android:shortcutLongLabel="@string/shortcut_dashboard_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.chainward.app"
+            android:targetClass="com.chainward.app.MainActivity"
+            android:data="https://chain-ward-ebon.vercel.app/dashboard" />
+    </shortcut>
+</shortcuts>

@@ -132,6 +132,7 @@ async function dispatchChainAlerts(
       body: `${factionName}: ${chain.current.toLocaleString()} / ${chain.max.toLocaleString()} hits. ${responsibility}`,
       tag: `chainward-chain-${factionId}-${chain.id}`,
       url: "/live-chain",
+      category: "chain",
       critical,
       requireInteraction: critical && preferences.keepCriticalVisible,
     }, result);
@@ -186,6 +187,7 @@ async function dispatchMemberAlerts(
       body: `${faction.name}: open the protected member queue for details.`,
       tag: `chainward-members-${faction.tornFactionId}`,
       url: "/members?view=attention",
+      category: "members",
       critical: criticalCount > 0,
       requireInteraction: criticalCount > 0 && preferences.keepCriticalVisible,
     }, result);

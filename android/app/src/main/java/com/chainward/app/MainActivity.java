@@ -6,8 +6,10 @@ import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -59,7 +61,27 @@ public class MainActivity extends BridgeActivity {
     // push arriving while this channel hasn't been created yet, so it's
     // created eagerly here rather than left to Firebase's own generic
     // auto-created channel (which defaults to IMPORTANCE_DEFAULT, no heads-up).
+    // Two more channels split chain and faction-activity alerts out from this
+    // default/fallback one (push-fcm.ts sets android.notification.channelId
+    // per category) so a member can mute or re-tone one category from the
+    // system Settings app without losing the other - Android has no
+    // per-category control below the channel level, so this is the only
+    // place that distinction can actually live.
     private static final String NOTIFICATION_CHANNEL_ID = "chainward_default";
+    private static final String NOTIFICATION_CHANNEL_CHAIN_ID = "chainward_chain";
+    private static final String NOTIFICATION_CHANNEL_MEMBERS_ID = "chainward_members";
+
+    // Digital Asset Links for this host are already published at
+    // public/.well-known/assetlinks.json (originally for the Credential
+    // Manager passkey bridge - see the WEB_AUTHENTICATION_SUPPORT_FOR_APP
+    // call below) with the "handle_all_urls" relation already declared, so
+    // adding the App Links intent-filter in the manifest is all that's
+    // needed to complete verified App Links for this domain. Only this exact
+    // host is ever navigated to from an incoming intent - see
+    // handleIncomingIntent() - so a malicious app crafting an explicit
+    // ACTION_VIEW intent at this (necessarily exported) launcher Activity
+    // can't steer the WebView anywhere else.
+    private static final String DEEP_LINK_HOST = "chain-ward-ebon.vercel.app";
 
     // Material 3's easing tokens, expressed as the platform's own
     // PathInterpolator (available since API 21, no extra dependency needed).
@@ -136,27 +158,71 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
-        createNotificationChannel();
+        createNotificationChannels();
         attachBackNavigationHandling();
         attachWebViewFailureHandling();
         attachNativeSplashOverlay();
+        handleIncomingIntent(getIntent());
     }
 
-    /** Creates the channel FCM pushes land in up front, at IMPORTANCE_HIGH - see NOTIFICATION_CHANNEL_ID. */
-    private void createNotificationChannel() {
+    /**
+     * Reused for both a cold start (called from onCreate, once the bridge's
+     * WebView exists) and a warm restart of an already-running instance (see
+     * onNewIntent - launchMode="singleTop" means a shortcut or App Link tap
+     * while the app is alive reuses this same Activity instance instead of
+     * creating a second one). A cold-start redirect happens invisibly behind
+     * the still-showing native splash overlay, which covers the WebView
+     * until the JS side calls AppSplash.hide() regardless of which URL it
+     * ends up loading underneath.
+     */
+    @Override
+    public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    /**
+     * Handles both App Links (an external tap on a chain-ward-ebon.vercel.app
+     * link - see the MainActivity intent-filter in AndroidManifest.xml) and
+     * the static launcher shortcuts in res/xml/shortcuts.xml, which target
+     * this exact same ACTION_VIEW + https data shape by explicit component.
+     * Only ever navigates to the app's own host, checked here rather than
+     * trusted from the manifest's intent-filter match alone - see
+     * DEEP_LINK_HOST.
+     */
+    private void handleIncomingIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
+            return;
+        }
+        Uri data = intent.getData();
+        if (data == null || !"https".equals(data.getScheme()) || !DEEP_LINK_HOST.equalsIgnoreCase(data.getHost())) {
+            return;
+        }
+        WebView webView = bridge.getWebView();
+        if (webView != null) {
+            webView.loadUrl(data.toString());
+        }
+    }
+
+    /** Creates the channels FCM pushes land in up front, at IMPORTANCE_HIGH - see NOTIFICATION_CHANNEL_ID and friends. */
+    private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return;
         }
-        NotificationChannel channel = new NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            "ChainWard alerts",
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        channel.setDescription("Chain warnings, hits, and faction activity alerts.");
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) {
-            manager.createNotificationChannel(channel);
+        if (manager == null) {
+            return;
         }
+        manager.createNotificationChannel(buildChannel(NOTIFICATION_CHANNEL_ID, "General alerts", "Anything that doesn't fit a specific category, plus test notifications sent from Settings."));
+        manager.createNotificationChannel(buildChannel(NOTIFICATION_CHANNEL_CHAIN_ID, "Chain alerts", "Chain warning and critical countdown pushes."));
+        manager.createNotificationChannel(buildChannel(NOTIFICATION_CHANNEL_MEMBERS_ID, "Faction activity", "Member inactivity and watch-list alerts."));
+    }
+
+    private NotificationChannel buildChannel(String id, String name, String description) {
+        NotificationChannel channel = new NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription(description);
+        return channel;
     }
 
     /**

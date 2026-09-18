@@ -7,7 +7,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        android:enableOnBackInvokedCallback="true">
 
         <!-- FCM's own display path (app backgrounded/killed) needs these to
              render a proper branded icon/color/channel instead of falling
@@ -51,6 +52,27 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Verified Android App Links: a chain-ward-ebon.vercel.app link
+                 tapped anywhere outside the app (Discord, SMS, email) opens
+                 straight into this app instead of a browser tab. autoVerify
+                 relies on the Digital Asset Links file already published at
+                 public/.well-known/assetlinks.json (originally added for the
+                 Credential Manager passkey bridge, which already declares the
+                 "handle_all_urls" relation this needs). See MainActivity's
+                 handleIncomingIntent() for the WebView-side handling. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="chain-ward-ebon.vercel.app" />
+            </intent-filter>
+
+            <!-- Static launcher shortcuts (long-press the app icon) - see
+                 res/xml/shortcuts.xml. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
 
         </activity>
 

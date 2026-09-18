@@ -2,9 +2,15 @@ import "server-only";
 
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
-import type { PushMessagePayload } from "./push-types";
+import type { PushMessagePayload, PushNotificationCategory } from "./push-types";
 
 let cachedApp: App | null = null;
+
+/** Mirrors the three channels MainActivity.createNotificationChannels() creates up front - keep in sync with android/app/src/main/java/com/chainward/app/MainActivity.java. */
+const ANDROID_CHANNEL_BY_CATEGORY: Record<PushNotificationCategory, string> = {
+  chain: "chainward_chain",
+  members: "chainward_members",
+};
 
 /**
  * Lazily initialises the Firebase Admin app from a service account key
@@ -52,6 +58,7 @@ export async function sendFcm(token: string, payload: PushMessagePayload): Promi
     android: {
       priority: payload.critical ? "high" : "normal",
       collapseKey: payload.tag,
+      notification: payload.category ? { channelId: ANDROID_CHANNEL_BY_CATEGORY[payload.category] } : undefined,
     },
   });
 }
