@@ -29,6 +29,15 @@ describe("AboutDialog", () => {
     expect(html).toContain(`#${PLATFORM_OWNER.tornUserId}`);
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noreferrer"');
-    expect(html.match(/<button/g)).toHaveLength(1);
+    // The close button and the share action are the only two <button>s -
+    // the creator identity itself must stay a real <a> for right-click/open-
+    // in-new-tab, not a JS button.
+    expect(html.match(/<button/g)).toHaveLength(2);
+  });
+
+  it("offers a share action for the app itself", () => {
+    const html = renderToStaticMarkup(<AboutDialog open onClose={() => undefined} />);
+
+    expect(html).toContain("Share Chainward");
   });
 });

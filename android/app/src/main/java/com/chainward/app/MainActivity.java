@@ -29,6 +29,7 @@ import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.content.ContextCompat;
 import androidx.core.splashscreen.SplashScreen;
@@ -55,6 +56,11 @@ public class MainActivity extends BridgeActivity {
     private static final long MIN_SPLASH_DISPLAY_MS = 4500;
     private static final long SPLASH_SAFETY_TIMEOUT_MS = 8500;
     private static final long PING_DURATION_MS = 2200;
+    // A bare back press at the root of the WebView's history (nothing left to
+    // navigate back through) used to exit the app immediately - an easy
+    // accidental exit for a workspace app people keep open and swipe around
+    // in all day. A second press within this window is what actually exits.
+    private static final long EXIT_CONFIRM_WINDOW_MS = 2000;
 
     // Must match the com.google.firebase.messaging.default_notification_channel_id
     // meta-data in AndroidManifest.xml - that's what FCM falls back to for any
@@ -111,6 +117,7 @@ public class MainActivity extends BridgeActivity {
     private boolean splashHidden = false;
     private Runnable splashHiddenCallback;
     private View connectionErrorOverlay;
+    private long lastBackPressAtElapsed = 0;
 
     private final Handler splashHandler = new Handler(Looper.getMainLooper());
     private final Runnable splashSafetyRunnable = () -> {
@@ -242,8 +249,14 @@ public class MainActivity extends BridgeActivity {
                     webView.goBack();
                     return;
                 }
-                setEnabled(false);
-                getOnBackPressedDispatcher().onBackPressed();
+                long now = SystemClock.elapsedRealtime();
+                if (now - lastBackPressAtElapsed <= EXIT_CONFIRM_WINDOW_MS) {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                    return;
+                }
+                lastBackPressAtElapsed = now;
+                Toast.makeText(MainActivity.this, "Press back again to exit", Toast.LENGTH_SHORT).show();
             }
         });
     }

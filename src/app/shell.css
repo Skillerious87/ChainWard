@@ -783,6 +783,7 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 }
 .about-dialog__creator:hover { border-color: rgba(var(--accent-rgb), .34); background: rgba(var(--accent-rgb), .045); transform: translateY(-1px); }
 .about-dialog__creator:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.about-dialog__share { width: 100%; text-align: left; cursor: pointer; }
 .about-dialog__avatar { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgba(var(--accent-rgb), .25); border-radius: 10px; background: rgba(var(--accent-rgb), .065); color: var(--accent); font-size: 10px; font-weight: 760; letter-spacing: .4px; }
 .about-dialog__creator > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .about-dialog__creator small { color: #78847e; font-size: 10px !important; }

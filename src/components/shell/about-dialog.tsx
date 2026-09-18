@@ -1,11 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { ExternalLink, ShieldCheck, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Share2, ShieldCheck, X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import packageInfo from "../../../package.json";
 import chainwardLogo from "../../../ChainWardLogo.png";
 import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
+import { isNativeApp } from "@/lib/is-native-app";
+import { shareChainward } from "@/lib/share-app";
 
 interface AboutDialogProps {
   open: boolean;
@@ -64,13 +66,22 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           </div>
           <div>
             <dt>Platform</dt>
-            <dd>Web app</dd>
+            <dd>{isNativeApp() ? "Android app" : "Web app"}</dd>
           </div>
           <div>
             <dt>Data source</dt>
             <dd>Torn API</dd>
           </div>
         </dl>
+
+        <button type="button" className="about-dialog__creator about-dialog__share" onClick={() => void shareChainward()}>
+          <span className="about-dialog__avatar" aria-hidden="true"><Share2 size={16} aria-hidden="true" /></span>
+          <span>
+            <small>Know a faction that needs this</small>
+            <strong>Share Chainward</strong>
+          </span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
 
         <a
           className="about-dialog__creator"

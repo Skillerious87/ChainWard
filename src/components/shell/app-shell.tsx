@@ -63,6 +63,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Spinner } from "@/components/ui/spinner";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
+import { tapHaptic } from "@/lib/native-haptics";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { enqueueToast, notify, toastDurationMs, toastKey, type ToastDetail, type ToastQueueItem, type ToastTone } from "@/lib/client-actions";
 import type { DatabaseStatus } from "@/lib/data/database-status";
@@ -691,7 +692,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           <div className="topbar__right">
             <UpgradeAccess access={access} workspaceAuthorized={workspaceAuthorized} />
             <button className="topbar-command" onClick={openCommandPalette}><Command size={14} /><span>Quick find</span><kbd>⌘K</kbd></button>
-            <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => void syncWorkspace()} disabled={syncing || workspaceLocked} aria-label={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Refresh workspace data. Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
+            <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => { tapHaptic(); void syncWorkspace(); }} disabled={syncing || workspaceLocked} aria-label={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Refresh workspace data. Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
               <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live" && !syncing} />
               <span><strong>{offlineMode ? "Offline fixture" : liveTelemetry.source === "live" ? "Server check" : "API attention"}</strong><small>{syncLabel}</small></span>
               {syncing ? <Spinner size={14} label="Syncing Torn data" /> : <Clock3 size={14} aria-hidden="true" />}
@@ -770,7 +771,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
               key={item.href}
               aria-current={active ? "page" : undefined}
               className={`mobile-tabbar__item${active ? " mobile-tabbar__item--active" : ""}`}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => { tapHaptic(); setMobileOpen(false); }}
             >
               <span><Icon size={20} strokeWidth={1.8} /></span>
               <small>{label}</small>
@@ -785,6 +786,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           aria-expanded={mobileOpen}
           aria-controls="workspace-navigation"
           onClick={() => {
+            tapHaptic();
             saveAppearancePreferences({ sidebarCollapsed: false });
             setMobileOpen(true);
           }}

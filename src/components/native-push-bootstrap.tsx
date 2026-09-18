@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { isNativeApp } from "@/lib/is-native-app";
 import { notify } from "@/lib/client-actions";
+import { criticalAlertHaptic } from "@/lib/native-haptics";
 
 /**
  * Mounted once at the app root (see layout.tsx), not just from the Settings
@@ -33,6 +34,7 @@ export function NativePushBootstrap() {
     });
 
     const receivedHandle = PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      if (notification.data?.critical === "true") criticalAlertHaptic();
       notify({
         title: notification.title?.trim() || "ChainWard alert",
         description: notification.body,
