@@ -23,8 +23,14 @@ public class ChainWidgetPlugin extends Plugin {
         String state = call.getString("state", "idle");
         int current = call.getInt("current", 0);
         int maximum = call.getInt("maximum", 0);
-        long deadlineEpochMs = doubleToLong(call.getDouble("deadlineEpochMs", 0d));
-        long checkedAtEpochMs = doubleToLong(call.getDouble("checkedAtEpochMs", 0d));
+        // Epoch-millisecond values are always whole numbers with no decimal
+        // point once JSON-serialized, and are always well beyond Integer
+        // range - Capacitor's bridge (plain org.json under the hood) parses
+        // a JSON number shaped like that as a Long, never a Double. getDouble()
+        // only matches an actual Double and silently falls back otherwise, so
+        // it was quietly reading 0 for both of these on every single call.
+        long deadlineEpochMs = call.getLong("deadlineEpochMs", 0L);
+        long checkedAtEpochMs = call.getLong("checkedAtEpochMs", 0L);
 
         ChainWidgetProvider.saveAndPush(getContext(), factionName, state, current, maximum, deadlineEpochMs, checkedAtEpochMs);
 
@@ -34,9 +40,5 @@ public class ChainWidgetPlugin extends Plugin {
         TileService.requestListeningState(getContext(), new ComponentName(getContext(), ChainWardTileService.class));
 
         call.resolve();
-    }
-
-    private static long doubleToLong(Double value) {
-        return value == null ? 0L : Math.round(value);
     }
 }

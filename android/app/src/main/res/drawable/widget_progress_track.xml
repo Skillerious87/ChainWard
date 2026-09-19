@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Custom ProgressBar drawable for the hits-progress row - the platform
+     default Holo bar reads as dated against the rest of the app's design.
+     android:id/background and android:id/progress are the two ids
+     ProgressBar itself looks for by convention. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape>
+            <corners android:radius="3dp" />
+            <solid android:color="#20272B" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape>
+                <corners android:radius="3dp" />
+                <solid android:color="@color/splash_accent" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

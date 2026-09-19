@@ -74,23 +74,47 @@ public class ChainWidgetProvider extends AppWidgetProvider {
         }
     }
 
+    private static final int COLOR_ACCENT = 0xFF91E653;
+    private static final int COLOR_CRITICAL = 0xFFFF5D68;
+    private static final int COLOR_MUTED = 0xFF8FA89B;
+    /** A chain inside its final minute - matches shell.css's :root[data-chain-danger="critical"] threshold exactly. */
+    private static final long CRITICAL_THRESHOLD_SECONDS = 60;
+
     private static RemoteViews buildViews(Context context, String factionName, String state, int current, int maximum, long deadlineEpochMs, long checkedAtEpochMs) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.chain_widget);
         views.setTextViewText(R.id.widget_faction, factionName == null || factionName.isEmpty() ? "ChainWard" : factionName);
 
         boolean hasSynced = checkedAtEpochMs > 0;
         boolean chainRunning = "active".equals(state) || "cooldown".equals(state);
+        long remainingSeconds = Math.max(0, (deadlineEpochMs - System.currentTimeMillis()) / 1000);
+        boolean critical = "active".equals(state) && remainingSeconds > 0 && remainingSeconds <= CRITICAL_THRESHOLD_SECONDS;
 
         if (hasSynced && chainRunning) {
             views.setViewVisibility(R.id.widget_active_group, View.VISIBLE);
             views.setViewVisibility(R.id.widget_idle, View.GONE);
-            views.setTextViewText(R.id.widget_score, current + " / " + maximum + " hits");
+            views.setInt(R.id.widget_root, "setBackgroundResource", critical ? R.drawable.widget_background_critical : R.drawable.widget_background);
+
+            int accent = critical ? COLOR_CRITICAL : "cooldown".equals(state) ? COLOR_MUTED : COLOR_ACCENT;
+            views.setTextViewText(R.id.widget_score, current + " / " + maximum);
+            views.setTextColor(R.id.widget_score, accent);
+            views.setInt(R.id.widget_icon, "setColorFilter", accent);
+
+            int visibleProgressId = critical ? R.id.widget_progress_critical : "cooldown".equals(state) ? R.id.widget_progress_muted : R.id.widget_progress_active;
+            for (int id : new int[] { R.id.widget_progress_active, R.id.widget_progress_critical, R.id.widget_progress_muted }) {
+                views.setViewVisibility(id, id == visibleProgressId ? View.VISIBLE : View.GONE);
+            }
+            views.setProgressBar(visibleProgressId, Math.max(1, maximum), Math.max(0, Math.min(current, maximum)), false);
+
+            views.setInt(R.id.widget_countdown, "setBackgroundResource", critical ? R.drawable.widget_badge_critical : "cooldown".equals(state) ? R.drawable.widget_badge_muted : R.drawable.widget_badge_accent);
+            views.setTextColor(R.id.widget_countdown, accent);
             // Chronometer renders purely off this base against the system clock -
             // no further app-side ticks needed for it to keep counting down.
             long base = SystemClock.elapsedRealtime() + (deadlineEpochMs - System.currentTimeMillis());
             views.setChronometer(R.id.widget_countdown, base, "cooldown".equals(state) ? "Cooldown · %s" : "Drops in · %s", true);
             views.setChronometerCountDown(R.id.widget_countdown, true);
         } else {
+            views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_background);
+            views.setInt(R.id.widget_icon, "setColorFilter", COLOR_ACCENT);
             views.setViewVisibility(R.id.widget_active_group, View.GONE);
             views.setViewVisibility(R.id.widget_idle, View.VISIBLE);
             views.setTextViewText(R.id.widget_idle, hasSynced ? "No chain running" : "Open ChainWard to sync");

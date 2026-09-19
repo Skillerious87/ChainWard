@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pill background behind the Chronometer - one of three state variants
+     swapped by ChainWidgetProvider (accent / critical / muted), all sharing
+     the same shape so only the fill color differs. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#2691E653" />
+    <corners android:radius="20dp" />
+</shape>

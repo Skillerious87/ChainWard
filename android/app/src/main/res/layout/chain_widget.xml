@@ -2,9 +2,20 @@
 <!-- RemoteViews-safe layout for the "ChainWard: Live Chain" home-screen
      widget - see ChainWidgetProvider.java and ChainWidgetPlugin.java. Only a
      small allowlisted set of views/attributes render inside a widget host;
-     everything here is a plain LinearLayout/TextView/Chronometer, and only
-     text, visibility and the Chronometer base are ever changed at runtime
-     (via RemoteViews.set*), so static styling lives directly in this XML. -->
+     everything here is a plain LinearLayout/FrameLayout/TextView/ImageView/
+     ProgressBar/Chronometer, and only text, visibility, tint, background
+     resource and the Chronometer base are ever changed at runtime (via
+     RemoteViews.set*), so static styling lives directly in this XML.
+
+     Three state colors (accent green / critical red / muted gray, matching
+     the in-app chain-state language - see shell.css's chain danger state and
+     active chain-state pill styling) are expressed
+     as three parallel views per element (three progress bars, one badge
+     background swap) rather than one dynamically-recolored view, since
+     RemoteViews has no version-independent way to retint an arbitrary
+     drawable at runtime - only ChainWidgetProvider's visibility toggles and
+     setInt("setBackgroundResource", ...) calls are needed, both of which
+     work on every supported API level (24+). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/widget_root"
@@ -12,32 +23,48 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="16dp">
+    android:padding="18dp">
 
-    <TextView
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="LIVE CHAIN"
-        android:textColor="@color/splash_accent"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.16"
-        android:fontFamily="sans-serif-medium" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/widget_icon"
+            android:layout_width="13dp"
+            android:layout_height="13dp"
+            android:layout_marginEnd="5dp"
+            android:src="@drawable/ic_stat_chainward"
+            tools:tint="@color/splash_accent" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="LIVE CHAIN"
+            android:textColor="#8FA89B"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.16"
+            android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/widget_faction"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="1dp"
-        android:textColor="@color/splash_tagline_text"
-        android:textSize="12sp"
+        android:layout_marginTop="2dp"
+        android:textColor="@color/splash_title_text"
+        android:textSize="13sp"
+        android:textStyle="bold"
         android:maxLines="1"
         android:ellipsize="end"
         tools:text="Prive Cartel" />
 
     <LinearLayout
         android:id="@+id/widget_active_group"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:orientation="vertical"
@@ -47,21 +74,61 @@
             android:id="@+id/widget_score"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:textColor="@color/splash_title_text"
-            android:textSize="26sp"
+            android:textSize="30sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium"
-            tools:text="47 / 50 hits" />
+            tools:text="47 / 50" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="7dp"
+            android:layout_marginTop="9dp"
+            android:layout_marginEnd="18dp">
+
+            <ProgressBar
+                android:id="@+id/widget_progress_active"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:progressDrawable="@drawable/widget_progress_track"
+                android:max="100"
+                tools:progress="94" />
+
+            <ProgressBar
+                android:id="@+id/widget_progress_critical"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:progressDrawable="@drawable/widget_progress_track_critical"
+                android:max="100"
+                android:visibility="gone" />
+
+            <ProgressBar
+                android:id="@+id/widget_progress_muted"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:progressDrawable="@drawable/widget_progress_track_muted"
+                android:max="100"
+                android:visibility="gone" />
+        </FrameLayout>
 
         <Chronometer
             android:id="@+id/widget_countdown"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/widget_badge_accent"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
             android:textColor="@color/splash_accent"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            tools:text="Drops in · 2:14" />
     </LinearLayout>
 
     <TextView
