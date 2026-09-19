@@ -1,10 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PageLoadingCore } from "./page-loading-core";
 import { ViewLoading } from "./view-loading";
 import { WorkspaceLoadingScreen } from "./workspace-loading-screen";
 
 describe("page loading experience", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders the modern circular loader with accessible route context", () => {
     const html = renderToStaticMarkup(<PageLoadingCore title="Loading roster" hint="Fetching verified faction members" />);
     expect(html).toContain("page-loading-core__ring");
@@ -12,6 +16,14 @@ describe("page loading experience", () => {
     expect(html).toContain("android-chrome-192x192.png");
     expect(html).toContain('aria-label="Loading roster. Fetching verified faction members."');
     expect(html).toContain("Fetching verified faction members</small>");
+  });
+
+  it("renders the isometric cube loader instead, inside the Capacitor Android shell", () => {
+    vi.stubGlobal("window", { Capacitor: { isNativePlatform: () => true } });
+    const html = renderToStaticMarkup(<PageLoadingCore title="Loading roster" hint="Fetching verified faction members" />);
+    expect(html).toContain("iso-loader");
+    expect(html).not.toContain("page-loading-core__ring");
+    expect(html).not.toContain("android-chrome-192x192.png");
   });
 
   it("renders a complete protected document handoff", () => {
