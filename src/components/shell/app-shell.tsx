@@ -63,6 +63,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Spinner } from "@/components/ui/spinner";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { applyAppearancePreferences, saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
+import { syncNativeChainWidget } from "@/lib/native-chain-widget";
 import { tapHaptic } from "@/lib/native-haptics";
 import { PLATFORM_OWNER, type PlatformActor } from "@/lib/auth/platform-owner";
 import { enqueueToast, notify, toastDurationMs, toastKey, type ToastDetail, type ToastQueueItem, type ToastTone } from "@/lib/client-actions";
@@ -352,6 +353,10 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
       if (chainAlertInFlightRef.current === eventKey) chainAlertInFlightRef.current = null;
     });
   }, [chainSeconds, deviceAlertPreferences, liveTelemetry.chain, liveTelemetry.faction]);
+
+  useEffect(() => {
+    syncNativeChainWidget(liveTelemetry.chain, liveTelemetry.faction, liveTelemetry.checkedAt);
+  }, [liveTelemetry.chain, liveTelemetry.faction, liveTelemetry.checkedAt]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setReadNotificationIds(loadReadNotificationIds(notificationScope)), 0);

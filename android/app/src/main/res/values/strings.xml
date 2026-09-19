@@ -14,4 +14,6 @@
     <string name="shortcut_members_long">Open Members</string>
     <string name="shortcut_dashboard_short">Dashboard</string>
     <string name="shortcut_dashboard_long">Open Dashboard</string>
+
+    <string name="widget_description">Live chain hits and countdown, updated whenever ChainWard is open.</string>
 </resources>

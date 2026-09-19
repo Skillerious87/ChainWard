@@ -150,6 +150,7 @@ public class MainActivity extends BridgeActivity {
         });
 
         registerPlugin(AppSplashPlugin.class);
+        registerPlugin(ChainWidgetPlugin.class);
         super.onCreate(savedInstanceState);
 
         // androidx.core.splashscreen swaps in postSplashScreenTheme right as
