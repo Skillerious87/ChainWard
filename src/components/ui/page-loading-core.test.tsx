@@ -21,7 +21,14 @@ describe("page loading experience", () => {
   it("renders the isometric cube loader instead, inside the Capacitor Android shell", () => {
     vi.stubGlobal("window", { Capacitor: { isNativePlatform: () => true } });
     const html = renderToStaticMarkup(<PageLoadingCore title="Loading roster" hint="Fetching verified faction members" />);
-    expect(html).toContain("iso-loader");
+    expect(html).toContain("iso-loader3d");
+    // Three independently-animating cube slots, not a single static shape -
+    // this is the specific thing that broke last time (see polish.css).
+    expect(html.match(/iso-cube-slot/g)).toHaveLength(3);
+    expect(html).toContain("iso-cube-shadow");
+    // Never nested inside page-loading-core__mark - that class's fixed
+    // 72x72px box (sized for the ring+chip) is what silently broke centering.
+    expect(html).not.toContain("page-loading-core__mark");
     expect(html).not.toContain("page-loading-core__ring");
     expect(html).not.toContain("android-chrome-192x192.png");
   });

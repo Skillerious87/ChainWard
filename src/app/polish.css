@@ -1839,33 +1839,49 @@ body {
 @keyframes page-core-spin { to { transform: rotate(360deg); } }
 
 /* Android-only isometric loading mark - see PageLoadingCore/IsometricLoader.
-   Three cubes, each three clip-path polygons (top/left/right face) sharing
-   one 32x30 bounding box, in the same 2:1 dimetric projection used
-   throughout the app's other isometric artwork. Bouncing + a brightness
-   pulse at the peak stands in for the edge-lit accent stroke that a solid
-   clip-path shape can't otherwise carry. */
-.page-loading-core__mark--iso { filter: drop-shadow(0 0 18px rgba(var(--accent-rgb), .16)); }
-.iso-loader { display: flex; align-items: flex-end; gap: 7px; height: 40px; }
-.iso-loader__cube {
-  position: relative; width: 27px; height: 25px; flex: 0 0 auto;
-  animation: iso-cube-bounce 1.1s ease-in-out infinite;
+   Deliberately its own standalone class tree, never combined with
+   .page-loading-core__mark (that class's fixed 72x72px box, sized for the
+   ring+chip it was designed around, silently broke centering here the first
+   time round). Each cube is a plain <span> (.iso-cube-slot) animating only
+   its own transform; the SVG inside it is 100% static, so there is no
+   nested-transform composition for a browser to get wrong. */
+.iso-loader3d {
+  display: flex; justify-content: center; align-items: flex-end;
+  width: 100%; height: 64px; gap: 16px;
+  filter: drop-shadow(0 6px 16px rgba(var(--accent-rgb), .2));
 }
-.iso-loader__face { position: absolute; inset: 0; }
-.iso-loader__face--top {
-  clip-path: polygon(50% 0%, 100% 26.7%, 50% 53.3%, 0% 26.7%);
-  background: linear-gradient(155deg, #dff2c8, var(--accent) 65%);
+.iso-cube-slot {
+  position: relative; width: 34px; height: 32px; flex: 0 0 auto;
+  animation: iso-cube-hop 0.95s infinite;
 }
-.iso-loader__face--left {
-  clip-path: polygon(0% 26.7%, 50% 53.3%, 50% 100%, 0% 73.3%);
-  background: linear-gradient(160deg, var(--accent-strong), #4a9422);
+.iso-cube-svg { position: absolute; inset: 0; overflow: visible; }
+.iso-cube-shadow {
+  position: absolute; left: 50%; bottom: -9px; width: 26px; height: 9px; margin-left: -13px;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .6), transparent 75%);
+  border-radius: 50%;
+  animation: iso-cube-shadow-pulse 0.95s infinite;
 }
-.iso-loader__face--right {
-  clip-path: polygon(50% 53.3%, 100% 26.7%, 100% 73.3%, 50% 100%);
-  background: linear-gradient(200deg, #3d7d1c, #2c5c14);
+.iso-face--top { fill: #dff2c8; }
+.iso-face--left { fill: var(--accent-strong); }
+.iso-face--right { fill: #2c5c14; }
+.iso-face--glint { fill: #f5fff0; opacity: 0; animation: iso-cube-glint 1.9s ease-in-out infinite; }
+
+/* Rise decelerates into the peak, fall accelerates out of it like gravity -
+   a plain symmetric ease-in-out read as mechanical rather than a hop. */
+@keyframes iso-cube-hop {
+  0% { transform: translateY(0); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  38% { transform: translateY(-17px); animation-timing-function: cubic-bezier(.55, 0, .85, .4); }
+  100% { transform: translateY(0); }
 }
-@keyframes iso-cube-bounce {
-  0%, 100% { transform: translateY(0); filter: brightness(0.82) saturate(0.85); }
-  50% { transform: translateY(-11px); filter: brightness(1.1) saturate(1.05); }
+/* Exactly inverse to the hop above: large and dark while grounded, small and faint at the peak. */
+@keyframes iso-cube-shadow-pulse {
+  0% { transform: scale(1); opacity: .55; animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  38% { transform: scale(.5); opacity: .16; animation-timing-function: cubic-bezier(.55, 0, .85, .4); }
+  100% { transform: scale(1); opacity: .55; }
+}
+@keyframes iso-cube-glint {
+  0%, 35%, 100% { opacity: 0; }
+  18% { opacity: .6; }
 }
 
 /* Compact loading mark: the same orbit language, simplified to stay crisp in
@@ -1902,8 +1918,8 @@ body {
   .workspace-loading-screen { padding: max(22px,var(--mobile-safe-area-top)) max(20px,var(--mobile-safe-area-right)) max(22px,var(--mobile-safe-area-bottom)) max(20px,var(--mobile-safe-area-left)); }
   .workspace-loading-screen__assurance { margin-top: 22px; }
   .page-loading-core { --core-size: 64px; min-width: min(280px,calc(100vw - 32px)); gap: 18px; }
-  .iso-loader { height: 34px; gap: 6px; }
-  .iso-loader__cube { width: 22px; height: 20px; }
+  .iso-loader3d { height: 56px; gap: 12px; }
+  .iso-cube-slot { width: 29px; height: 27px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1911,12 +1927,13 @@ body {
   .skeleton-line { animation: none; background: #171e24; }
   .cw-spinner__arc { animation: none; }
   .page-loading-core__ring { animation-duration: 1.8s; }
-  .iso-loader__cube { animation-duration: 2.4s; }
+  .iso-cube-slot, .iso-cube-shadow { animation-duration: 2.2s; }
 }
 :root.reduced-motion .skeleton-line { animation: none; background: #171e24; }
 :root.reduced-motion .cw-spinner__arc { animation: none; }
 :root.reduced-motion .page-loading-core__ring { animation-duration: 1.8s; }
-:root.reduced-motion .iso-loader__cube { animation-duration: 2.4s; }
+:root.reduced-motion .iso-cube-slot,
+:root.reduced-motion .iso-cube-shadow { animation-duration: 2.2s; }
 
 /* Shared interaction polish. Custom controls that visually replace their
    native inputs keep an equally obvious keyboard focus indicator. */

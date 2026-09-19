@@ -13,19 +13,18 @@ interface PageLoadingCoreProps {
  * RouteProgress) as well as the view/workspace loading fallbacks that share
  * this same component. The web/desktop mark is one spinning ring around the
  * still brand chip; inside the Capacitor Android shell it's a small trio of
- * isometric cubes bouncing in sequence instead - a purpose-built native
+ * isometric cubes hopping in sequence instead - a purpose-built native
  * treatment, requested to be Android-only, that has no equivalent on the
  * marketing site or desktop browser tab. Both share the exact same title/hint
- * copy treatment below.
+ * copy treatment below. IsometricLoader is intentionally NOT nested inside
+ * page-loading-core__mark - that class carries a fixed 72x72px box sized for
+ * the ring+chip, which silently broke the cubes' centering by constraining a
+ * wider element into a box it didn't fit.
  */
 export function PageLoadingCore({ title, hint }: PageLoadingCoreProps) {
   return (
     <div className="page-loading-core" role="status" aria-live="polite" aria-label={`${title}. ${hint}.`}>
-      {isNativeApp() ? (
-        <div className="page-loading-core__mark page-loading-core__mark--iso" aria-hidden="true">
-          <IsometricLoader />
-        </div>
-      ) : (
+      {isNativeApp() ? <IsometricLoader /> : (
         <div className="page-loading-core__mark" aria-hidden="true">
           <span className="page-loading-core__ring" />
           <span className="page-loading-core__chip">
@@ -42,22 +41,33 @@ export function PageLoadingCore({ title, hint }: PageLoadingCoreProps) {
 }
 
 /**
- * Three flat-shaded isometric cubes bouncing in a staggered wave - each face
- * is a `clip-path` polygon on a plain div, using the same 2:1 dimetric
- * projection (top/left/right faces) as the rest of the app's isometric
- * artwork, not a CSS skew trick or 3D perspective transform (both render
- * inconsistently across WebView versions at this size).
+ * Three isometric cubes hopping in a staggered wave, each with its own
+ * ground shadow (scaling/fading opposite the hop - big and dark when
+ * grounded, small and faint at the peak) and a brief glint sweep across the
+ * top face. Real SVG polygons at exact 2:1 dimetric coordinates, not
+ * `clip-path` on flat divs - clip-path shapes stacked under a `transform`
+ * animation were the likely reason the previous version rendered as static,
+ * un-animated boxes. Each cube is a plain HTML `<span>` animating its own
+ * `transform`; the SVG inside it never animates anything itself, which
+ * sidesteps any SVG-nested-transform composition risk entirely.
  */
 function IsometricLoader() {
   return (
-    <div className="iso-loader">
-      {[0, 1, 2].map((index) => (
-        <span className="iso-loader__cube" key={index} style={{ animationDelay: `${index * 0.15}s` }}>
-          <i className="iso-loader__face iso-loader__face--top" />
-          <i className="iso-loader__face iso-loader__face--left" />
-          <i className="iso-loader__face iso-loader__face--right" />
-        </span>
-      ))}
+    <div className="iso-loader3d" aria-hidden="true">
+      {[0, 1, 2].map((index) => {
+        const delay = `${index * 0.16}s`;
+        return (
+          <span className="iso-cube-slot" key={index} style={{ animationDelay: delay }}>
+            <i className="iso-cube-shadow" style={{ animationDelay: delay }} />
+            <svg className="iso-cube-svg" viewBox="0 0 34 32" width="34" height="32">
+              <polygon className="iso-face iso-face--right" points="17,17 34,8.5 34,23.5 17,32" />
+              <polygon className="iso-face iso-face--left" points="0,8.5 17,17 17,32 0,23.5" />
+              <polygon className="iso-face iso-face--top" points="17,0 34,8.5 17,17 0,8.5" />
+              <polygon className="iso-face iso-face--glint" points="17,4.25 25.5,8.5 17,12.75 8.5,8.5" style={{ animationDelay: `${index * 0.16 + 0.25}s` }} />
+            </svg>
+          </span>
+        );
+      })}
     </div>
   );
 }
