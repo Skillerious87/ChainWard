@@ -191,26 +191,48 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Handles both App Links (an external tap on a chain-ward-ebon.vercel.app
-     * link - see the MainActivity intent-filter in AndroidManifest.xml) and
-     * the static launcher shortcuts in res/xml/shortcuts.xml, which target
-     * this exact same ACTION_VIEW + https data shape by explicit component.
-     * Only ever navigates to the app's own host, checked here rather than
-     * trusted from the manifest's intent-filter match alone - see
-     * DEEP_LINK_HOST.
+     * Handles three kinds of incoming intent:
+     * - App Links: an external tap on a chain-ward-ebon.vercel.app link (see
+     *   the MainActivity intent-filter in AndroidManifest.xml).
+     * - The static launcher shortcuts in res/xml/shortcuts.xml, which target
+     *   this exact same ACTION_VIEW + https data shape by explicit component.
+     * - A plain-text share from another app (Discord, the browser, Torn's
+     *   own site) picking "ChainWard" from the system share sheet - forwarded
+     *   as-is to the Targets page's "Add target" field, which already parses
+     *   both a bare Torn ID and a full profile URL (see targets-workspace.tsx).
+     *   There is deliberately no attempt to validate it looks like a Torn
+     *   profile here - that field's existing validation is the single source
+     *   of truth for what counts as a usable reference.
+     *
+     * The ACTION_VIEW branch only ever navigates to the app's own host,
+     * checked here rather than trusted from the manifest's intent-filter
+     * match alone - see DEEP_LINK_HOST.
      */
     private void handleIncomingIntent(Intent intent) {
-        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
+        if (intent == null) {
+            return;
+        }
+        WebView webView = bridge.getWebView();
+        if (webView == null) {
+            return;
+        }
+
+        if (Intent.ACTION_SEND.equals(intent.getAction()) && "text/plain".equals(intent.getType())) {
+            String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (sharedText != null && !sharedText.trim().isEmpty()) {
+                webView.loadUrl("https://" + DEEP_LINK_HOST + "/targets?share=" + Uri.encode(sharedText.trim()));
+            }
+            return;
+        }
+
+        if (!Intent.ACTION_VIEW.equals(intent.getAction())) {
             return;
         }
         Uri data = intent.getData();
         if (data == null || !"https".equals(data.getScheme()) || !DEEP_LINK_HOST.equalsIgnoreCase(data.getHost())) {
             return;
         }
-        WebView webView = bridge.getWebView();
-        if (webView != null) {
-            webView.loadUrl(data.toString());
-        }
+        webView.loadUrl(data.toString());
     }
 
     /** Creates the channels FCM pushes land in up front, at IMPORTANCE_HIGH - see NOTIFICATION_CHANNEL_ID and friends. */

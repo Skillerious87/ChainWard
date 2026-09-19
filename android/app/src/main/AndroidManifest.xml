@@ -74,6 +74,16 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
 
+            <!-- Lets "ChainWard" appear in the system share sheet for plain
+                 text from any app - sharing a Torn profile link from Discord
+                 or a browser routes straight to Targets' "Add target" field.
+                 See MainActivity's handleIncomingIntent() ACTION_SEND branch. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
 
         <provider

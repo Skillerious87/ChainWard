@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   addTargetAction,
@@ -139,13 +139,24 @@ interface LiveState {
 export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   const { entries, snapshots, errors, source, fetchedAt, nowMs, connected, storageAvailable, fairFight, ffscouterConfigured } = props;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { view: rawView } = useWorkspaceSectionNavigation("targets");
   const view: View = VIEWS.includes(rawView as View) ? (rawView as View) : "list";
 
+  // Populated by the Android share sheet - see MainActivity's
+  // handleIncomingIntent() ACTION_SEND branch, which forwards whatever text
+  // was shared (a Torn profile link copied from Discord/the browser)
+  // straight here as a "share" param. Read once, into lazy initial state
+  // (not a post-mount effect calling setState, which cascades an avoidable
+  // extra render) - the matching effect further down only ever clears the
+  // param from the URL, never touches component state.
+  const sharedReference = searchParams.get("share");
+  const canAddShared = Boolean(sharedReference) && connected && storageAvailable && entries.length < MAX_TARGETS;
+
   const [pending, startTransition] = useTransition();
   const [now, setNow] = useState(nowMs);
-  const [addOpen, setAddOpen] = useState(false);
-  const [reference, setReference] = useState("");
+  const [addOpen, setAddOpen] = useState(canAddShared);
+  const [reference, setReference] = useState(canAddShared ? (sharedReference as string) : "");
   const [addNote, setAddNote] = useState("");
   const [importText, setImportText] = useState("");
   const [addMode, setAddMode] = useState<AddMode>("single");
@@ -684,6 +695,14 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   }, [catchingUp, connected, entries.length, nextReady, runCatchUp]);
 
   const canAdd = connected && storageAvailable && entries.length < MAX_TARGETS;
+
+  useEffect(() => {
+    // The dialog itself already opened from lazy initial state above (if at
+    // all) - this only ever strips the param so a refresh or back-navigation
+    // doesn't reopen it.
+    if (searchParams.get("share")) router.replace("/targets", { scroll: false });
+  }, [searchParams, router]);
+
   // Chain/Abroad never read statusFilter (see chainRows/abroadRows above), so
   // their own "clear filters" prompt only needs to watch the filters that
   // actually narrow them.
