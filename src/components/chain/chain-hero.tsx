@@ -1,14 +1,17 @@
 "use client";
 
-import { Activity, ArrowUpRight, Clock3, Crosshair, Expand, Swords, TrendingUp, Users, X } from "lucide-react";
+import { Activity, ArrowUpRight, Clock3, Crosshair, Expand, Siren, Swords, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
 import type { BestChainTargetResult } from "@/lib/targets/best-target";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
+import { useNextChainTarget } from "./use-next-chain-target";
 interface ChainHeroProps { detailed?: boolean; bestTarget?: BestChainTargetResult; onRefresh?: () => void; }
 
 /**
@@ -34,6 +37,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
   const { telemetry: snapshot, seconds, deadlineAtSeconds, nowSeconds } = useLiveWorkspaceTelemetry();
   const [syncing, setSyncing] = useState(false);
   const [focus, setFocus] = useState(false);
+  const { chainPanicMode } = useAppearancePreferences();
   const exitButtonRef = useRef<HTMLButtonElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const chain = snapshot.chain;
@@ -158,6 +162,11 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
       aria-modal={focus || undefined}
       aria-label={focus ? "Expanded live chain telemetry" : undefined}
     >
+      {chainPanicMode && seconds > 0 && seconds <= 60 && createPortal(
+        <div className="chain-panic-alert" role="status">
+          <span><Siren size={18} aria-hidden="true" /> Chain timeout: 60 seconds or less remaining</span>
+        </div>, document.body,
+      )}
       {focus && (
         <button ref={exitButtonRef} className="chain-focus-exit" onClick={closeFocus}>
           <X size={17} /><span>Exit expanded view</span><kbd>Esc</kbd>
@@ -218,6 +227,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
           deadlineAtSeconds={deadlineAtSeconds}
           warmup={chain.current < 10}
           bestTarget={bestTarget}
+          panicMode={chainPanicMode}
         />
       </div>
 
@@ -247,12 +257,14 @@ function TimeoutRing({
   deadlineAtSeconds,
   warmup,
   bestTarget,
+  panicMode,
 }: {
   seconds: number;
   windowSeconds: number;
   deadlineAtSeconds: number;
   warmup: boolean;
   bestTarget?: BestChainTargetResult;
+  panicMode: boolean;
 }) {
   const radius = 54;
   // Browser and server JavaScript engines can serialize the final few bits of
@@ -261,7 +273,7 @@ function TimeoutRing({
   const svgNumber = (value: number) => Number(value.toFixed(6));
   const circumference = svgNumber(2 * Math.PI * radius);
   const fraction = windowSeconds > 0 ? Math.max(0, Math.min(1, seconds / windowSeconds)) : 0;
-  const tone = seconds <= 0 ? "expired" : seconds < 60 ? "critical" : seconds < 120 ? "warning" : "safe";
+  const tone = seconds <= 0 ? "expired" : seconds <= 60 ? "critical" : seconds < 120 ? "warning" : "safe";
   const label = tone === "expired" ? "Chain dropped" : tone === "critical" ? "Act now" : tone === "warning" ? "Watch window" : "Healthy";
 
   return (
@@ -335,6 +347,17 @@ function TimeoutRing({
         <div><dt>Window</dt><dd>{formatDuration(windowSeconds)}</dd></div>
       </dl>
 
+      <button
+        type="button"
+        className="timeout-ring__panic"
+        aria-pressed={panicMode}
+        title="Slow red screen-border pulse during the final 60 seconds. Reduced motion uses a steady border."
+        onClick={() => saveAppearancePreferences({ chainPanicMode: !panicMode })}
+      >
+        <Siren size={15} aria-hidden="true" /> {panicMode ? "Panic mode on" : "Enable panic mode"}
+        <span>Last 60s</span>
+      </button>
+
       {bestTarget && <ChainAttackSuggestion result={bestTarget} />}
 
       <small title="Torn reports seconds remaining when it answers. Automatic active-chain checks bypass the service cache and project each response with a monotonic clock.">
@@ -350,8 +373,8 @@ function TimeoutRing({
  * now, one tap away from keeping the chain alive without a detour through
  * the Targets page.
  */
-function ChainAttackSuggestion({ result }: { result: BestChainTargetResult }) {
-  const { target, targetCount } = result;
+function ChainAttackSuggestion({ result: initial }: { result: BestChainTargetResult }) {
+  const { target, targetCount, verificationUnavailable } = useNextChainTarget(initial);
 
   if (target) {
     const lead = target.reasons[0];
@@ -365,7 +388,7 @@ function ChainAttackSuggestion({ result }: { result: BestChainTargetResult }) {
       >
         <span className="timeout-ring__attack-icon"><Swords size={15} /></span>
         <span className="timeout-ring__attack-copy">
-          <em>Suggested target</em>
+          <em>Next target</em>
           <strong>Attack {target.name}</strong>
           <small>Lvl {target.level}{lead ? ` · ${lead}` : ""}</small>
         </span>
@@ -378,9 +401,9 @@ function ChainAttackSuggestion({ result }: { result: BestChainTargetResult }) {
     <Link className="timeout-ring__attack timeout-ring__attack--empty" href="/targets">
       <span className="timeout-ring__attack-icon"><Crosshair size={15} /></span>
       <span className="timeout-ring__attack-copy">
-        <em>Suggested target</em>
-        <strong>{targetCount > 0 ? "No target ready right now" : "No targets tracked yet"}</strong>
-        <small>{targetCount > 0 ? "Nobody on your list is available to hit." : "Add targets to get attack suggestions here."}</small>
+        <em>Next target</em>
+        <strong>{verificationUnavailable ? "Target checks unavailable" : targetCount > 0 ? "No target ready right now" : "No targets tracked yet"}</strong>
+        <small>{verificationUnavailable ? "Retry with Sync now or check your targets." : targetCount > 0 ? "Targets unavailable or attacked in the last 5m." : "Add targets to get attack suggestions here."}</small>
       </span>
       <ArrowUpRight size={15} className="timeout-ring__attack-go" />
     </Link>

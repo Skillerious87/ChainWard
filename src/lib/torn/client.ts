@@ -137,16 +137,16 @@ export class TornClient {
    * key — powers the personal Targets list. Cached for 60s, which matches the
    * Targets workspace's ~90s staleness window.
    */
-  getUserProfileById(tornUserId: number): Promise<{ value: UserProfileByIdResponse; fetchedAt: number }> {
-    return this.requestWithMeta(`/user/${tornUserId}`, userProfileByIdResponseSchema, 60_000, { selections: "profile" });
+  getUserProfileById(tornUserId: number, options: TornRequestOptions = {}): Promise<{ value: UserProfileByIdResponse; fetchedAt: number }> {
+    return this.requestWithMeta(`/user/${tornUserId}`, userProfileByIdResponseSchema, 60_000, { selections: "profile" }, options);
   }
 
   /**
    * The operator's own recent attack log — powers the Targets "last hit by me"
    * and retaliation flags. Cached briefly; the list only grows as they play.
    */
-  getMyAttacks(): Promise<{ value: UserAttacksResponse; fetchedAt: number }> {
-    return this.requestWithMeta("/user/attacks", userAttacksResponseSchema, 45_000, { limit: "100", sort: "DESC" });
+  getMyAttacks(options: TornRequestOptions = {}): Promise<{ value: UserAttacksResponse; fetchedAt: number }> {
+    return this.requestWithMeta("/user/attacks", userAttacksResponseSchema, 45_000, { limit: "100", sort: "DESC" }, options);
   }
 
   /**

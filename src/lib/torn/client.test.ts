@@ -3,6 +3,23 @@ import { TornClient } from "./client";
 import { TornApiError, userFacingTornError } from "./errors";
 
 describe("TornClient", () => {
+  it.each(["profile", "attacks"] as const)("refreshes %s immediately after an attack without reusing the normal cache", async (kind) => {
+    const payload = kind === "profile" ? { profile: { id: 123, name: "Target", status: { state: "Okay" } } } : { attacks: [] };
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(payload));
+    const client = new TornClient({ apiKey: `fresh-target-${kind}`, fetchImplementation: fetchMock });
+    const read = (fresh = false) => {
+      const options = fresh ? { forceRefresh: true, bypassUpstreamCache: true } : {};
+      return kind === "profile" ? client.getUserProfileById(123, options) : client.getMyAttacks(options);
+    };
+    await read();
+    await read();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await read(true);
+    await read();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(new URL(String(fetchMock.mock.calls[1]?.[0])).searchParams.get("timestamp")).toMatch(/^\d+$/);
+  });
+
   it("retrieves the current profile image from the public profile endpoint", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
       profile: {

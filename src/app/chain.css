@@ -370,6 +370,69 @@
 :root.reduced-motion .timeout-ring__halo { transition: none; }
 :root.reduced-motion .timeout-ring--critical .timeout-ring__badge { animation: none; }
 
+.timeout-ring__panic {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid #35404a;
+  border-radius: 8px;
+  background: #12191e;
+  color: #bcc6ce;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+.timeout-ring__panic span { margin-left: auto; color: #87939d; font-size: 10px; white-space: nowrap; }
+.timeout-ring__panic:hover { border-color: #87939d; }
+.timeout-ring__panic:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.timeout-ring__panic[aria-pressed="true"] { border-color: #b54f54; background: #2b171c; color: #ffc2c2; }
+.timeout-ring__panic[aria-pressed="true"] span { color: #e5a1a5; }
+
+/* Screen edges stay visible on a second monitor and never intercept a click.
+   Only opacity moves: one gradual pulse every three seconds. */
+.chain-panic-alert {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 16px;
+  border: 6px solid #ff474f;
+  background: linear-gradient(0deg, rgba(197, 24, 44, .3), transparent 100px);
+  box-shadow: inset 0 0 70px 18px rgba(245, 40, 58, .45);
+  pointer-events: none;
+}
+.chain-panic-alert::before {
+  position: absolute;
+  inset: -6px;
+  border: 12px solid #ff6269;
+  box-shadow: inset 0 0 100px 25px rgba(245, 40, 58, .5);
+  content: "";
+  animation: chain-panic-pulse 3s ease-in-out infinite;
+}
+.chain-panic-alert > span {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #ff7c82;
+  border-radius: 8px;
+  background: #4a101b;
+  color: #fff0f1;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+@keyframes chain-panic-pulse { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .chain-panic-alert::before { animation: none; opacity: .5; }
+}
+:root.reduced-motion .chain-panic-alert::before { animation: none; opacity: .5; }
+
 /* The console body gives the ring a real column with breathing room, rather
    than the narrow strip the old orbit was squeezed into. */
 .chain-console__body { grid-template-columns: minmax(0, 1fr) 268px; gap: 20px; padding: 20px 22px; }

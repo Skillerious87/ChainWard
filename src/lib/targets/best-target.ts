@@ -2,15 +2,18 @@ import "server-only";
 
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
-import { refreshDueTargetsForList } from "./data-service";
+import { fetchTargetSnapshot, loadHitIndex, refreshDueTargetsForList } from "./data-service";
 import { enrichWithFairFight } from "./ffscouter";
 import { scoreTarget } from "./priority";
-import { readTargetList } from "./store";
+import { mergeSnapshots, readTargetList, writeTargetList } from "./store";
 import { isAttackableState, type TargetSnapshot } from "./types";
 
-/** Small enough to cost nothing on a page that renders every few seconds —
- *  see `refreshDueTargetsForList`; most calls find nothing due anyway. */
-const LIVE_REFRESH_BUDGET = 8;
+// Keep large lists moving without spending the whole API budget on profiles
+// that will never be suggested. The selected candidate gets its own live check.
+const LIVE_REFRESH_BUDGET = 2;
+const CANDIDATE_CHECK_BUDGET = 3;
+const RECENT_ATTACK_MS = 5 * 60_000;
+const FRESH = { forceRefresh: true, bypassUpstreamCache: true } as const;
 
 export interface BestChainTarget {
   tornUserId: number;
@@ -29,6 +32,8 @@ export interface BestChainTargetResult {
   target: BestChainTarget | null;
   /** Total targets on the operator's list, so the caller can tell "none ready" from "no list yet". */
   targetCount: number;
+  /** No attack link is shown when the remaining candidates cannot be verified. */
+  verificationUnavailable?: boolean;
 }
 
 const NONE: BestChainTargetResult = { target: null, targetCount: 0 };
@@ -36,15 +41,14 @@ const NONE: BestChainTargetResult = { target: null, targetCount: 0 };
 /**
  * Reuses the Targets workspace's own hit-priority scoring to answer "who
  * should I hit right now to keep this chain alive" from the Active Chain
- * page. Reads the operator's already-cached target list rather than forcing
- * a fresh Torn fetch, so this costs nothing beyond what the Targets page
- * already keeps current; Fair Fight enrichment shares the same process-wide
- * cache as that page too.
+ * page. Recent personal attacks override cached readiness, and the winning
+ * candidate is checked directly with Torn before an attack link is returned.
+ * A click alone is never treated as proof that an attack happened.
  */
 export async function getBestChainTarget(): Promise<BestChainTargetResult> {
   const [actor, connection] = await Promise.all([getCurrentActor(), getConfiguredTornConnection()]);
   const factionId = connection?.factionId ?? null;
-  if (!factionId || !connection) return NONE;
+  if (!factionId || !connection || connection.tornUserId !== actor.tornUserId) return NONE;
 
   let entries, snapshots;
   try {
@@ -54,18 +58,31 @@ export async function getBestChainTarget(): Promise<BestChainTargetResult> {
   }
   if (entries.length === 0) return NONE;
 
-  // Nobody else is guaranteed to be polling: a candidate that looked
-  // attackable a few refreshes ago may already be in hospital. Closing that
-  // gap here (not just leaning on the Targets page's own poll) is what lets
-  // this suggestion actually change once the top pick gets hit.
+  // This must run even when every stored profile is "fresh". An attack just
+  // before opening the page otherwise remains invisible for 45–60 seconds.
+  const hitIndex = await loadHitIndex(connection.client, actor.tornUserId, FRESH);
+  const faction = { id: factionId, name: connection.factionName ?? "", tag: connection.factionTag ?? "" };
   try {
-    const faction = { id: factionId, name: connection.factionName ?? "", tag: connection.factionTag ?? "" };
     snapshots = await refreshDueTargetsForList(faction, actor.tornUserId, entries, snapshots, LIVE_REFRESH_BUDGET);
   } catch {
-    /* Stale data beats blocking the suggestion on a Torn hiccup. */
+    /* Candidates are still individually verified below. */
   }
 
-  const attackable = Object.values(snapshots).filter((snapshot) => isAttackableState(snapshot.status.state));
+  const now = Date.now();
+  const eligible = (snapshot: TargetSnapshot): boolean =>
+    snapshot.tornUserId !== actor.tornUserId && snapshot.factionId !== factionId &&
+    isAttackableState(snapshot.status.state) &&
+    (!snapshot.lastHit || now - snapshot.lastHit.at * 1_000 >= RECENT_ATTACK_MS);
+  const attackable = entries.flatMap((entry) => {
+    const snapshot = snapshots[String(entry.tornUserId)];
+    if (!snapshot) return [];
+    const hit = hitIndex.get(entry.tornUserId);
+    // Never replace newer saved history with an older/cached log response.
+    const current = hit?.lastHit && hit.lastHit.at >= (snapshot.lastHit?.at ?? 0)
+      ? { ...snapshot, lastHit: hit.lastHit, hitYouBack: hit.hitYouBack, hitStats: hit.stats }
+      : snapshot;
+    return eligible(current) ? [current] : [];
+  });
   if (attackable.length === 0) return { target: null, targetCount: entries.length };
 
   let fairFight = new Map<number, number | null>();
@@ -77,18 +94,47 @@ export async function getBestChainTarget(): Promise<BestChainTargetResult> {
   }
 
   const pinnedIds = new Set(entries.filter((entry) => entry.pinned).map((entry) => entry.tornUserId));
-  const now = Date.now();
+  const rank = (snapshot: TargetSnapshot) => scoreTarget({
+    snapshot,
+    fairFight: fairFight.get(snapshot.tornUserId) ?? null,
+    pinned: pinnedIds.has(snapshot.tornUserId),
+    now,
+  });
+  const ranked = attackable.map((snapshot) => ({ snapshot, ...rank(snapshot) }))
+    .sort((a, b) => b.score - a.score || a.snapshot.tornUserId - b.snapshot.tornUserId);
+  const checked: TargetSnapshot[] = [];
   let best: { snapshot: TargetSnapshot; score: number; reasons: string[] } | null = null;
-  for (const snapshot of attackable) {
-    const { score, reasons } = scoreTarget({
-      snapshot,
-      fairFight: fairFight.get(snapshot.tornUserId) ?? null,
-      pinned: pinnedIds.has(snapshot.tornUserId),
-      now,
-    });
-    if (!best || score > best.score) best = { snapshot, score, reasons };
+  let verificationUnavailable = false;
+  for (const candidate of ranked.slice(0, CANDIDATE_CHECK_BUDGET)) {
+    try {
+      const snapshot = await fetchTargetSnapshot(connection.client, candidate.snapshot.tornUserId, {
+        lastHit: candidate.snapshot.lastHit,
+        hitYouBack: candidate.snapshot.hitYouBack,
+        stats: candidate.snapshot.hitStats,
+      }, FRESH);
+      checked.push(snapshot);
+      if (!eligible(snapshot)) continue;
+      best = { snapshot, ...rank(snapshot) };
+      break;
+    } catch {
+      // A failed check must not put the old, possibly hospitalised pick back.
+      verificationUnavailable = true;
+    }
   }
-  if (!best) return { target: null, targetCount: entries.length };
+  if (checked.length > 0) {
+    try {
+      // Re-read curation so a concurrent removal/pin edit is not overwritten.
+      const latest = await readTargetList(factionId, actor.tornUserId);
+      const tracked = new Set(latest.entries.map((entry) => entry.tornUserId));
+      await writeTargetList(faction, actor.tornUserId, mergeSnapshots(latest, checked.filter((snapshot) => tracked.has(snapshot.tornUserId))));
+    } catch { /* Verification remains valid if persistence is unavailable. */ }
+  }
+  if (!best) return {
+    target: null,
+    targetCount: entries.length,
+    // There may be more candidates than can safely be checked in one request.
+    ...(verificationUnavailable || ranked.length > CANDIDATE_CHECK_BUDGET ? { verificationUnavailable: true } : {}),
+  };
 
   return {
     targetCount: entries.length,

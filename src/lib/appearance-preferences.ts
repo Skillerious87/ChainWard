@@ -14,6 +14,7 @@ export interface AppearancePreferences {
   autoRefresh: boolean;
   refreshIntervalSeconds: 30 | 60 | 120;
   chainWarningSeconds: 60 | 120 | 180 | 300;
+  chainPanicMode: boolean;
 }
 
 const storageKey = "chainward:appearance:v1";
@@ -28,6 +29,7 @@ const defaults: AppearancePreferences = {
   autoRefresh: true,
   refreshIntervalSeconds: 30,
   chainWarningSeconds: 180,
+  chainPanicMode: false,
 };
 let currentSnapshot = defaults;
 let snapshotLoaded = false;
@@ -51,6 +53,7 @@ export function readAppearancePreferences(): AppearancePreferences {
       autoRefresh: candidate.autoRefresh !== false,
       refreshIntervalSeconds: isRefreshInterval(candidate.refreshIntervalSeconds) ? candidate.refreshIntervalSeconds : defaults.refreshIntervalSeconds,
       chainWarningSeconds: isWarningThreshold(candidate.chainWarningSeconds) ? candidate.chainWarningSeconds : defaults.chainWarningSeconds,
+      chainPanicMode: candidate.chainPanicMode === true,
     };
   } catch {
     return defaults;

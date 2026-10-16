@@ -2,7 +2,7 @@ import "server-only";
 
 import { TornApiError, userFacingTornError } from "@/lib/torn/errors";
 import { acquireConcurrencySlot } from "@/lib/security/rate-limit";
-import type { TornClient } from "@/lib/torn/client";
+import type { TornClient, TornRequestOptions } from "@/lib/torn/client";
 import type { FactionMembersResponse, UserAttacksResponse, UserBountiesResponse } from "@/lib/torn/schemas";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { type Faction, writeTargetList } from "./store";
@@ -236,9 +236,9 @@ export function collectAttackedOpponents(response: UserAttacksResponse, operator
 
 /** Builds the hit index once per batch — every caller that fetches one or
  *  more target profiles shares this instead of re-reading the attack log. */
-export async function loadHitIndex(client: TornClient, operatorId: number): Promise<Map<number, HitInfo>> {
+export async function loadHitIndex(client: TornClient, operatorId: number, options: TornRequestOptions = {}): Promise<Map<number, HitInfo>> {
   try {
-    const { value } = await client.getMyAttacks();
+    const { value } = await client.getMyAttacks(options);
     return buildHitStats(value, operatorId);
   } catch {
     // Attack history is enrichment only — a missing selection or a transient
@@ -271,9 +271,9 @@ function delay(milliseconds: number): Promise<void> {
 
 /** One target's profile (+ bounties) — used when a target is first added.
  *  Not concurrency-bounded: a deliberate, low-frequency, single-target call. */
-export async function fetchTargetSnapshot(client: TornClient, tornUserId: number, hit: HitInfo = NO_HIT): Promise<TargetSnapshot> {
+export async function fetchTargetSnapshot(client: TornClient, tornUserId: number, hit: HitInfo = NO_HIT, options: TornRequestOptions = {}): Promise<TargetSnapshot> {
   const [{ value, fetchedAt }, bounties] = await Promise.all([
-    client.getUserProfileById(tornUserId),
+    client.getUserProfileById(tornUserId, options),
     client.getUserBounties(tornUserId).catch(() => null),
   ]);
   return snapshotFromProfile(tornUserId, value.profile, fetchedAt, hit, summarizeBounties(bounties?.value));
