@@ -470,6 +470,15 @@ model ApplicationSetting {
   updatedAt DateTime @updatedAt
 }
 
+model TornApiBrokerState {
+  key       String    @id
+  value     Json
+  expiresAt DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@index([expiresAt])
+}
+
 /**
  * One row per faction. `roleName` lets the chain manager rename the assigned
  * duty (default "Chain Watcher") everywhere it appears in the UI; `bufferSeconds`

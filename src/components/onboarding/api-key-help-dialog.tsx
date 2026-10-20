@@ -54,7 +54,7 @@ export function ApiKeyHelpDialog() {
             <h3>What it&apos;s for</h3>
             <p>
               Chainward uses your key server-side to verify your identity and faction, then reads chain, member,
-              and reward data into your workspace. It is never sent to your browser or shown to other members.
+              and reward data into your workspace. Plaintext keys are never returned to other players.
             </p>
           </div>
 
@@ -62,7 +62,7 @@ export function ApiKeyHelpDialog() {
             <h3>Getting one</h3>
             <ol>
               <li>Open Torn → Settings → API Keys</li>
-              <li>Create a key with <strong>Limited Access</strong></li>
+              <li>Create a <strong>Public Only</strong> key for faction views, or Limited Access for optional personal features</li>
               <li>Paste it below — nothing is saved until you connect</li>
             </ol>
           </div>

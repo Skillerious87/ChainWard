@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { platformAuthenticatorIsAvailable, startRegistration } from "@simplewebauthn/browser";
 import { Dialog } from "@/components/ui/dialog";
+import { ApiPoolSettings } from "./api-pool-settings";
 import { Spinner } from "@/components/ui/spinner";
 import { lockWorkspaceForTesting, unlockWorkspaceForTesting } from "@/app/(platform)/settings/actions";
 import { listMyPasskeys, removeMyPasskey } from "@/app/(platform)/settings/passkey-actions";
@@ -441,6 +442,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
           </div>
           <div className="settings-view-actions"><Link className="button button--secondary" href="/connect"><KeyRound size={15} /> {telemetry.source === "live" ? "Replace connection" : "Connect Torn API"}</Link></div>
 
+          <ApiPoolSettings />
           <div className="settings-subsection">
             <header><h3><Fingerprint size={16} /> Your passkeys</h3><p>Unlock Chainward with your device&apos;s fingerprint, face, or PIN instead of pasting your API key.</p></header>
             {passkeys.length > 0 ? <ul className="settings-passkey-list">

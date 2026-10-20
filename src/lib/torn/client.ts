@@ -6,6 +6,8 @@ import { readLimitedJson, RequestBodyTooLargeError } from "@/lib/security/reques
 import { TornApiError } from "./errors";
 import { CHAIN_CACHE_SECONDS } from "./polling-policy";
 import { battleStatsResponseSchema } from "@/lib/members/member-battle-stats";
+import { factionPoolOperation } from "./api-pool-policy";
+import type { FactionPoolRequest, TornCoordinationContext, TornResponseSnapshot } from "./api-pool-types";
 import {
   chainReportResponseSchema,
   chainsResponseSchema,
@@ -49,6 +51,12 @@ export interface TornClientOptions {
   historyCacheSeconds?: number;
   fetchImplementation?: typeof fetch;
   sleep?: (milliseconds: number) => Promise<void>;
+  coordinateRequests?: boolean;
+  coordination?: TornCoordinationContext;
+  sharedFaction?: {
+    factionId: number;
+    read: (request: FactionPoolRequest, ownRead: () => Promise<TornResponseSnapshot>) => Promise<TornResponseSnapshot>;
+  };
 }
 
 export interface TornRequestOptions {
@@ -101,6 +109,9 @@ export class TornClient {
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly keyFingerprint: string;
   private currentChainFetchedAt: number | null = null;
+  private readonly coordinateRequests: boolean;
+  private readonly coordination: TornCoordinationContext;
+  private readonly sharedFaction: TornClientOptions["sharedFaction"];
 
   constructor(options: TornClientOptions) {
     if (!options.apiKey.trim()) throw new Error("A Torn API key is required.");
@@ -114,14 +125,31 @@ export class TornClient {
     this.historyCacheMs = (options.historyCacheSeconds ?? 900) * 1_000;
     this.fetchImplementation = options.fetchImplementation ?? fetch;
     this.sleep = options.sleep ?? delay;
+    this.coordinateRequests = options.coordinateRequests === true && this.dataMode !== "offline";
+    this.coordination = { ...options.coordination };
+    this.sharedFaction = options.sharedFaction;
     this.keyFingerprint = createHash("sha256")
       .update(options.apiKey)
-      .digest("hex")
-      .slice(0, 16);
+      .digest("hex");
   }
 
-  getKeyInfo(): Promise<KeyInfoResponse> {
-    return this.request("/key/info", keyInfoResponseSchema, this.historyCacheMs);
+  async getKeyInfo(options: TornRequestOptions = {}): Promise<KeyInfoResponse> {
+    const snapshot = await this.requestWithMeta("/key/info", keyInfoResponseSchema, this.historyCacheMs, {}, options);
+    const response = snapshot.value;
+    if (this.coordination.ownerId && this.coordination.ownerId !== response.info.user.id) {
+      const error = new TornApiError(2, "The Torn credential identity was inconsistent.");
+      if (this.coordinateRequests) {
+        const { recordTornFailure } = await import("./api-request-budget");
+        await recordTornFailure(this.keyFingerprint, this.coordination, error);
+      }
+      throw error;
+    }
+    if (this.coordinateRequests) {
+      const { identifyTornOwner } = await import("./api-request-budget");
+      await identifyTornOwner(this.keyFingerprint, response.info.user.id, undefined, { factionId: response.info.user.faction_id, verifiedAt: snapshot.fetchedAt });
+    }
+    this.coordination.ownerId = response.info.user.id;
+    return response;
   }
 
   getMyProfile(): Promise<UserBasicResponse> {
@@ -199,6 +227,7 @@ export class TornClient {
   getCompletedChains(
     factionId?: number,
     options: { from?: number; to?: number; limit?: number } = {},
+    requestOptions: TornRequestOptions = {},
   ): Promise<ChainsResponse> {
     const path = factionId ? `/faction/${factionId}/chains` : "/faction/chains";
     return this.request(
@@ -211,6 +240,7 @@ export class TornClient {
         ...(options.to === undefined ? {} : { to: String(options.to) }),
         ...(options.limit === undefined ? {} : { limit: String(options.limit) }),
       },
+      requestOptions,
     );
   }
 
@@ -223,11 +253,11 @@ export class TornClient {
     return this.request(path, chainReportResponseSchema, chainId && !options.live ? this.historyCacheMs : this.liveCacheMs, {}, options);
   }
 
-  getFactionMembers(factionId?: number): Promise<FactionMembersResponse> {
+  getFactionMembers(factionId?: number, options: TornRequestOptions = {}): Promise<FactionMembersResponse> {
     const path = factionId ? `/faction/${factionId}/members` : "/faction/members";
     return this.request(path, factionMembersResponseSchema, this.liveCacheMs, {
       striptags: "true",
-    });
+    }, options);
   }
 
   private request<T>(
@@ -246,6 +276,22 @@ export class TornClient {
     cacheMs: number,
     query: Readonly<Record<string, string>> = {},
     options: TornRequestOptions = {},
+  ): Promise<{ value: T; fetchedAt: number }> {
+    if (this.sharedFaction && factionPoolOperation(path, this.sharedFaction.factionId)) {
+      return this.sharedFaction.read(
+        { path, query, cacheMs, forceRefresh: options.forceRefresh === true },
+        () => this.requestOwnWithMeta(path, schema, cacheMs, query, options),
+      ).then((snapshot) => ({ value: schema.parse(snapshot.value), fetchedAt: snapshot.fetchedAt }));
+    }
+    return this.requestOwnWithMeta(path, schema, cacheMs, query, options);
+  }
+
+  private requestOwnWithMeta<T>(
+    path: string,
+    schema: ZodType<T>,
+    cacheMs: number,
+    query: Readonly<Record<string, string>>,
+    options: TornRequestOptions,
   ): Promise<{ value: T; fetchedAt: number }> {
     const canonicalUrl = new URL(`${this.baseUrl}${path}`);
     canonicalUrl.searchParams.set("comment", this.comment);
@@ -286,6 +332,12 @@ export class TornClient {
     schema: ZodType<T>,
     attempt: number,
   ): Promise<T> {
+    const coordination = { ...this.coordination, verificationRequest: url.pathname.endsWith("/key/info") };
+    if (this.coordinateRequests) {
+      if (url.origin !== "https://api.torn.com" || !url.pathname.startsWith("/v2/")) throw new Error("Coordinated Torn requests must use the official HTTPS API.");
+      const { reserveTornAttempt } = await import("./api-request-budget");
+      await reserveTornAttempt(this.keyFingerprint, coordination);
+    }
     let response: Response;
     try {
       response = await this.fetchImplementation(url, {
@@ -295,9 +347,16 @@ export class TornClient {
           Accept: "application/json",
         },
         cache: "no-store",
+        redirect: "error",
         signal: AbortSignal.timeout(this.requestTimeoutMs),
       });
     } catch (cause: unknown) {
+      if (this.coordinateRequests) {
+        const error = new TornApiError(17, "Torn API request failed.");
+        const { recordTornFailure } = await import("./api-request-budget");
+        await recordTornFailure(this.keyFingerprint, coordination, error);
+        throw error;
+      }
       if (attempt < 2) {
         await this.sleep(250 * 2 ** attempt);
         return this.fetchWithRetry(url, schema, attempt + 1);
@@ -305,10 +364,19 @@ export class TornClient {
       throw new TornApiError(17, "Torn API request failed.", { cause });
     }
 
+    const retryAfterSeconds = parseRetryAfterSeconds(response.headers.get("retry-after"));
     let payload: unknown;
     try {
       payload = await readLimitedJson(response, MAX_RESPONSE_BYTES);
     } catch (cause: unknown) {
+      if (!response.ok) {
+        const error = new TornApiError(response.status === 429 ? 5 : response.status === 503 ? 9 : 17, `Torn API returned HTTP ${response.status}.`, { retryAfterSeconds });
+        if (this.coordinateRequests) {
+          const { recordTornFailure } = await import("./api-request-budget");
+          await recordTornFailure(this.keyFingerprint, coordination, error);
+        }
+        throw error;
+      }
       throw new TornApiError(
         0,
         cause instanceof RequestBodyTooLargeError
@@ -322,8 +390,13 @@ export class TornClient {
       const apiError = new TornApiError(
         errorResult.data.error.code,
         errorResult.data.error.error,
+        { retryAfterSeconds },
       );
-      if (apiError.retryable && attempt < 2) {
+      if (this.coordinateRequests) {
+        const { recordTornFailure } = await import("./api-request-budget");
+        await recordTornFailure(this.keyFingerprint, coordination, apiError);
+      }
+      if (!this.coordinateRequests && apiError.retryable && attempt < 2 && (retryAfterSeconds ?? 0) <= 5) {
         await this.sleep(retryDelay(response, attempt));
         return this.fetchWithRetry(url, schema, attempt + 1);
       }
@@ -331,7 +404,12 @@ export class TornClient {
     }
 
     if (!response.ok) {
-      throw new TornApiError(17, `Torn API returned HTTP ${response.status}.`);
+      const error = new TornApiError(response.status === 429 ? 5 : response.status === 503 ? 9 : 17, `Torn API returned HTTP ${response.status}.`, { retryAfterSeconds });
+      if (this.coordinateRequests) {
+        const { recordTornFailure } = await import("./api-request-budget");
+        await recordTornFailure(this.keyFingerprint, coordination, error);
+      }
+      throw error;
     }
 
     const parsed = schema.safeParse(payload);
@@ -345,10 +423,20 @@ export class TornClient {
 }
 
 function retryDelay(response: Response, attempt: number): number {
-  const retryAfter = response.headers.get("retry-after");
-  const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
-  const requestedDelay = Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : 500 * 2 ** attempt;
+  const seconds = parseRetryAfterSeconds(response.headers.get("retry-after"));
+  const requestedDelay = seconds === undefined ? 500 * 2 ** attempt : seconds * 1_000;
   return Math.min(MAX_RETRY_DELAY_MS, requestedDelay);
+}
+
+export function parseRetryAfterSeconds(value: string | null, now = Date.now()): number | undefined {
+  if (!value?.trim()) return undefined;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return Number.isSafeInteger(seconds) ? seconds : undefined;
+  }
+  const timestamp = Date.parse(trimmed);
+  return Number.isFinite(timestamp) ? Math.max(0, Math.ceil((timestamp - now) / 1_000)) : undefined;
 }
 
 function delay(milliseconds: number): Promise<void> {

@@ -1,5 +1,7 @@
 "use client";
 
+import { ApiUseDisclosure } from "./api-use-disclosure";
+
 import {
   AlertTriangle,
   ArrowRight,
@@ -483,7 +485,8 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
               </span>
             </button>
 
-            <span className="connect-trust"><ShieldCheck size={13} /> Encrypted server-side. Never stored in your browser.</span>
+            <span className="connect-trust"><ShieldCheck size={13} /> Encrypted. Never shared with other players.</span>
+            <ApiUseDisclosure />
 
             <span className="connect-footer-link">Need a key? <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create one <ExternalLink size={12} /></a></span>
 

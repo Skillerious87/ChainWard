@@ -269,6 +269,13 @@ async function run() {
 
     const settings = await getRoute("/settings", session.cookie);
     check("settings opens straight into its console", settings.html.includes("settings-console") && !settings.html.includes("Manage one area at a time"));
+    check("settings exposes explicit faction API contribution controls", settings.html.includes("Shared faction API capacity") && settings.html.includes("Maximum contributions per minute") && settings.html.includes("I authorise the faction API use"));
+    const fixturePool = await fetch(`${ORIGIN}/api/settings/api-pool`, { headers: { cookie: session.cookie } });
+    check("offline fixtures cannot contribute a Torn key", fixturePool.ok && (await fixturePool.json()).available === false);
+    const anonymousPool = await fetch(`${ORIGIN}/api/settings/api-pool`);
+    check("pool settings reject an unauthenticated caller", anonymousPool.status === 401);
+    const crossSitePool = await fetch(`${ORIGIN}/api/settings/api-pool`, { method: "DELETE", headers: { cookie: session.cookie, origin: "https://attacker.example", "sec-fetch-site": "cross-site" } });
+    check("pool contribution removal rejects cross-site requests", crossSitePool.status === 403);
     check("licence testing tools are hidden from a non-owner", !settings.html.includes("Developer tools"), "the controls that lock and unlock the workspace must be owner-only");
     const ownerForSettings = await openOfflineSession("owner");
     const ownerSettings = await getRoute("/settings", ownerForSettings.cookie);

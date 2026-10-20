@@ -23,7 +23,7 @@ export interface ValidatedTornConnection {
 }
 
 interface ConnectionClient {
-  getKeyInfo(): Promise<KeyInfoResponse>;
+  getKeyInfo(options?: { forceRefresh?: boolean; bypassUpstreamCache?: boolean }): Promise<KeyInfoResponse>;
   getMyProfile(): Promise<UserBasicResponse>;
   getMyProfileDetails(): Promise<UserProfileResponse>;
   getFactionBasic(factionId?: number): Promise<FactionBasicResponse>;
@@ -41,11 +41,11 @@ export class MissingTornSelectionsError extends Error {
 }
 
 export async function validateTornConnection(apiKey: string, clientOptions: Omit<ConstructorParameters<typeof TornClient>[0], "apiKey"> = {}): Promise<ValidatedTornConnection> {
-  return validateTornConnectionWithClient(new TornClient({ ...clientOptions, apiKey }));
+  return validateTornConnectionWithClient(new TornClient({ coordinateRequests: true, coordination: { validation: true }, ...clientOptions, apiKey }));
 }
 
 export async function validateTornConnectionWithClient(client: ConnectionClient): Promise<ValidatedTornConnection> {
-  const keyInfo = await client.getKeyInfo();
+  const keyInfo = await client.getKeyInfo({ forceRefresh: true, bypassUpstreamCache: true });
   const factionId = keyInfo.info.user.faction_id;
   if (!factionId) throw new Error("The Torn account is not currently in a faction.");
 

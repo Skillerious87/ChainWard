@@ -9,6 +9,7 @@ export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
   try {
     const connection = await getConfiguredTornConnection();
     if (!connection) return unauthenticatedActor();
+    await connection.verifyIdentity?.();
 
     const storedProfileImageUrl = normalizeTornProfileImageUrl(connection.tornUserImageUrl);
     // Permission and telemetry checks only need the server-trusted identity.

@@ -4,9 +4,8 @@ import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { buildMemberActivityAlert, type MemberActivityAlert } from "@/lib/members/member-activity-intelligence";
 import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
-import { decryptCredential } from "@/lib/security/credential-encryption";
-import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
-import { createTornClient } from "@/lib/torn/server-client";
+import { backgroundFactionPoolClient } from "@/lib/torn/api-pool-broker";
+import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
 import { mapFactionMember } from "@/lib/torn/workspace-data-service";
 import { isPermanentFcmFailure, sendFcm } from "./push-fcm";
 import {
@@ -71,7 +70,6 @@ export async function dispatchPushNotifications(now = new Date()): Promise<PushD
   const factions = await db.faction.findMany({
     where: { pushSubscriptions: { some: { enabled: true } } },
     include: {
-      apiCredentials: { where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 1 },
       chainWatchSlots: { where: { startAt: { lte: now }, endAt: { gt: now } }, orderBy: { startAt: "desc" }, take: 1 },
       pushSubscriptions: {
         where: { enabled: true },
@@ -81,15 +79,12 @@ export async function dispatchPushNotifications(now = new Date()): Promise<PushD
   });
 
   for (const faction of factions) {
-    const credential = faction.apiCredentials[0];
-    if (!credential) continue;
     result.factionsChecked += 1;
     try {
-      const apiKey = decryptCredential(credential.encryptedKey, credential.encryptionIv, credentialEncryptionSecret());
-      const client = createTornClient(apiKey);
-      const chain = await client.getCurrentChain(faction.tornFactionId, { forceRefresh: true, bypassUpstreamCache: true });
+      const client = backgroundFactionPoolClient(faction.tornFactionId);
+      const chain = await client.getCurrentChain();
       await dispatchChainAlerts(String(faction.tornFactionId), faction.name, faction.pushSubscriptions, faction.chainWatchSlots[0] ?? null, chain.chain, result, now);
-      await dispatchMemberAlerts(faction, credential.ownerTornUserId, client, result, now);
+      await dispatchMemberAlerts(faction, client, result, now);
     } catch {
       // One inaccessible Torn credential must not block other subscribed factions.
       result.failed += 1;
@@ -147,19 +142,18 @@ async function dispatchMemberAlerts(
     tag: string | null;
     pushSubscriptions: PushTarget[];
   },
-  credentialOwnerTornId: number,
-  client: ReturnType<typeof createTornClient>,
+  client: ReturnType<typeof backgroundFactionPoolClient>,
   result: PushDispatchResult,
   now: Date,
 ): Promise<void> {
-  const authorised = faction.pushSubscriptions.filter((target) => canReceiveMemberAlerts(target, faction.id, credentialOwnerTornId));
+  const authorised = faction.pushSubscriptions.filter((target) => canReceiveMemberAlerts(target, faction.id));
   const due = authorised.filter((target) => {
     const preferences = preferencesFromDatabase(target.preferences);
     return preferences.enabled && (!target.lastMemberCheckAt || now.getTime() - target.lastMemberCheckAt.getTime() >= preferences.intervalMinutes * 60_000);
   });
   if (!due.length) return;
   const [membersResponse, workspace] = await Promise.all([
-    client.getFactionMembers(faction.tornFactionId),
+    client.getFactionMembers(),
     getMemberActivityWorkspace(faction.tornFactionId),
   ]);
   const members = membersResponse.members.map(mapFactionMember);
@@ -235,9 +229,8 @@ function eligibleMemberAlerts(alerts: MemberActivityAlert[], preferences: PushNo
   });
 }
 
-function canReceiveMemberAlerts(target: PushTarget, factionId: string, credentialOwnerTornId: number): boolean {
-  return target.user.isPlatformAdmin
-    || target.user.tornUserId === credentialOwnerTornId
+function canReceiveMemberAlerts(target: PushTarget, factionId: string): boolean {
+  return (target.user.isPlatformAdmin && target.user.tornUserId === PLATFORM_OWNER.tornUserId)
     || target.user.memberships.some((membership) => membership.factionId === factionId && (membership.role === "OWNER" || membership.role === "ADMINISTRATOR"));
 }
 

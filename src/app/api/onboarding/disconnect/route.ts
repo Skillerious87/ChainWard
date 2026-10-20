@@ -6,6 +6,7 @@ import { recordAuthEvent } from "@/lib/torn/auth-audit";
 import { CONNECTION_COOKIE } from "@/lib/torn/connection-session";
 import { currentConnectionScope } from "@/lib/torn/current-connection-scope";
 import { REMEMBERED_CONNECTION_COOKIE, revokeRememberedConnection } from "@/lib/torn/remembered-connection";
+import { revokeApiPoolGrant } from "@/lib/torn/api-pool-store";
 
 export async function POST(request: Request) {
   if (!isTrustedMutationRequest(request)) return mutationDeniedResponse();
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
   // Resolved before revoking - once the session is gone there's nothing left
   // to attribute the audit entry to.
   const scope = await currentConnectionScope();
+  if (scope) await revokeApiPoolGrant(scope.tornUserId);
   await revokeRememberedConnection(cookieStore.get(REMEMBERED_CONNECTION_COOKIE)?.value);
   if (scope) {
     await recordAuthEvent("auth.disconnected", {

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import { ApiPoolPresence } from "@/components/settings/api-pool-presence";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -71,22 +72,22 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
     authorizationDataPromise,
     pendingReviewPromise,
   ]);
-  if (telemetry.source !== "live" || !telemetry.faction || connection.factionId !== telemetry.faction.id) redirect("/connect");
-  const factionId = telemetry.faction.id;
+  if (telemetry.faction && connection.factionId !== telemetry.faction.id) redirect("/connect");
+  const factionId = connection.factionId;
   const { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity } = authorizationData;
   const currentRosterMember = !currentRoster?.available || currentRoster.data.some((member) => member.tornId === actor.tornUserId);
   const workspaceAuthorized = access.state === "active" && (owner || Boolean(assignment && currentRosterMember));
   const shellTelemetry = redactLockedTelemetry(telemetry, access, workspaceAuthorized);
   const canManageMembers = workspaceAuthorized && provisionallyCanManageMembers;
-  if (canManageMembers && currentRoster?.available && memberActivity?.databaseAvailable) {
+  if (canManageMembers && telemetry.faction && currentRoster?.available && memberActivity?.databaseAvailable) {
     await synchronizeMemberInactivityPeriods(telemetry.faction, currentRoster.data, memberActivity.records, currentRoster.checkedAt).catch(() => undefined);
   }
   const memberActivityAlert = canManageMembers && currentRoster?.available && memberActivity
     ? {
       factionId,
-      factionName: telemetry.faction.name,
+      factionName: telemetry.faction?.name ?? connection.factionName ?? "Connected faction",
       ...buildMemberActivityAlert(currentRoster.data, memberActivity, currentRoster.checkedAt),
     }
     : null;
-  return <AppShell currentUser={actor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}>{children}</AppShell>;
+  return <AppShell currentUser={actor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}><ApiPoolPresence enabled={workspaceAuthorized && shellTelemetry.mode !== "offline"} />{children}</AppShell>;
 }

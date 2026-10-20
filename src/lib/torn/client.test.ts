@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { TornClient } from "./client";
+import { parseRetryAfterSeconds, TornClient } from "./client";
 import { TornApiError, userFacingTornError } from "./errors";
 
 describe("TornClient", () => {
@@ -80,7 +80,7 @@ describe("TornClient", () => {
     });
   });
 
-  it("caps an upstream Retry-After so one request cannot occupy a worker indefinitely", async () => {
+  it("returns a long upstream cooldown without sleeping or retrying early", async () => {
     const sleep = vi.fn().mockResolvedValue(undefined);
     const limited = () => Response.json(
       { error: { code: 5, error: "Too many requests" } },
@@ -92,10 +92,27 @@ describe("TornClient", () => {
       sleep,
     });
 
-    await expect(client.getKeyInfo()).rejects.toMatchObject({ category: "RATE_LIMITED" });
-    expect(sleep).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenNthCalledWith(1, 5_000);
-    expect(sleep).toHaveBeenNthCalledWith(2, 5_000);
+    await expect(client.getKeyInfo()).rejects.toMatchObject({ category: "RATE_LIMITED", retryAfterSeconds: 86400 });
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("understands seconds and HTTP-date cooldowns", () => {
+    const now = Date.UTC(2026, 9, 20, 12);
+    expect(parseRetryAfterSeconds("120", now)).toBe(120);
+    expect(parseRetryAfterSeconds("Tue, 20 Oct 2026 12:02:00 GMT", now)).toBe(120);
+    expect(parseRetryAfterSeconds("invalid", now)).toBeUndefined();
+  });
+
+  it("handles an HTML rate-limit response without requiring Torn JSON", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response("<h1>Rate limited</h1>", { status: 429, headers: { "retry-after": "90" } }));
+    const client = new TornClient({ apiKey: "html-limit-test", fetchImplementation: fetchMock });
+    await expect(client.getKeyInfo()).rejects.toMatchObject({ code: 5, retryAfterSeconds: 90 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("preserves an IP-block error even when the HTTP status is 429", async () => {
+    const client = new TornClient({ apiKey: "ip-limit-test", fetchImplementation: vi.fn(async () => Response.json({ error: { code: 8, error: "IP blocked" } }, { status: 429 })) });
+    await expect(client.getKeyInfo()).rejects.toMatchObject({ code: 8, retryable: false });
   });
 
   it("rejects an oversized upstream payload before buffering it", async () => {

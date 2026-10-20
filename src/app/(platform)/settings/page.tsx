@@ -10,13 +10,14 @@ import { getFactionAccessSummary } from "@/lib/licensing/faction-access";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { redactLockedTelemetry } from "@/lib/licensing/telemetry";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { listMyPasskeys } from "./passkey-actions";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const [telemetry, database, actor, passkeys] = await Promise.all([getWorkspaceTelemetry(), getDatabaseStatus(), getCurrentActor(), listMyPasskeys()]);
-  const factionId = telemetry.faction?.id ?? null;
+  const [telemetry, database, actor, passkeys, connection] = await Promise.all([getWorkspaceTelemetry(), getDatabaseStatus(), getCurrentActor(), listMyPasskeys(), getConfiguredTornConnection()]);
+  const factionId = telemetry.faction?.id ?? connection?.factionId ?? null;
   const owner = isPlatformOwner(actor);
   // Local licence controls remain available to the exact platform owner.
   // Everyone else must satisfy the normal licence and player-faction binding.

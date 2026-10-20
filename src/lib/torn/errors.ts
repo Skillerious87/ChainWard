@@ -28,21 +28,23 @@ const errorCategories: Readonly<Record<number, TornErrorCategory>> = {
   24: "API_UNAVAILABLE",
 };
 
-const retryableCodes = new Set([5, 8, 9, 14, 17, 24]);
+const retryableCodes = new Set([9, 17, 24]);
 
 export class TornApiError extends Error {
   readonly category: TornErrorCategory;
   readonly retryable: boolean;
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(
     readonly code: number,
     message: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; retryAfterSeconds?: number },
   ) {
     super(message, options);
     this.name = "TornApiError";
     this.category = errorCategories[code] ?? "UNEXPECTED_RESPONSE";
     this.retryable = retryableCodes.has(code);
+    this.retryAfterSeconds = options?.retryAfterSeconds;
   }
 }
 

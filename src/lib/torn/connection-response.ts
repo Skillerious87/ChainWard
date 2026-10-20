@@ -5,6 +5,8 @@ import { registerFactionAccessRequest } from "@/lib/auth/faction-access-store";
 import { encryptCredential } from "@/lib/security/credential-encryption";
 import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import { recordAuthEvent } from "./auth-audit";
+import { reconcileApiPoolConnection } from "./api-pool-store";
+import { isOfflineFixtureKey } from "./offline-fixture";
 import type { ValidatedTornConnection } from "./connection-service";
 import { CONNECTION_COOKIE, CONNECTION_MAX_AGE_SECONDS, createConnectionSession } from "./connection-session";
 import { passkeyDeviceCookieOptions, PASSKEY_DEVICE_COOKIE } from "./passkey-device-cookie";
@@ -76,6 +78,7 @@ export async function respondWithEstablishedConnection(
   // function as soon as the response is returned, which would silently drop
   // an unawaited write.
   const keyFingerprint = session.kind === "remembered" ? session.value.keyFingerprint : session.keyFingerprint;
+  if (!isOfflineFixtureKey(apiKey)) await reconcileApiPoolConnection(connection.player.id, connection.faction.id, keyFingerprint);
   await recordAuthEvent(options.method === "passkey" ? "auth.passkey_login" : "auth.key_login", {
     tornFactionId: connection.faction.id,
     tornUserId: connection.player.id,

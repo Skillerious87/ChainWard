@@ -856,3 +856,9 @@ body:has(.login-page) { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .install-nudge { animation: none; }
 }
+.api-use-disclosure { width: 100%; min-width: 0; max-width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.api-use-disclosure > p { margin: 0 0 10px; }
+.api-use-disclosure__table { overflow-x: auto; }
+.api-use-disclosure table { width: 100%; border-collapse: collapse; text-align: left; }
+.api-use-disclosure th, .api-use-disclosure td { min-width: 130px; padding: 8px; border: 1px solid var(--border); vertical-align: top; }
+.api-use-disclosure th { color: var(--text-secondary); }

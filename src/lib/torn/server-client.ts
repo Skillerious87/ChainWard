@@ -7,6 +7,8 @@ import { TornClient } from "./client";
 import { createOfflineFixtureFetch, isOfflineFixtureKey } from "./offline-fixture";
 import { CHAIN_CACHE_SECONDS, MIN_POLL_SECONDS } from "./polling-policy";
 import { normalizeTornProfileImageUrl } from "./profile-image";
+import { readFactionPoolRequest } from "./api-pool-broker";
+import { verifyTornIdentity } from "./api-identity";
 import { readRememberedConnection, updateRememberedConnectionImage, REMEMBERED_CONNECTION_COOKIE } from "./remembered-connection";
 
 export interface ConfiguredTornConnection {
@@ -18,6 +20,7 @@ export interface ConfiguredTornConnection {
   factionName: string | null;
   factionTag: string | null;
   refreshProfileImage: () => Promise<string | null>;
+  verifyIdentity: () => Promise<void>;
 }
 
 /**
@@ -34,7 +37,7 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
   const apiKey = session?.apiKey;
   if (!apiKey) return null;
   const offline = isOfflineFixtureKey(apiKey);
-  const client = createTornClient(apiKey, offline);
+  const client = createTornClient(apiKey, offline, { ownerId: session.tornUserId, factionId: session.factionId });
 
   let profileImagePromise: Promise<string | null> | undefined;
 
@@ -46,6 +49,7 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
     factionName: session.factionName,
     factionTag: session.factionTag,
     client,
+    verifyIdentity: () => offline ? Promise.resolve() : verifyTornIdentity(apiKey, session.tornUserId, session.factionId, true),
     // Only the rendered shell needs this request. Telemetry and permission
     // checks must remain independent of avatar API availability.
     refreshProfileImage: () => profileImagePromise ??= resolveProfileImage(client, session, remembered ? rememberedToken : undefined),
@@ -75,9 +79,17 @@ async function resolveProfileImage(
 }
 
 /** Creates an isolated server client for trusted background workers. */
-export function createTornClient(apiKey: string, offline = false): TornClient {
+export function createTornClient(apiKey: string, offline = false, identity?: { ownerId: number; factionId: number }): TornClient {
   return new TornClient({
     apiKey,
+    coordinateRequests: !offline,
+    coordination: { ownerId: identity?.ownerId },
+    ...(!offline && identity ? {
+      sharedFaction: {
+        factionId: identity.factionId,
+        read: (request, ownRead) => readFactionPoolRequest({ factionId: identity.factionId, ownerId: identity.ownerId, apiKey }, request, ownRead),
+      } satisfies NonNullable<ConstructorParameters<typeof TornClient>[0]["sharedFaction"]>,
+    } : {}),
     dataMode: offline ? "offline" : "torn",
     baseUrl: process.env.TORN_API_BASE_URL,
     comment: process.env.TORN_API_COMMENT,

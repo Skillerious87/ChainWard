@@ -196,3 +196,9 @@
   .settings-panel-header { padding-block: 16px; }
   .settings-save-hint { font-size: 9px; }
 }
+.api-pool-settings { display: grid; gap: 16px; }
+.api-pool-settings > p { color: var(--text-muted); font-size: 12px; line-height: 1.65; }
+.api-pool-settings__field { display: grid; gap: 8px; font-size: 12px; }
+.api-pool-settings__field input, .api-pool-settings__field select { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.api-pool-settings__choice { display: flex; align-items: flex-start; gap: 10px; color: var(--text-secondary); font-size: 12px; line-height: 1.65; }
+.api-pool-settings__choice input { flex-shrink: 0; width: 16px; height: 16px; margin-top: 3px; accent-color: var(--accent); }

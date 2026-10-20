@@ -18,6 +18,8 @@
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
+    "db:pool": "node --import tsx scripts/setup-api-pool.mts",
+    "verify:pool:postgres": "node --conditions=react-server --import tsx scripts/verify-api-pool-postgres.mts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:local": "docker compose up -d postgres",
