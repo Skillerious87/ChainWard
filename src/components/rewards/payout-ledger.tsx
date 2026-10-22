@@ -186,7 +186,7 @@ export function PayoutLedger({ entries, message, databaseAvailable = true, secti
   const exportRows = useMemo(() => filtered.map((entry) => ({ chainId: entry.chainId, tornUserId: entry.tornUserId, member: entry.memberName, tier: entry.tierLabel ?? "", amount: entry.amount, unit: entry.rewardUnit, paymentDue: isPayable(entry) ? "Yes" : "No", status: displayStatus(entry), createdAt: entry.createdAt, processedAt: entry.processedAt ?? "", processedBy: entry.processedBy?.name ?? "" })), [filtered]);
   const outstandingTotal = singleTotal(analysis.openTotals);
   const latestActivity = analysis.latestProcessedAt
-    ? new Date(analysis.latestProcessedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    ? new Date(analysis.latestProcessedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
     : "No processing activity";
 
   function changeView(next: LedgerView): void { setView(next); setPage(0); }
@@ -214,11 +214,11 @@ export function PayoutLedger({ entries, message, databaseAvailable = true, secti
       <div className="payout-intelligence__kpis">
         <article>
           <span className="payout-score-ring" style={{ "--progress": `${analysis.settlementRate}%` } as CSSProperties}><strong>{analysis.settlementRate.toFixed(0)}%</strong></span>
-          <div><small>Settlement rate</small><strong>{analysis.resolved.toLocaleString()} / {analysis.payable.toLocaleString()}</strong><em>{analysis.notEligible ? `${analysis.notEligible.toLocaleString()} not eligible excluded` : "Paid or formally waived"}</em></div>
+          <div><small>Settlement rate</small><strong>{analysis.resolved.toLocaleString("en-GB")} / {analysis.payable.toLocaleString("en-GB")}</strong><em>{analysis.notEligible ? `${analysis.notEligible.toLocaleString("en-GB")} not eligible excluded` : "Paid or formally waived"}</em></div>
         </article>
-        <article><span><ShieldAlert size={18} /></span><div><small>Requires attention</small><strong>{(analysis.pending + analysis.approved + analysis.held).toLocaleString()}</strong><em>{analysis.held ? `${analysis.held} held for review` : analysis.approved ? `${analysis.approved} approved, awaiting payment` : "No held records"}</em></div></article>
+        <article><span><ShieldAlert size={18} /></span><div><small>Requires attention</small><strong>{(analysis.pending + analysis.approved + analysis.held).toLocaleString("en-GB")}</strong><em>{analysis.held ? `${analysis.held} held for review` : analysis.approved ? `${analysis.approved} approved, awaiting payment` : "No held records"}</em></div></article>
         <article><span><CircleDollarSign size={18} /></span><div><small>Outstanding liability</small>{outstandingTotal ? <RewardAmount amount={outstandingTotal[1]} unit={outstandingTotal[0]} artwork="liability" size="compact" /> : <strong>{formatTotals(analysis.openTotals)}</strong>}<em>{analysis.openTotals.size > 1 ? "Kept separate by reward unit" : "Pending, approved, and held"}</em></div></article>
-        <article><span><Users size={18} /></span><div><small>Ledger coverage</small><strong>{analysis.distinctMembers.toLocaleString()} <b>members</b></strong><em>{analysis.chains.length.toLocaleString()} chain{analysis.chains.length === 1 ? "" : "s"} represented</em></div></article>
+        <article><span><Users size={18} /></span><div><small>Ledger coverage</small><strong>{analysis.distinctMembers.toLocaleString("en-GB")} <b>members</b></strong><em>{analysis.chains.length.toLocaleString("en-GB")} chain{analysis.chains.length === 1 ? "" : "s"} represented</em></div></article>
       </div>
 
       <div className="payout-lifecycle" aria-label="Payout status distribution">
@@ -275,15 +275,15 @@ export function PayoutLedger({ entries, message, databaseAvailable = true, secti
         </section>
       </div>
       <nav className="payout-overview-links" aria-label="Continue payout review">
-        <Link href="/payouts/ledger"><span><ClipboardList size={17} /></span><span><strong>Inspect the register</strong><small>{(analysis.pending + analysis.approved + analysis.held).toLocaleString()} record{analysis.pending + analysis.approved + analysis.held === 1 ? "" : "s"} need attention</small></span><ChevronRight size={14} /></Link>
-        <Link href="/payouts/recipients"><span><Trophy size={17} /></span><span><strong>Review recipients</strong><small>{analysis.distinctMembers.toLocaleString()} member{analysis.distinctMembers === 1 ? "" : "s"} across every reward unit</small></span><ChevronRight size={14} /></Link>
+        <Link href="/payouts/ledger"><span><ClipboardList size={17} /></span><span><strong>Inspect the register</strong><small>{(analysis.pending + analysis.approved + analysis.held).toLocaleString("en-GB")} record{analysis.pending + analysis.approved + analysis.held === 1 ? "" : "s"} need attention</small></span><ChevronRight size={14} /></Link>
+        <Link href="/payouts/recipients"><span><Trophy size={17} /></span><span><strong>Review recipients</strong><small>{analysis.distinctMembers.toLocaleString("en-GB")} member{analysis.distinctMembers === 1 ? "" : "s"} across every reward unit</small></span><ChevronRight size={14} /></Link>
         <Link href="/payouts/corrections"><span><RotateCcw size={17} /></span><span><strong>Audit corrections</strong><small>Reasons and operators behind withdrawn acknowledgements</small></span><ChevronRight size={14} /></Link>
       </nav>
     </section>}
 
     {section !== "overview" && <section className="data-section professional-payout-ledger payout-workspace-section">
       <div className="payout-register-heading">
-        <div><span><DatabaseZap size={18} /></span><div><p className="eyebrow">Auditable register</p><h2>Member payout ledger</h2><p>{filtered.length.toLocaleString()} of {entries.length.toLocaleString()} persisted records match this view</p></div></div>
+        <div><span><DatabaseZap size={18} /></span><div><p className="eyebrow">Auditable register</p><h2>Member payout ledger</h2><p>{filtered.length.toLocaleString("en-GB")} of {entries.length.toLocaleString("en-GB")} persisted records match this view</p></div></div>
         <span className="payout-register-heading__source"><ShieldCheck size={13} /> Persisted records only</span>
       </div>
 
@@ -311,13 +311,13 @@ export function PayoutLedger({ entries, message, databaseAvailable = true, secti
         <dl><div><dt>Timeline</dt><dd><LedgerTimeline entry={entry} /></dd></div><div><dt>Recorded by</dt><dd><PayoutRecorder value={entry.processedBy} /></dd></div></dl>
         <Link className="mobile-record-action" href={`/chains/${entry.chainId}`}>Open chain record <ChevronRight size={15} /></Link>
       </li>)}</ol>{visible.length === 0 && <div className="table-empty payout-ledger-empty"><CircleDollarSign size={22} /><div><strong>{entries.length ? "No records match this control view" : "No payout records yet"}</strong><span>{entries.length ? "Reset the filters or search a different member, chain, or recorder." : message}</span></div></div>}</div>
-      <div className="payout-register-footer"><span>Showing {visible.length ? safePage * pageSize + 1 : 0}–{Math.min((safePage + 1) * pageSize, filtered.length)} of {filtered.length.toLocaleString()} <small>· {formatTotals(filteredTotals)} in this view</small></span><div className="pagination"><button disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={14} /> Previous</button><span>Page {safePage + 1} of {pageCount}</span><button disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next <ChevronRight size={14} /></button></div></div>
+      <div className="payout-register-footer"><span>Showing {visible.length ? safePage * pageSize + 1 : 0}–{Math.min((safePage + 1) * pageSize, filtered.length)} of {filtered.length.toLocaleString("en-GB")} <small>· {formatTotals(filteredTotals)} in this view</small></span><div className="pagination"><button disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={14} /> Previous</button><span>Page {safePage + 1} of {pageCount}</span><button disabled={safePage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Next <ChevronRight size={14} /></button></div></div>
     </section>}
   </>;
 }
 
 function LifecycleItem({ tone, label, count }: { tone: string; label: string; count: number }) {
-  return <span><i className={`payout-lifecycle__dot payout-lifecycle__dot--${tone}`} /><strong>{label}</strong><small>{count.toLocaleString()}</small></span>;
+  return <span><i className={`payout-lifecycle__dot payout-lifecycle__dot--${tone}`} /><strong>{label}</strong><small>{count.toLocaleString("en-GB")}</small></span>;
 }
 
 function PostureRow({ tone, title, detail }: { tone: "clear" | "danger" | "warning" | "neutral"; title: string; detail: string }) {
@@ -333,10 +333,10 @@ function SortableLedgerHeader({ label, value, active, direction, onSort, numeric
 function LedgerTimeline({ entry }: { entry: PayoutLedgerEntry }) {
   if (!isPayable(entry)) {
     const assessedAt = entry.processedAt ?? entry.createdAt;
-    return <span className="ledger-date ledger-date--ineligible"><strong>{new Date(assessedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</strong><small>Assessed · no payment due</small></span>;
+    return <span className="ledger-date ledger-date--ineligible"><strong>{new Date(assessedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</strong><small>Assessed · no payment due</small></span>;
   }
-  if (entry.processedAt) return <span className="ledger-date"><strong>{new Date(entry.processedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</strong><small>{new Date(entry.processedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · processed</small></span>;
-  return <span className="ledger-date ledger-date--open"><strong>{new Date(entry.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</strong><small>Created · not processed</small></span>;
+  if (entry.processedAt) return <span className="ledger-date"><strong>{new Date(entry.processedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</strong><small>{new Date(entry.processedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })} · processed</small></span>;
+  return <span className="ledger-date ledger-date--open"><strong>{new Date(entry.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</strong><small>Created · not processed</small></span>;
 }
 
 function PayoutRecorder({ value }: { value: PayoutLedgerEntry["processedBy"] }) {
@@ -407,5 +407,5 @@ function postureTitle(analysis: PayoutLedgerAnalysis, total: number, available: 
 function postureDescription(analysis: PayoutLedgerAnalysis, total: number, message: string, available: boolean): string {
   if (!available || !total) return message;
   if (analysis.held) return "Held records are surfaced first, then approved and pending liability. Reward units remain separated so unlike values are never summed together.";
-  return `${analysis.resolved.toLocaleString()} of ${analysis.payable.toLocaleString()} payable records are paid or waived${analysis.notEligible ? `; ${analysis.notEligible.toLocaleString()} below-threshold or zero-reward decision${analysis.notEligible === 1 ? " is" : "s are"} excluded` : ""}. The register preserves every reward decision for dispute review.`;
+  return `${analysis.resolved.toLocaleString("en-GB")} of ${analysis.payable.toLocaleString("en-GB")} payable records are paid or waived${analysis.notEligible ? `; ${analysis.notEligible.toLocaleString("en-GB")} below-threshold or zero-reward decision${analysis.notEligible === 1 ? " is" : "s are"} excluded` : ""}. The register preserves every reward decision for dispute review.`;
 }

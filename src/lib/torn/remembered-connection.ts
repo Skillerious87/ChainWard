@@ -7,6 +7,7 @@ import { credentialEncryptionSecret } from "@/lib/security/credential-secret";
 import type { ValidatedTornConnection } from "./connection-service";
 import { connectionEncryptionSecret } from "./connection-session";
 import { openCredentialDatabase } from "./credential-database";
+import { SavedConnectionUnavailableError } from "./connection-errors";
 
 export const REMEMBERED_CONNECTION_COOKIE = "chainward_remembered_connection";
 // The database row's expiresAt (below) is the actual authority and slides
@@ -265,10 +266,7 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
       include: { faction: true },
       orderBy: { updatedAt: "desc" },
     }),
-  ])).catch(() => null);
-  // Database still unreachable after retries — degrade to "not connected"
-  // (recoverable on the next request) rather than throwing into global-error.
-  if (!lookup) return null;
+  ])).catch(() => { throw new SavedConnectionUnavailableError(); });
   const [session, credential] = lookup;
   if (!session) return null;
   if (session.expiresAt.getTime() <= Date.now()) {
@@ -296,7 +294,8 @@ async function readPostgresConnection(tokenHash: string, scope: RememberedTokenS
       factionTag: credential.faction.tag ?? "",
       expiresAt,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof SavedConnectionUnavailableError) throw error;
     await db.session.delete({ where: { id: session.id } });
     return null;
   }
@@ -384,7 +383,7 @@ export async function decryptAndMigratePostgresCredential(credential: {
     const plaintext = decryptCredential(credential.encryptedKey, credential.encryptionIv, connectionEncryptionSecret());
     const migrated = encryptCredential(plaintext, dedicatedSecret);
     const { db } = await import("@/lib/db");
-    await db.factionApiCredential.update({
+    await withDbRetry(() => db.factionApiCredential.update({
       where: { id: credential.id },
       data: {
         encryptedKey: Uint8Array.from(migrated.encryptedKey),
@@ -392,7 +391,7 @@ export async function decryptAndMigratePostgresCredential(credential: {
         keyFingerprint: migrated.fingerprint,
         keyLastFour: migrated.lastFour,
       },
-    });
+    })).catch(() => { throw new SavedConnectionUnavailableError(); });
     return plaintext;
   }
 }

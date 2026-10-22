@@ -12,7 +12,7 @@ interface RewardAmountProps {
 const rewardImageRoot = "/images/rewards";
 
 export function RewardAmount({ amount, unit, detail, paid = false, size = "table", artwork = "quantity" }: RewardAmountProps) {
-  const formatted = amount.toLocaleString();
+  const formatted = amount.toLocaleString("en-GB");
   const xanax = isXanaxUnit(unit);
   const artworkSrc = xanax ? getXanaxRewardImage(amount, artwork) : null;
   const noReward = xanax && artwork === "quantity" && Number.isFinite(amount) && amount <= 0;

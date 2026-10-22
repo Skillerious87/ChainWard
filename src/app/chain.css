@@ -426,7 +426,11 @@
   font-size: 13px;
   font-weight: 700;
   text-align: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
+.chain-panic-alert button { position: relative; pointer-events: auto; border: 1px solid #ff7c82; border-radius: 6px; padding: 8px 12px; background: #6c1d2a; color: #fff0f1; font: inherit; cursor: pointer; }
+.chain-panic-alert button:focus-visible { outline: 2px solid white; outline-offset: 3px; }
 @keyframes chain-panic-pulse { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .chain-panic-alert::before { animation: none; opacity: .5; }

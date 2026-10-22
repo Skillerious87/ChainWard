@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
 import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
 import { licensePlans } from "./pricing";
@@ -19,6 +19,8 @@ describe.sequential("local unlock licensing", () => {
   let temporaryDirectory = "";
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z"));
     temporaryDirectory = mkdtempSync(path.join(tmpdir(), "chainward-unlock-"));
     delete process.env.DATABASE_URL;
     process.env.CHAINWARD_LOCAL_DB_PATH = path.join(temporaryDirectory, "chainward-test.sqlite");
@@ -26,6 +28,7 @@ describe.sequential("local unlock licensing", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = originalDatabaseUrl;
     if (originalDatabasePath === undefined) delete process.env.CHAINWARD_LOCAL_DB_PATH;

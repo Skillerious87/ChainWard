@@ -73,6 +73,11 @@ active-chain timeout warning. Background refresh continues while Chainward
 remains open and online; active chains use an uncached 5-second check, and
 manual refresh also requests a fresh Torn chain snapshot.
 
+Panic mode is enabled automatically for an active chain's final 60 seconds on
+every workspace page. Use **Turn off panic mode** on the alert, or the panic
+mode control on the chain timer, to save a device-level opt-out. A new hit,
+cooldown, or expired timer clears the alert automatically.
+
 ## Device notifications
 
 Users can enable standards-based Web Push under **Settings → Device alerts**.
@@ -166,7 +171,7 @@ supplied.
 
 ```bash
 npm run check           # lint, TypeScript, unit tests, production build
-npm run verify:offline  # 90 end-to-end assertions with no network access
+npm run verify:offline  # 100 end-to-end assertions with no network access
 npm run check:full      # both of the above
 ```
 

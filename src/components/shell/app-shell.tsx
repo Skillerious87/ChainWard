@@ -43,6 +43,7 @@ import {
   type ReactNode,
 } from "react";
 import { BrandMark } from "@/components/brand-mark";
+import { ChainPanicAlert } from "@/components/chain/chain-panic-alert";
 import { AdminWorkspaceNavigation, AdminWorkspaceNavigationProvider } from "@/components/admin/admin-workspace-navigation";
 import { UpgradeAccess } from "@/components/licensing/upgrade-access";
 import { useMemberActivityMonitor } from "@/components/members/use-member-activity-monitor";
@@ -166,7 +167,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     : syncState === "failed"
       ? "Check failed"
       : checkedTimeLabel(liveTelemetry.checkedAt);
-  const renewalNotice = workspaceAuthorized && access.state === "active" ? getLicenseRenewalNotice(access.expiresAt) : null;
+  const renewalNotice = workspaceAuthorized && access.state === "active" ? getLicenseRenewalNotice(access.expiresAt, new Date(nowSeconds * 1_000)) : null;
   const renewalNotification: OperationalNotification | null = renewalNotice?.renewalOpen ? {
     // Include the countdown step so a notice acknowledged at seven days is
     // surfaced again as the paid-through date approaches.
@@ -225,8 +226,8 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     .filter((group) => group.label !== "Platform" || ownerAccess)
     .map((group) => ({ ...group, items: group.items.map((item) => {
       if (workspaceLocked && item.requiresLicense) return { ...item, locked: true, badge: "Locked" };
-      if (item.href === "/live-chain") return { ...item, badge: chain ? chain.current.toLocaleString() : "—" };
-      if (item.href === "/members" && monitoredActivity?.attentionCount) return { ...item, badge: monitoredActivity.attentionCount.toLocaleString() };
+      if (item.href === "/live-chain") return { ...item, badge: chain ? chain.current.toLocaleString("en-GB") : "—" };
+      if (item.href === "/members" && monitoredActivity?.attentionCount) return { ...item, badge: monitoredActivity.attentionCount.toLocaleString("en-GB") };
       return item;
     }) }));
   const searchableItems = visibleNavigation.flatMap((group) => group.items);
@@ -250,7 +251,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
   const syncing = syncLabel.startsWith("Syncing");
   const chainActive = chain?.state === "active";
   const chainStatusLabel = chainActive
-    ? `${chain.current.toLocaleString()} / ${chain.maximum.toLocaleString()}`
+    ? `${chain.current.toLocaleString("en-GB")} / ${chain.maximum.toLocaleString("en-GB")}`
     : chain?.state === "cooldown"
       ? "Cooldown"
       : chain
@@ -340,7 +341,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
     void showDeviceNotification(
       critical ? `Chain critical · ${formatChainCountdown(chainSeconds)}` : `Chain warning · ${formatChainCountdown(chainSeconds)}`,
       {
-        body: `${liveTelemetry.faction?.name ?? "Your faction"}: ${currentChain.current.toLocaleString()} / ${currentChain.maximum.toLocaleString()} hits. Open the live chain now.`,
+        body: `${liveTelemetry.faction?.name ?? "Your faction"}: ${currentChain.current.toLocaleString("en-GB")} / ${currentChain.maximum.toLocaleString("en-GB")} hits. Open the live chain now.`,
         icon: "/icons/android-chrome-192x192.png?v=2",
         badge: "/icons/favicon-32x32.png?v=2",
         tag: `chainward-chain-${liveTelemetry.faction?.id ?? "global"}-${currentChain.id}`,
@@ -697,7 +698,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
           <div className="topbar__right">
             <UpgradeAccess access={access} workspaceAuthorized={workspaceAuthorized} />
             <button className="topbar-command" onClick={openCommandPalette}><Command size={14} /><span>Quick find</span><kbd>⌘K</kbd></button>
-            <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => { tapHaptic(); void syncWorkspace(); }} disabled={syncing || workspaceLocked} aria-label={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Refresh workspace data. Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB")}`}>
+            <button className={`data-status-control data-status-control--${offlineMode ? "offline" : liveTelemetry.source}`} onClick={() => { tapHaptic(); void syncWorkspace(); }} disabled={syncing || workspaceLocked} aria-label={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Refresh workspace data. Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB", { timeZone: "UTC" })}`} title={workspaceLocked ? "Live sync unlocks with the operational workspace" : `Last server check: ${new Date(liveTelemetry.checkedAt).toLocaleString("en-GB", { timeZone: "UTC" })}`}>
               <StatusDot tone={liveTelemetry.source === "live" ? "success" : "warning"} pulse={liveTelemetry.source === "live" && !syncing} />
               <span><strong>{offlineMode ? "Offline fixture" : liveTelemetry.source === "live" ? "Server check" : "API attention"}</strong><small>{syncLabel}</small></span>
               {syncing ? <Spinner size={14} label="Syncing Torn data" /> : <Clock3 size={14} aria-hidden="true" />}
@@ -757,6 +758,7 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
               deadlineAtSeconds,
               nowSeconds,
             }}>
+              <ChainPanicAlert />
               {children}
             </LiveWorkspaceTelemetryProvider>
           </main>
@@ -858,7 +860,7 @@ function notificationCategoryLabel(category: "connection" | "chain" | "members" 
 function notificationTimeLabel(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "Recently";
-  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(timestamp);
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(timestamp);
 }
 
 function loadReadNotificationIds(scope: string): string[] {
@@ -878,7 +880,7 @@ function saveReadNotificationIds(scope: string, ids: readonly string[]): void {
 function checkedTimeLabel(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "Check time unavailable";
-  return `Checked ${new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(timestamp)}`;
+  return `Checked ${new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" }).format(timestamp)}`;
 }
 
 function newestTelemetry(server: WorkspaceTelemetry, override: WorkspaceTelemetry | null): WorkspaceTelemetry {

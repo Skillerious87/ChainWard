@@ -26,10 +26,11 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe("chain panic alert", () => {
-  it.each([60, 59, 1])("shows the screen-edge alert at %i seconds", (seconds) => {
+describe("chain panic control", () => {
+  it.each([60, 59, 1])("keeps the panic control available at %i seconds while the shell owns the alert", (seconds) => {
     const html = view(seconds);
-    expect(html).toContain('class="chain-panic-alert" role="status"');
+    // The shell owns the screen-wide warning; the console owns its control.
+    expect(html).not.toContain('class="chain-panic-alert"');
     expect(html).toContain("Panic mode on");
     expect(html).toContain("timeout-ring--critical");
   });

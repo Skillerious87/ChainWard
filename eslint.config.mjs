@@ -7,5 +7,5 @@ export default defineConfig([
   ...nextTypescript,
   // `.next-*` covers the throwaway build directories used by
   // `npm run verify:offline`, which runs beside an open development server.
-  globalIgnores([".next/**", ".next-*/**", "coverage/**", "src/generated/prisma/**"]),
+  globalIgnores([".next/**", ".next-*/**", "coverage/**", "src/generated/prisma/**", "android/**/build/**"]),
 ]);

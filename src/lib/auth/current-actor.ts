@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { normalizeTornProfileImageUrl } from "@/lib/torn/profile-image";
+import { SavedConnectionUnavailableError } from "@/lib/torn/connection-errors";
 import { PLATFORM_OWNER, type PlatformActor, unauthenticatedActor } from "./platform-owner";
 
 export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
@@ -45,7 +46,8 @@ export const getCurrentActor = cache(async (): Promise<PlatformActor> => {
       isPlatformAdmin: profile.id === PLATFORM_OWNER.tornUserId,
       profileImageUrl: null,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof SavedConnectionUnavailableError) throw error;
     return unauthenticatedActor();
   }
 });

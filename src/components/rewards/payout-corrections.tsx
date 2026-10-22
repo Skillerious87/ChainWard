@@ -36,15 +36,15 @@ export function PayoutCorrections({ corrections }: { corrections: PayoutRevertRe
       </header>
 
       <div className="payout-correction-summary" aria-label="Correction summary">
-        <article><span><Undo2 size={17} /></span><div><small>Withdrawals</small><strong>{corrections.length.toLocaleString()}</strong><em>Acknowledgements reversed</em></div></article>
-        <article><span><FileClock size={17} /></span><div><small>Affected chains</small><strong>{chainCount.toLocaleString()}</strong><em>Returned to unpaid</em></div></article>
-        <article><span><UserRoundCheck size={17} /></span><div><small>Operators</small><strong>{operatorCount.toLocaleString()}</strong><em>Named correction authors</em></div></article>
+        <article><span><Undo2 size={17} /></span><div><small>Withdrawals</small><strong>{corrections.length.toLocaleString("en-GB")}</strong><em>Acknowledgements reversed</em></div></article>
+        <article><span><FileClock size={17} /></span><div><small>Affected chains</small><strong>{chainCount.toLocaleString("en-GB")}</strong><em>Returned to unpaid</em></div></article>
+        <article><span><UserRoundCheck size={17} /></span><div><small>Operators</small><strong>{operatorCount.toLocaleString("en-GB")}</strong><em>Named correction authors</em></div></article>
         <article><span><CalendarClock size={17} /></span><div><small>Latest correction</small><strong>{latest ? formatDate(latest) : "None"}</strong><em>{formatTotals(totals)}</em></div></article>
       </div>
 
       <div className="payout-correction-toolbar">
         <label className="search-field"><Search size={15} /><span className="sr-only">Search payout corrections</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Chain, reason, operator, or unit" /></label>
-        <span>{filtered.length.toLocaleString()} of {corrections.length.toLocaleString()} corrections</span>
+        <span>{filtered.length.toLocaleString("en-GB")} of {corrections.length.toLocaleString("en-GB")} corrections</span>
         <ExportButton filename="chainward-payout-corrections.csv" label={`Export corrections (${filtered.length})`} rows={exportRows} className="button button--quiet" />
       </div>
 
@@ -86,9 +86,9 @@ function formatTotals(totals: ReadonlyMap<string, number>): string {
 }
 
 function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 }

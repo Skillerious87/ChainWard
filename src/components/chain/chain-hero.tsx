@@ -3,7 +3,6 @@
 import { Activity, ArrowUpRight, Clock3, Crosshair, Expand, Siren, Swords, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { Spinner } from "@/components/ui/spinner";
@@ -141,7 +140,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
         <div className="chain-console__metrics">
           <div><span><Users size={17} /></span><small>Faction members</small><strong>{snapshot.faction?.members || "—"}</strong><p>Current faction basic response</p></div>
           <div><span><Crosshair size={17} /></span><small>Last chain ID</small><strong>{chain.id > 0 ? `#${chain.id}` : "—"}</strong><p>Returned by Torn</p></div>
-          <div><span><Activity size={17} /></span><small>Last recorded hits</small><strong>{chain.id > 0 ? chain.current.toLocaleString() : "—"}</strong><p>Not displayed as live progress</p></div>
+          <div><span><Activity size={17} /></span><small>Last recorded hits</small><strong>{chain.id > 0 ? chain.current.toLocaleString("en-GB") : "—"}</strong><p>Not displayed as live progress</p></div>
           <div><span className="chain-metric__symbol">✓</span><small>Data provenance</small><strong>Live<em> API</em></strong><p>Validated server-side</p></div>
         </div>
       </section>
@@ -162,11 +161,6 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
       aria-modal={focus || undefined}
       aria-label={focus ? "Expanded live chain telemetry" : undefined}
     >
-      {chainPanicMode && seconds > 0 && seconds <= 60 && createPortal(
-        <div className="chain-panic-alert" role="status">
-          <span><Siren size={18} aria-hidden="true" /> Chain timeout: 60 seconds or less remaining</span>
-        </div>, document.body,
-      )}
       {focus && (
         <button ref={exitButtonRef} className="chain-focus-exit" onClick={closeFocus}>
           <X size={17} /><span>Exit expanded view</span><kbd>Esc</kbd>
@@ -185,7 +179,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
       <div className="chain-console__body">
         <div className="chain-console__primary">
           <span className="chain-console__kicker">Current progress</span>
-          <div className="chain-count" aria-live="polite"><strong>{chain.current.toLocaleString()}</strong><span><i>/</i>{chain.maximum.toLocaleString()}</span></div>
+          <div className="chain-count" aria-live="polite"><strong>{chain.current.toLocaleString("en-GB")}</strong><span><i>/</i>{chain.maximum.toLocaleString("en-GB")}</span></div>
           {/* Endpoints are read from Torn's `current` and `max`, so the scale
               re-derives itself whenever the faction's target changes. */}
           <div
@@ -194,17 +188,17 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
             aria-valuemin={0}
             aria-valuemax={chain.maximum || undefined}
             aria-valuenow={chain.current}
-            aria-valuetext={`${chain.current.toLocaleString()} of ${chain.maximum.toLocaleString()} hits`}
+            aria-valuetext={`${chain.current.toLocaleString("en-GB")} of ${chain.maximum.toLocaleString("en-GB")} hits`}
           >
             <div className="chain-gauge__track">
               <div className="chain-gauge__fill" style={{ width: `${progress}%` }}><span className="chain-gauge__sheen" aria-hidden="true" /></div>
               {[25, 50, 75].map((value) => <i key={value} className="chain-gauge__tick" style={{ left: `${value}%` }} aria-hidden="true" />)}
-              <span className="chain-gauge__marker" style={{ left: `${progress}%` }} aria-hidden="true"><b>{chain.current.toLocaleString()}</b></span>
+              <span className="chain-gauge__marker" style={{ left: `${progress}%` }} aria-hidden="true"><b>{chain.current.toLocaleString("en-GB")}</b></span>
             </div>
             <div className="chain-gauge__scale" aria-hidden="true">
               <span>0</span>
-              <span className="chain-gauge__scale-mid"><b>{progress.toFixed(1)}%</b> to the next bonus · {remaining.toLocaleString()} hit{remaining === 1 ? "" : "s"} to go</span>
-              <span>{chain.maximum.toLocaleString()}</span>
+              <span className="chain-gauge__scale-mid"><b>{progress.toFixed(1)}%</b> to the next bonus · {remaining.toLocaleString("en-GB")} hit{remaining === 1 ? "" : "s"} to go</span>
+              <span>{chain.maximum.toLocaleString("en-GB")}</span>
             </div>
             <ol className="chain-milestones" aria-label="Torn chain bonus milestones">
               {milestoneWindow(chain.maximum).map((milestone) => {
@@ -212,7 +206,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
                 const target = milestone === chain.maximum;
                 return <li key={milestone} className={`chain-milestone${reached ? " chain-milestone--reached" : ""}${target ? " chain-milestone--target" : ""}`}>
                   <i aria-hidden="true" />
-                  <b>{milestone.toLocaleString()}</b>
+                  <b>{milestone.toLocaleString("en-GB")}</b>
                   {target && <em>next bonus</em>}
                 </li>;
               })}
@@ -233,7 +227,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
 
       <div className="chain-console__metrics">
         <div><span><Users size={17} /></span><small>Faction members</small><strong>{factionMembers || "—"}</strong><p>From faction basic endpoint</p></div>
-        <div><span><Crosshair size={17} /></span><small>Next bonus at</small><strong>{chain.maximum.toLocaleString()}<em> hits</em></strong><p>Torn chain bonus target</p></div>
+        <div><span><Crosshair size={17} /></span><small>Next bonus at</small><strong>{chain.maximum.toLocaleString("en-GB")}<em> hits</em></strong><p>Torn chain bonus target</p></div>
         <div><span><Activity size={17} /></span><small>Elapsed runtime</small><strong>{formatDuration(elapsedSeconds)}</strong><p>Started {formatTornTime(chain.startedAt)}</p></div>
         <div><span className="chain-metric__symbol">✓</span><small>Data provenance</small><strong>Live<em> API</em></strong><p>Validated server-side</p></div>
       </div>
@@ -413,7 +407,7 @@ function ChainAttackSuggestion({ result: initial }: { result: BestChainTargetRes
 function formatCheckedTime(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "time unavailable";
-  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(timestamp);
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" }).format(timestamp);
 }
 
 function formatTime(seconds: number): string {

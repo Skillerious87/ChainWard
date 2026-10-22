@@ -38,12 +38,12 @@ export function ChainTrend({ chains, settlements }: { chains: TornChainHistoryIt
             {rising ? "+" : ""}{shift.toFixed(0)}%
             <small>recent half vs earlier</small>
           </span>
-          <span className="chain-trend__best"><Flame size={13} /> Best {best.hits.toLocaleString()}<small>chain #{best.id}</small></span>
+          <span className="chain-trend__best"><Flame size={13} /> Best {best.hits.toLocaleString("en-GB")}<small>chain #{best.id}</small></span>
         </div>
       </header>
 
       <div className="chain-trend__plot">
-        <div className="chain-trend__mean" style={{ bottom: `${(average / peak) * 100}%` }} aria-hidden="true"><span>avg {Math.round(average).toLocaleString()}</span></div>
+        <div className="chain-trend__mean" style={{ bottom: `${(average / peak) * 100}%` }} aria-hidden="true"><span>avg {Math.round(average).toLocaleString("en-GB")}</span></div>
         <ol>
           {recent.map((chain) => {
             const settlement = settlements[chain.id];
@@ -53,7 +53,7 @@ export function ChainTrend({ chains, settlements }: { chains: TornChainHistoryIt
                 <i style={{ height: `${Math.max(3, (chain.hits / peak) * 100)}%` }} />
                 <span className="chain-trend__tip">
                   <strong>#{chain.id}</strong>
-                  <em>{chain.hits.toLocaleString()} hits</em>
+                  <em>{chain.hits.toLocaleString("en-GB")} hits</em>
                   <small>{formatDay(chain.endedAt)} · {state === "paid" ? "Paid" : state === "calculated" ? "Calculated" : "Not settled"}</small>
                 </span>
               </li>

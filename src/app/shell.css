@@ -61,7 +61,7 @@
 }
 .route-progress[data-phase="finishing"]::after {
   opacity: 1;
-  animation: route-progress-finish 320ms cubic-bezier(.2, .8, .2, 1) forwards;
+  animation: route-progress-finish 160ms cubic-bezier(.2, .8, .2, 1) forwards;
 }
 .route-loading-core {
   position: fixed;
@@ -130,14 +130,9 @@
   to { opacity: 1; transform: none; }
 }
 
-/* Applied for the same short, minimum-duration handoff as the loading ring. */
+/* Route fallbacks replace only the content that is actually still loading. */
 .page-content {
   transition: opacity 220ms ease, transform 220ms cubic-bezier(.22, .82, .28, 1), filter 220ms ease;
-}
-:root[data-navigating="true"] .page-content {
-  opacity: .42;
-  transform: none;
-  pointer-events: none;
 }
 /* The rail and top chrome stay fully present so the shell never appears to
    reload — only the view being replaced recedes. */

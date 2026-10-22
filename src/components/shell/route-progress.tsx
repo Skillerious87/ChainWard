@@ -3,11 +3,10 @@
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { PageLoadingCore } from "@/components/ui/page-loading-core";
 
 const NAVIGATION_EVENT = "chainward:navigating";
-const MINIMUM_VISIBLE_MS = 1_000;
-const FINISH_DURATION_MS = 260;
+const SHOW_DELAY_MS = 150;
+const FINISH_DURATION_MS = 160;
 const NAVIGATION_SAFETY_TIMEOUT_MS = 12_000;
 
 /**
@@ -40,8 +39,7 @@ export function publishNavigationState(id: string, pending: boolean): void {
 /**
  * Client-only panes (settings sections, editor tabs, and similar views) render
  * synchronously, but still deserve the same visible acknowledgement as a route
- * change. RouteProgress owns the minimum display time, so callers only need to
- * publish for the duration of the render frame.
+ * change. Fast switches finish before the delayed progress indicator appears.
  */
 export function publishViewSwitch(id: string): void {
   publishNavigationState(id, true);
@@ -51,8 +49,8 @@ export function publishViewSwitch(id: string): void {
 /**
  * Immediate workspace navigation feedback. `useLinkStatus` deliberately skips
  * prefetched routes, so a capture listener also observes ordinary same-origin
- * link activation. The ring stays visible long enough to be perceived even
- * when the destination was already in the Next.js client cache.
+ * link activation. Only slower transitions show the slim progress bar; route
+ * loading boundaries own the fallback without covering a completed view.
  */
 export function RouteProgress() {
   const pathname = usePathname();
@@ -60,23 +58,10 @@ export function RouteProgress() {
   const pendingIds = useRef(new Set<string>());
   const manualNavigationId = useRef<string | null>(null);
   const manualSafetyTimer = useRef<number | undefined>(undefined);
-  const runningSince = useRef(0);
 
   useEffect(() => {
-    let finishDelayTimer: number | undefined;
+    let showTimer: number | undefined;
     let idleTimer: number | undefined;
-
-    /**
-     * The outgoing view stays on screen while the next one resolves, so it is
-     * marked on the root element instead of being replaced by a placeholder.
-     */
-    function markNavigating(active: boolean): void {
-      if (!active) {
-        delete document.documentElement.dataset.navigating;
-        return;
-      }
-      document.documentElement.dataset.navigating = "true";
-    }
 
     function receive(event: Event): void {
       const detail = (event as CustomEvent<{ id: string; pending: boolean }>).detail;
@@ -85,31 +70,23 @@ export function RouteProgress() {
       else pendingIds.current.delete(detail.id);
 
       if (pendingIds.current.size > 0) {
-        window.clearTimeout(finishDelayTimer);
         window.clearTimeout(idleTimer);
-        if (runningSince.current === 0) runningSince.current = performance.now();
-        markNavigating(true);
-        setPhase("running");
+        if (showTimer === undefined) showTimer = window.setTimeout(() => {
+          setPhase("running");
+        }, SHOW_DELAY_MS);
         return;
       }
 
-      const remaining = Math.max(0, MINIMUM_VISIBLE_MS - (performance.now() - runningSince.current));
-      window.clearTimeout(finishDelayTimer);
-      finishDelayTimer = window.setTimeout(() => {
-        setPhase((current) => current === "idle" ? current : "finishing");
-        idleTimer = window.setTimeout(() => {
-          runningSince.current = 0;
-          markNavigating(false);
-          setPhase("idle");
-        }, FINISH_DURATION_MS);
-      }, remaining);
+      window.clearTimeout(showTimer);
+      showTimer = undefined;
+      setPhase((current) => current === "idle" ? current : "finishing");
+      idleTimer = window.setTimeout(() => setPhase("idle"), FINISH_DURATION_MS);
     }
 
     window.addEventListener(NAVIGATION_EVENT, receive);
     return () => {
-      window.clearTimeout(finishDelayTimer);
+      window.clearTimeout(showTimer);
       window.clearTimeout(idleTimer);
-      delete document.documentElement.dataset.navigating;
       window.removeEventListener(NAVIGATION_EVENT, receive);
     };
   }, []);
@@ -162,8 +139,5 @@ export function RouteProgress() {
     publishNavigationState(id, false);
   }, [pathname]);
 
-  return <>
-    <div className="route-progress" data-phase={phase} aria-hidden="true" />
-    {phase !== "idle" && <div className="route-loading-core" data-phase={phase}><PageLoadingCore title="Preparing next view" hint="Synchronising the secure workspace" /></div>}
-  </>;
+  return <div className="route-progress" data-phase={phase} aria-hidden="true" />;
 }

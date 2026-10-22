@@ -126,7 +126,7 @@ export function MemberReportWorkspace({ member, factionId, source, checkedAt, pr
     <ActivitySnapshot activity={activity} thresholdDays={thresholdDays} presentation={activityPresentation} />
 
     <section className="member-report-facts" aria-label="Current member facts">
-      <Fact icon={CalendarDays} label="Faction tenure" value={`${member.daysInFaction.toLocaleString()} days`} detail={joinedAt ? `Approx. since ${joinedAt}` : "Join date unavailable"} />
+      <Fact icon={CalendarDays} label="Faction tenure" value={`${member.daysInFaction.toLocaleString("en-GB")} days`} detail={joinedAt ? `Approx. since ${joinedAt}` : "Join date unavailable"} />
       <Fact icon={UserRound} label="Position" value={member.position || "Unassigned"} detail={`Level ${member.level}`} />
       <Fact icon={Clock3} label="Last action" value={member.lastAction} detail={formatRelativeActivity(activity.ageSeconds)} />
       <Fact icon={ShieldCheck} label="Torn status" value={member.status || "Unknown"} detail={member.statusDescription || "No status detail"} />
@@ -304,8 +304,8 @@ function describeActivity(activity: MemberActivityAssessment): ActivityPresentat
 }
 function categoryLabel(category: MemberReportCategory): string { return reportCategories.find((item) => item.id === category)?.label ?? category; }
 function approximateJoinDate(days: number, checkedAt: string): string | null { const checked = Date.parse(checkedAt); if (Number.isNaN(checked) || !Number.isFinite(days)) return null; return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(checked - days * 86_400_000)); }
-function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "time unavailable" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date); }
-function formatShortDate(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unknown date" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date); }
+function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "time unavailable" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(date); }
+function formatShortDate(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unknown date" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date); }
 function formatShortDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unknown" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(date); }
 function formatInactivityDuration(seconds: number): string { if (!Number.isFinite(seconds) || seconds <= 0) return "—"; if (seconds < 86_400) return `${Math.max(1, Math.round(seconds / 3_600))} hours`; const days = seconds / 86_400; return `${days < 10 ? days.toFixed(1) : Math.round(days)} days`; }
 function formatRelativeActivity(seconds: number): string { if (seconds < 3_600) return `${Math.max(0, Math.floor(seconds / 60))} minutes ago`; if (seconds < 86_400) return `${Math.floor(seconds / 3_600)} hours ago`; const days = Math.floor(seconds / 86_400); return `${days} day${days === 1 ? "" : "s"} ago`; }

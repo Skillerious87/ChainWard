@@ -86,7 +86,7 @@ export function ContributionTable({ members, title = "Chain contribution", compa
           <tbody>{renderedMembers.map((member) => <tr key={member.tornId}>
             <td data-label="Rank"><span className={`rank${member.rank <= 3 ? " rank--top" : ""}`}>{member.rank}</span></td>
             <td data-label="Player"><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} detail="View Torn profile" /></td>
-            <td className="numeric" data-label="Chain hits"><strong>{member.hits.toLocaleString()}</strong></td>
+            <td className="numeric" data-label="Chain hits"><strong>{member.hits.toLocaleString("en-GB")}</strong></td>
             {!compact && <td className="numeric" data-label="Contribution"><span className="contribution-value">{member.contribution.toFixed(1)}%</span><span className="mini-progress"><i style={{ width: `${Math.min(member.contribution, 100)}%` }} /></span></td>}
             <td className="numeric" data-label="Respect"><strong>{member.respect.toFixed(2)}</strong></td>
             {rewardColumnVisible && <td className="numeric reward-column" data-label="Member reward">{rewards
@@ -101,7 +101,7 @@ export function ContributionTable({ members, title = "Chain contribution", compa
               <div className="contribution-mobile-row__player"><TornUserLink className="member-cell" name={member.name} tornUserId={member.tornId} avatar={false} detail={`ID ${member.tornId}`} />
                 {!compact && (member.status ? <span className={`member-status member-status--${statusClass(member.status)}`}><i />{member.status}</span> : <span className="muted-value">Status unavailable</span>)}
               </div>
-              <dl className="contribution-mobile-row__hits"><dt>Hits</dt><dd>{member.hits.toLocaleString()}</dd>{!compact && <><dt className="sr-only">Contribution</dt><dd className="contribution-mobile-row__share">{member.contribution.toFixed(1)}%</dd></>}</dl>
+              <dl className="contribution-mobile-row__hits"><dt>Hits</dt><dd>{member.hits.toLocaleString("en-GB")}</dd>{!compact && <><dt className="sr-only">Contribution</dt><dd className="contribution-mobile-row__share">{member.contribution.toFixed(1)}%</dd></>}</dl>
               <dl className="contribution-mobile-row__respect"><dt>Respect</dt><dd>{member.respect.toFixed(2)}</dd></dl>
             {rewardColumnVisible && <div className="contribution-mobile-row__reward"><span>Member reward</span>{rewards
               ? <RewardAmount amount={rewards[member.tornId]?.amount ?? 0} unit={rewardUnit ?? "units"} detail={rewards[member.tornId]?.tierLabel ?? "No matching tier"} paid={payoutStatus === "PAID"} size="compact" />

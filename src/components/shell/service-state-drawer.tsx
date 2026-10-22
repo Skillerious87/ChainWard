@@ -130,7 +130,7 @@ export function ServiceStateDrawer({ telemetry, database, autoRefresh, refreshIn
             {syncing ? <Spinner size={14} label="Checking service state" tone="muted" /> : <Activity size={14} />} {syncing ? "Checking…" : "Re-check now"}
           </button>
           <Link href="/settings" className="button button--quiet" onClick={onClose}><Settings size={14} /> Settings</Link>
-          <time dateTime={telemetry.checkedAt}>{new Date(telemetry.checkedAt).toLocaleString("en-GB")}</time>
+          <time dateTime={telemetry.checkedAt}>{new Date(telemetry.checkedAt).toLocaleString("en-GB", { timeZone: "UTC" })}</time>
         </footer>
       </aside>
     </div>

@@ -3,6 +3,7 @@ import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "./telemetry-cli
 
 describe("browser telemetry requests", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -24,6 +25,24 @@ describe("browser telemetry requests", () => {
   it("validates the complete client-safe telemetry envelope", () => {
     expect(isWorkspaceTelemetry(telemetryFixture())).toBe(true);
     expect(isWorkspaceTelemetry({ source: "live", checkedAt: "now" })).toBe(false);
+  });
+
+  it("bounds a stalled request and allows the next refresh to recover", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const fetchMock = vi.fn().mockImplementation((_url, options: RequestInit) => new Promise((_resolve, reject) => {
+      options.signal?.addEventListener("abort", () => reject(options.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = requestWorkspaceTelemetry("/api/telemetry/live-chain");
+    const failure = expect(request).rejects.toThrow("Timed out");
+    expect(timeout).toHaveBeenCalledWith(15_000);
+    controller.abort(new DOMException("Timed out", "TimeoutError"));
+    await failure;
+
+    fetchMock.mockResolvedValueOnce(Response.json(telemetryFixture()));
+    await expect(requestWorkspaceTelemetry("/api/telemetry/live-chain")).resolves.toMatchObject({ ok: true, payload: telemetryFixture() });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

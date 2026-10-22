@@ -434,7 +434,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
 
         {activeView === "connection" && <section className="settings-view-content">
           <div className="settings-status-hero"><span><KeyRound size={22} /></span><div><p className="eyebrow">Your Torn account</p><h3>{telemetry.source === "live" ? "Connected and ready" : "Connect your faction"}</h3><p>{telemetry.source === "live" ? "Your faction data is available across the workspace." : "Connect a Torn API key to bring your faction into Chainward."}</p></div><em className={`connection-pill connection-pill--${telemetry.source}`}><i />{telemetry.source === "live" ? "Verified" : "Not connected"}</em></div>
-          <dl className="settings-detail-list"><div><dt>Faction</dt><dd>{telemetry.faction?.name ?? "Unavailable"}</dd></div><div><dt>Faction ID</dt><dd>{telemetry.faction?.id ?? "—"}</dd></div><div><dt>Last server check</dt><dd>{new Date(telemetry.checkedAt).toLocaleString("en-GB")}</dd></div><div><dt>Operational status</dt><dd>{telemetry.message}</dd></div></dl>
+          <dl className="settings-detail-list"><div><dt>Faction</dt><dd>{telemetry.faction?.name ?? "Unavailable"}</dd></div><div><dt>Faction ID</dt><dd>{telemetry.faction?.id ?? "—"}</dd></div><div><dt>Last server check</dt><dd>{new Date(telemetry.checkedAt).toLocaleString("en-GB", { timeZone: "UTC" })}</dd></div><div><dt>Operational status</dt><dd>{telemetry.message}</dd></div></dl>
           <div className="settings-assurance-grid" aria-label="Connection safeguards">
             <article><span><ShieldCheck size={17} /></span><div><strong>Connected to the right faction</strong><p>Your player and faction details are checked directly with Torn.</p></div></article>
             <article><span><RefreshCw size={17} /></span><div><strong>Fresh when it matters</strong><p>Active-chain checks and manual sync request the latest available chain data.</p></div></article>
@@ -450,7 +450,7 @@ export function WorkspaceSettings({ telemetry, database, canMonitorMembers, lice
                 <span className="settings-passkey-list__icon" aria-hidden="true"><Fingerprint size={16} /></span>
                 <span className="settings-passkey-list__meta">
                   <strong>{passkey.deviceLabel ?? "Unknown device"}</strong>
-                  <small>Added {new Date(passkey.createdAt).toLocaleDateString("en-GB")} · Last used {passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString("en-GB") : "Never"}</small>
+                  <small>Added {new Date(passkey.createdAt).toLocaleDateString("en-GB", { timeZone: "UTC" })} · Last used {passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString("en-GB", { timeZone: "UTC" }) : "Never"}</small>
                 </span>
                 <button type="button" className="button button--quiet settings-passkey-list__remove" disabled={passkeyWorking === passkey.credentialId} onClick={() => void removePasskey(passkey.credentialId)} aria-label={`Remove ${passkey.deviceLabel ?? "this passkey"}`}>
                   {passkeyWorking === passkey.credentialId ? <Spinner size={14} label="Removing" tone="muted" /> : <Trash2 size={14} />}

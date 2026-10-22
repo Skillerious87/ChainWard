@@ -65,7 +65,7 @@ export function ApiPoolSettings() {
       {status && <dl className="settings-detail-list">
         <div><dt>Your contribution</dt><dd>{status.enabled ? `Active · key ending ${status.lastFour}` : "Not contributing"}</dd></div>
         <div><dt>Calls in the last minute</dt><dd>{status.requestsLastMinute} Chainward calls, including {status.contributionsLastMinute} contributions</dd></div>
-        <div><dt>Last contribution</dt><dd>{status.lastUsedAt ? new Date(status.lastUsedAt).toLocaleString("en-GB") : "None yet"}</dd></div>
+        <div><dt>Last contribution</dt><dd>{status.lastUsedAt ? new Date(status.lastUsedAt).toLocaleString("en-GB", { timeZone: "UTC" }) : "None yet"}</dd></div>
       </dl>}
       {status?.lastError && <p role="status">{status.lastError}</p>}
       <p>Chainward permits up to 30 calls per player per minute, including up to 10 contributions. Other apps use the same Torn allowance, so spare capacity cannot be guaranteed.</p>

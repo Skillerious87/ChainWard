@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SavedConnectionUnavailableError } from "@/lib/torn/connection-errors";
 
 const { getConfiguredTornConnection } = vi.hoisted(() => ({ getConfiguredTornConnection: vi.fn() }));
 
@@ -9,6 +10,11 @@ import { getCurrentActor, getCurrentActorWithProfileImage } from "./current-acto
 describe("current actor", () => {
   beforeEach(() => {
     getConfiguredTornConnection.mockReset();
+  });
+
+  it("preserves a recoverable storage failure instead of reporting a signed-out actor", async () => {
+    getConfiguredTornConnection.mockRejectedValue(new SavedConnectionUnavailableError());
+    await expect(getCurrentActor()).rejects.toBeInstanceOf(SavedConnectionUnavailableError);
   });
 
   it("uses the server-trusted session identity and image without another Torn request", async () => {

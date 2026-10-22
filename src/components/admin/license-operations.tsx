@@ -22,7 +22,7 @@ export function LicenseRegistry({ licenses }: { licenses: ActiveLicenseView[] })
       <span><ShieldCheck size={17} /></span>
       <div><strong>{license.faction}</strong><small>Faction {license.factionId} · Licence {license.licenseId.slice(0, 8).toUpperCase()}</small></div>
       <div><code>{license.reference}</code><small>{license.approvedBy ? <>Approved by <TornUserName name={license.approvedBy.name} tornUserId={license.approvedBy.tornUserId} /></> : `${license.term} access`}</small></div>
-      <div><strong>{license.expiresAt ? new Date(license.expiresAt).toLocaleDateString("en-GB") : "No expiry"}</strong><small>{renewal.renewalOpen ? <><CalendarClock size={11} /> {renewal.title}</> : license.expiresAt ? "Expires" : "Permanent"}</small></div>
+      <div><strong>{license.expiresAt ? new Date(license.expiresAt).toLocaleDateString("en-GB", { timeZone: "UTC" }) : "No expiry"}</strong><small>{renewal.renewalOpen ? <><CalendarClock size={11} /> {renewal.title}</> : license.expiresAt ? "Expires" : "Permanent"}</small></div>
     </article>; })}</div> : <div className="table-empty"><ShieldCheck size={20} /> No active licence records are stored.</div>}
   </section>;
 }
@@ -72,7 +72,7 @@ export function AccessAuditTimeline({ events }: { events: AccessAuditView[] }) {
         <div className="access-audit-event__body">
           <p className="access-audit-event__headline">
             <strong>{event.action}</strong>
-            <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
+            <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}</time>
           </p>
           <p className="access-audit-event__meta">
             <code>{event.reference ?? "No payment reference"}</code>

@@ -434,13 +434,13 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
                       <div className={`reward-simulator__result reward-simulator__result--${matchedTier ? "matched" : "unmatched"}`}>
                         {matchedTier ? (
                           <>
-                            <strong>{matchedTier.amount.toLocaleString()} <em>{draft.rewardUnit || "units"}</em></strong>
-                            <p>A member finishing on {previewHits.toLocaleString()} hits is paid by <b>{matchedTier.label}</b> ({rangeLabel(matchedTier)}).</p>
+                            <strong>{matchedTier.amount.toLocaleString("en-GB")} <em>{draft.rewardUnit || "units"}</em></strong>
+                            <p>A member finishing on {previewHits.toLocaleString("en-GB")} hits is paid by <b>{matchedTier.label}</b> ({rangeLabel(matchedTier)}).</p>
                           </>
                         ) : (
                           <>
                             <strong>No reward</strong>
-                            <p>{previewHits.toLocaleString()} hits falls outside every enabled tier, so this member would be paid nothing. Rebuild the ranges to close the gap.</p>
+                            <p>{previewHits.toLocaleString("en-GB")} hits falls outside every enabled tier, so this member would be paid nothing. Rebuild the ranges to close the gap.</p>
                           </>
                         )}
                       </div>
@@ -457,7 +457,7 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
                             <li key={tier.id} className={active ? "reward-ladder__row reward-ladder__row--active" : "reward-ladder__row"}>
                               <span className="reward-ladder__label"><strong>{tier.label}</strong><small>{rangeLabel(tier)}</small></span>
                               <span className="reward-ladder__bar"><i style={{ width: `${Math.max(share, 2)}%` }} /></span>
-                              <span className="reward-ladder__amount">{tier.amount.toLocaleString()} <small>{draft.rewardUnit || "units"}</small></span>
+                              <span className="reward-ladder__amount">{tier.amount.toLocaleString("en-GB")} <small>{draft.rewardUnit || "units"}</small></span>
                             </li>
                           );
                         })}
@@ -495,7 +495,7 @@ function RangeStatus({ validation, coverage, unit, onFix }: { validation: string
         <TriangleAlert size={16} />
         <div>
           <strong>{coverage.gaps.length} hit range{coverage.gaps.length === 1 ? "" : "s"} pay nothing</strong>
-          <ul>{coverage.gaps.map((gap) => <li key={`${gap.fromHits}-${gap.toHits ?? "up"}`}>{gap.toHits === null ? `${gap.fromHits.toLocaleString()} hits and above` : gap.fromHits === gap.toHits ? `${gap.fromHits.toLocaleString()} hits` : `${gap.fromHits.toLocaleString()}–${gap.toHits.toLocaleString()} hits`} is not claimed by any enabled tier.</li>)}</ul>
+          <ul>{coverage.gaps.map((gap) => <li key={`${gap.fromHits}-${gap.toHits ?? "up"}`}>{gap.toHits === null ? `${gap.fromHits.toLocaleString("en-GB")} hits and above` : gap.fromHits === gap.toHits ? `${gap.fromHits.toLocaleString("en-GB")} hits` : `${gap.fromHits.toLocaleString("en-GB")}–${gap.toHits.toLocaleString("en-GB")} hits`} is not claimed by any enabled tier.</li>)}</ul>
         </div>
         <button className="button button--quiet" onClick={onFix}><Wand2 size={13} /> Close gaps</button>
       </div>
@@ -561,7 +561,7 @@ function findTier(tiers: readonly RewardTierView[], hits: number): RewardTierVie
 }
 
 function rangeLabel(tier: RewardTierView): string {
-  return tier.maximumHits === null ? `${tier.minimumHits.toLocaleString()}+ hits` : `${tier.minimumHits.toLocaleString()}–${tier.maximumHits.toLocaleString()} hits`;
+  return tier.maximumHits === null ? `${tier.minimumHits.toLocaleString("en-GB")}+ hits` : `${tier.minimumHits.toLocaleString("en-GB")}–${tier.maximumHits.toLocaleString("en-GB")} hits`;
 }
 
 function maxAmount(tiers: readonly RewardTierView[]): number {

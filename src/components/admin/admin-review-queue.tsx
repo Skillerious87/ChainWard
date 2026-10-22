@@ -61,5 +61,5 @@ export function AdminReviewQueue({ licenceRequests, memberRequests }: { licenceR
 function formatWhen(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "Unknown";
-  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(timestamp);
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(timestamp);
 }

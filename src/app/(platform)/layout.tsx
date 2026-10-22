@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
 import { hasPermission } from "@/lib/auth/authorization";
-import { getCurrentActorWithProfileImage } from "@/lib/auth/current-actor";
+import { getCurrentActor, getCurrentActorWithProfileImage } from "@/lib/auth/current-actor";
 import { getFactionAccessAssignment, getFactionAccessWorkspace } from "@/lib/auth/faction-access-store";
 import { isPlatformOwner } from "@/lib/auth/platform-owner";
 import { getDatabaseStatus } from "@/lib/data/database-status";
@@ -44,8 +44,11 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
   const telemetryPromise = getWorkspaceTelemetry();
   const databasePromise = getDatabaseStatus();
   const accessPromise = getFactionAccessSummary(connection.factionId);
-  const actor = await getCurrentActorWithProfileImage();
+  const actor = await getCurrentActor();
   if (!actor.tornUserId || connection.tornUserId !== actor.tornUserId) redirect("/connect");
+  // Avatar refresh is display-only: let roster and permission reads proceed
+  // alongside it rather than waiting for an extra Torn round trip first.
+  const displayActorPromise = getCurrentActorWithProfileImage();
   const owner = isPlatformOwner(actor);
   const assignmentPromise = owner
     ? Promise.resolve(null)
@@ -66,11 +69,12 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
     ]);
     return { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity };
   });
-  const [telemetry, database, authorizationData, pendingReview] = await Promise.all([
+  const [telemetry, database, authorizationData, pendingReview, displayActor] = await Promise.all([
     telemetryPromise,
     databasePromise,
     authorizationDataPromise,
     pendingReviewPromise,
+    displayActorPromise,
   ]);
   if (telemetry.faction && connection.factionId !== telemetry.faction.id) redirect("/connect");
   const factionId = connection.factionId;
@@ -89,5 +93,5 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
       ...buildMemberActivityAlert(currentRoster.data, memberActivity, currentRoster.checkedAt),
     }
     : null;
-  return <AppShell currentUser={actor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}><ApiPoolPresence enabled={workspaceAuthorized && shellTelemetry.mode !== "offline"} />{children}</AppShell>;
+  return <AppShell currentUser={displayActor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}><ApiPoolPresence enabled={workspaceAuthorized && shellTelemetry.mode !== "offline"} />{children}</AppShell>;
 }

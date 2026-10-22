@@ -77,9 +77,9 @@ export function AnalyticsWorkspace({ historyResult, reportResult, rosterResult }
     </div>
 
     <section className="analytics-stat-grid">
-      <AnalyticsStat icon={History} label="Chains analysed" value={historyResult.available ? chainSummary.sampleSize.toLocaleString() : "—"} detail={`${history.length} returned in total`} />
-      <AnalyticsStat icon={Target} label="Average chain" value={historyResult.available ? Math.round(chainSummary.averageHits).toLocaleString() : "—"} detail="Verified final hits" />
-      <AnalyticsStat icon={Award} label="Best returned" value={historyResult.available ? chainSummary.bestChain?.hits.toLocaleString() ?? "—" : "—"} detail={chainSummary.bestChain ? `Chain #${chainSummary.bestChain.id}` : historyResult.message} />
+      <AnalyticsStat icon={History} label="Chains analysed" value={historyResult.available ? chainSummary.sampleSize.toLocaleString("en-GB") : "—"} detail={`${history.length} returned in total`} />
+      <AnalyticsStat icon={Target} label="Average chain" value={historyResult.available ? Math.round(chainSummary.averageHits).toLocaleString("en-GB") : "—"} detail="Verified final hits" />
+      <AnalyticsStat icon={Award} label="Best returned" value={historyResult.available ? chainSummary.bestChain?.hits.toLocaleString("en-GB") ?? "—" : "—"} detail={chainSummary.bestChain ? `Chain #${chainSummary.bestChain.id}` : historyResult.message} />
       <AnalyticsStat icon={Clock3} label="Average duration" value={historyResult.available ? formatDuration(chainSummary.averageDurationSeconds) : "—"} detail="Start to completion" />
       <AnalyticsStat icon={ShieldCheck} label="Consistency" value={chainSummary.consistencyPercent === null ? "—" : `${chainSummary.consistencyPercent.toFixed(0)}%`} detail="Variation around average" />
     </section>
@@ -88,7 +88,7 @@ export function AnalyticsWorkspace({ historyResult, reportResult, rosterResult }
       <section className="panel analytics-trend-panel">
         <div className="section-heading analytics-panel-heading"><div><h2>Chain performance trend</h2><p>{selectedHistory.length} completed chains · oldest to newest</p></div><div className="segmented-control segmented-control--compact">{metrics.map((option) => <button key={option.value} className={metric === option.value ? "segmented-control__active" : undefined} onClick={() => setMetric(option.value)}>{option.label}</button>)}</div></div>
         {selectedHistory.length > 0 ? <ChainTrendChart history={selectedHistory.toReversed()} metric={metric} /> : <AnalyticsEmpty icon={History} title="No completed chains returned" message={historyResult.message} />}
-        <div className="analytics-trend-footer"><span><small>Average hits</small><strong>{Math.round(chainSummary.averageHits).toLocaleString()}</strong></span><span><small>Respect per hit</small><strong>{chainSummary.respectPerHit.toFixed(2)}</strong></span><span><small>Average respect</small><strong>{chainSummary.averageRespect.toFixed(2)}</strong></span><span><small>Recent movement</small><strong className={`analytics-value--${trendTone}`}>{chainSummary.trendPercent === null ? "Baseline pending" : formatSigned(chainSummary.trendPercent)}</strong></span></div>
+        <div className="analytics-trend-footer"><span><small>Average hits</small><strong>{Math.round(chainSummary.averageHits).toLocaleString("en-GB")}</strong></span><span><small>Respect per hit</small><strong>{chainSummary.respectPerHit.toFixed(2)}</strong></span><span><small>Average respect</small><strong>{chainSummary.averageRespect.toFixed(2)}</strong></span><span><small>Recent movement</small><strong className={`analytics-value--${trendTone}`}>{chainSummary.trendPercent === null ? "Baseline pending" : formatSigned(chainSummary.trendPercent)}</strong></span></div>
       </section>
 
       <section className="panel roster-readiness-panel">
@@ -102,7 +102,7 @@ export function AnalyticsWorkspace({ historyResult, reportResult, rosterResult }
     <div className="analytics-dashboard-grid analytics-dashboard-grid--secondary">
       <section className="panel analytics-leaders-panel">
         <div className="section-heading"><div><h2>Current report leaders</h2><p>{report ? `Matching Torn report #${report.id}` : "Current-chain participation"}</p></div>{report && <span className="active-badge"><RadioTower size={12} /> Verified report</span>}</div>
-        {report ? <div className="analytics-leader-list">{report.contributions.slice(0, 6).map((member, index) => <article key={member.tornId}><span className="analytics-leader-rank">{index + 1}</span><MemberAvatar name={member.name} /><div><strong>{member.name}</strong><small>{member.hits.toLocaleString()} qualifying hits · {member.respect.toFixed(2)} respect</small></div><i><b style={{ width: `${Math.min(100, member.contribution)}%` }} /></i><em>{member.contribution.toFixed(1)}%</em></article>)}</div> : <AnalyticsEmpty icon={Activity} title="No matching current report" message={reportResult.message} action={{ label: "Open live chain", href: "/live-chain" }} />}
+        {report ? <div className="analytics-leader-list">{report.contributions.slice(0, 6).map((member, index) => <article key={member.tornId}><span className="analytics-leader-rank">{index + 1}</span><MemberAvatar name={member.name} /><div><strong>{member.name}</strong><small>{member.hits.toLocaleString("en-GB")} qualifying hits · {member.respect.toFixed(2)} respect</small></div><i><b style={{ width: `${Math.min(100, member.contribution)}%` }} /></i><em>{member.contribution.toFixed(1)}%</em></article>)}</div> : <AnalyticsEmpty icon={Activity} title="No matching current report" message={reportResult.message} action={{ label: "Open live chain", href: "/live-chain" }} />}
       </section>
 
       <section className="panel position-mix-panel">
@@ -165,7 +165,7 @@ function metricLabel(metric: ChartMetric): string {
 function formatMetric(value: number, metric: ChartMetric, compact = false): string {
   if (metric === "duration") return `${value.toFixed(compact && value >= 10 ? 0 : 1)}h`;
   if (metric === "respect") return value.toFixed(compact ? 0 : 2);
-  return compact && value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : Math.round(value).toLocaleString();
+  return compact && value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : Math.round(value).toLocaleString("en-GB");
 }
 
 function showAxisLabel(index: number, count: number): boolean {

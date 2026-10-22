@@ -18,6 +18,9 @@ export function requestWorkspaceTelemetry(endpoint: string): Promise<TelemetryRe
   const request: Promise<TelemetryRequestResult> = fetch(endpoint, {
     headers: { accept: "application/json" },
     cache: "no-store",
+    // Release the shared request after a stalled connection so later polls
+    // and manual refreshes can recover without reloading the application.
+    signal: AbortSignal.timeout(15_000),
   }).then(async (response) => ({
     ok: response.ok,
     payload: await response.json() as unknown,

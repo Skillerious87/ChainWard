@@ -1111,7 +1111,7 @@ function ChainStrip({ chain, timeoutMs, cooldownMs, bestPick, readyCount, totalT
       <span className="targets-chainbar__icon"><Activity size={16} /></span>
       {active ? (
         <>
-          <span className="targets-chainbar__count"><strong>{chain.current.toLocaleString()}</strong> hits</span>
+          <span className="targets-chainbar__count"><strong>{chain.current.toLocaleString("en-GB")}</strong> hits</span>
           {chain.modifier > 1 && <span className="targets-chainbar__mod">×{chain.modifier.toFixed(2)}</span>}
           <span className="targets-chainbar__timer"><Clock3 size={13} /> {formatCountdown(timeoutMs)} to timeout</span>
           {atRisk && (readyCount === 0 || !bestPick) && (
@@ -1236,7 +1236,7 @@ function TargetCard({ row, now, priority, open, busy, disabled, chainMode = fals
             {(snapshot?.lastHit || snapshot?.hitYouBack || bountied || difficulty || entry.tags.length > 0 || (stats && stats.hitCount > 1) || reliableFarm) && (
               <span className="targets-card__l3">
                 {snapshot?.lastHit && (
-                  <span className="targets-card__hit" title={`You: ${snapshot.lastHit.result}, ${new Date(snapshot.lastHit.at * 1_000).toLocaleString()}`}>
+                  <span className="targets-card__hit" title={`You: ${snapshot.lastHit.result}, ${new Date(snapshot.lastHit.at * 1_000).toLocaleString("en-GB", { timeZone: "UTC" })}`}>
                     <Swords size={9} /> {snapshot.lastHit.result || "hit"} {formatAgo(now - snapshot.lastHit.at * 1_000)}
                     {snapshot.lastHit.respect > 0 && ` · +${snapshot.lastHit.respect.toFixed(1)}`}
                   </span>
@@ -1267,7 +1267,7 @@ function TargetCard({ row, now, priority, open, busy, disabled, chainMode = fals
               </span>
             )}
             {lifePct !== null && (
-              <span className="targets-card__life" title={`${snapshot!.lifeCurrent.toLocaleString()} / ${snapshot!.lifeMaximum.toLocaleString()} life`}>
+              <span className="targets-card__life" title={`${snapshot!.lifeCurrent.toLocaleString("en-GB")} / ${snapshot!.lifeMaximum.toLocaleString("en-GB")} life`}>
                 <span className="targets-card__life-bar"><span style={{ width: `${Math.max(2, lifePct)}%` }} /></span>
                 <span className="targets-card__life-num">{lifePct}%</span>
               </span>
@@ -1291,7 +1291,7 @@ function TargetCard({ row, now, priority, open, busy, disabled, chainMode = fals
           <dl className="targets-card__facts">
             <div><dt>Status</dt><dd>{snapshot?.status.description || stateLabel}</dd></div>
             {snapshot?.factionName && <div><dt>Faction</dt><dd>{snapshot.factionName}{snapshot.position ? ` · ${snapshot.position}` : ""}</dd></div>}
-            {lifePct !== null && <div><dt>Life</dt><dd>{snapshot!.lifeCurrent.toLocaleString()} / {snapshot!.lifeMaximum.toLocaleString()}</dd></div>}
+            {lifePct !== null && <div><dt>Life</dt><dd>{snapshot!.lifeCurrent.toLocaleString("en-GB")} / {snapshot!.lifeMaximum.toLocaleString("en-GB")}</dd></div>}
             {snapshot?.lastHit && <div><dt>Your last hit</dt><dd>{snapshot.lastHit.result || "Hit"} · {formatAgo(now - snapshot.lastHit.at * 1_000)}{snapshot.lastHit.respect > 0 ? ` · +${snapshot.lastHit.respect.toFixed(2)}` : ""}</dd></div>}
             {stats && stats.hitCount > 0 && (
               <div>
@@ -1482,7 +1482,7 @@ function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? "—"
-    : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+    : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 function formatMoney(amount: number): string {

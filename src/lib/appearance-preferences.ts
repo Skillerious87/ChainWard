@@ -29,7 +29,7 @@ const defaults: AppearancePreferences = {
   autoRefresh: true,
   refreshIntervalSeconds: 30,
   chainWarningSeconds: 180,
-  chainPanicMode: false,
+  chainPanicMode: true,
 };
 let currentSnapshot = defaults;
 let snapshotLoaded = false;
@@ -53,7 +53,7 @@ export function readAppearancePreferences(): AppearancePreferences {
       autoRefresh: candidate.autoRefresh !== false,
       refreshIntervalSeconds: isRefreshInterval(candidate.refreshIntervalSeconds) ? candidate.refreshIntervalSeconds : defaults.refreshIntervalSeconds,
       chainWarningSeconds: isWarningThreshold(candidate.chainWarningSeconds) ? candidate.chainWarningSeconds : defaults.chainWarningSeconds,
-      chainPanicMode: candidate.chainPanicMode === true,
+      chainPanicMode: candidate.chainPanicMode !== false,
     };
   } catch {
     return defaults;

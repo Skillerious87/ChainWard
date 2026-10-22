@@ -21,6 +21,7 @@ const PUBLIC_ROUTES = ["/", "/connect"];
 const OPERATIONAL_ROUTES = [
   "/dashboard",
   "/live-chain",
+  "/chain-watch",
   "/members",
   "/members/9000002",
   "/targets",

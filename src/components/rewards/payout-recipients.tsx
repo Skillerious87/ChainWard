@@ -58,10 +58,10 @@ export function PayoutRecipients({ entries }: { entries: PayoutLedgerEntry[] }) 
       </header>
 
       <div className="payout-recipient-summary" aria-label="Recipient summary">
-        <article><span><Users size={17} /></span><div><small>Recipients</small><strong>{distinctMembers.toLocaleString()}</strong><em>Distinct Torn members</em></div></article>
-        <article><span><BadgeCheck size={17} /></span><div><small>Paid members</small><strong>{paidMembers.toLocaleString()}</strong><em>With an acknowledged reward</em></div></article>
-        <article className={openMembers ? "payout-recipient-summary__attention" : undefined}><span><Clock3 size={17} /></span><div><small>Open exposure</small><strong>{openMembers.toLocaleString()}</strong><em>{openMembers ? "Members awaiting resolution" : "No recipient liability"}</em></div></article>
-        <article><span><Layers3 size={17} /></span><div><small>Chain coverage</small><strong>{chainCount.toLocaleString()}</strong><em>Persisted settlements</em></div></article>
+        <article><span><Users size={17} /></span><div><small>Recipients</small><strong>{distinctMembers.toLocaleString("en-GB")}</strong><em>Distinct Torn members</em></div></article>
+        <article><span><BadgeCheck size={17} /></span><div><small>Paid members</small><strong>{paidMembers.toLocaleString("en-GB")}</strong><em>With an acknowledged reward</em></div></article>
+        <article className={openMembers ? "payout-recipient-summary__attention" : undefined}><span><Clock3 size={17} /></span><div><small>Open exposure</small><strong>{openMembers.toLocaleString("en-GB")}</strong><em>{openMembers ? "Members awaiting resolution" : "No recipient liability"}</em></div></article>
+        <article><span><Layers3 size={17} /></span><div><small>Chain coverage</small><strong>{chainCount.toLocaleString("en-GB")}</strong><em>Persisted settlements</em></div></article>
       </div>
 
       <div className="payout-recipient-toolbar">

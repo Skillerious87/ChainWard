@@ -1,7 +1,8 @@
 "use client";
 
 import { AlarmClock, ArrowLeftRight, CalendarClock, CalendarPlus, CheckSquare, Clock3, Copy, Pause, Pencil, Play, Repeat, Settings2, ShieldAlert, ShieldCheck, Trash2, TriangleAlert, UserRoundCheck, Users, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { createChainWatchSlotAction, deleteChainWatchSlotAction, updateChainWatchSettingsAction, updateChainWatchSlotAction } from "@/app/(platform)/chain-watch/actions";
 import { bulkDeleteChainWatchSlotsAction, duplicateChainWatchRangeAction, swapChainWatchSlotMembersAction } from "@/app/(platform)/chain-watch/bulk-actions";
 import { createChainWatchRotationAction, deleteChainWatchRotationAction, pauseChainWatchRotationAction, updateChainWatchRotationAction } from "@/app/(platform)/chain-watch/rotation-actions";
@@ -45,6 +46,14 @@ interface SlotDraft {
 
 const EMPTY_DRAFT: SlotDraft = { startAt: "", endAt: "", primaryTornUserId: "", backupTornUserId: "", note: "" };
 
+function subscribeToView(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+function readSavedView(): "list" | "timeline" {
+  try { return window.localStorage.getItem("chainward:chain-watch-view:v1") === "timeline" ? "timeline" : "list"; } catch { return "list"; }
+}
+
 export function ChainWatchWorkspace({
   workspace,
   rosterResult,
@@ -56,11 +65,8 @@ export function ChainWatchWorkspace({
   rotations: ChainWatchRotation[];
   canManage: boolean;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(interval);
-  }, []);
+  const { nowSeconds } = useLiveWorkspaceTelemetry();
+  const now = nowSeconds * 1_000;
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [roleNameDraft, setRoleNameDraft] = useState(workspace.roleName);
@@ -75,10 +81,9 @@ export function ChainWatchWorkspace({
   const [deleteRotationTarget, setDeleteRotationTarget] = useState<ChainWatchRotation | null>(null);
   const editingRotation = editingRotationId ? rotations.find((rotation) => rotation.id === editingRotationId) ?? null : null;
 
-  const [viewMode, setViewModeState] = useState<"list" | "timeline">(() => {
-    if (typeof window === "undefined") return "list";
-    try { return window.localStorage.getItem("chainward:chain-watch-view:v1") === "timeline" ? "timeline" : "list"; } catch { return "list"; }
-  });
+  const savedView = useSyncExternalStore(subscribeToView, readSavedView, () => "list" as const);
+  const [selectedView, setViewModeState] = useState<"list" | "timeline" | null>(null);
+  const viewMode = selectedView ?? savedView;
   function setViewMode(next: "list" | "timeline") {
     setViewModeState(next);
     try { window.localStorage.setItem("chainward:chain-watch-view:v1", next); } catch { /* view choice still applies to this tab */ }
