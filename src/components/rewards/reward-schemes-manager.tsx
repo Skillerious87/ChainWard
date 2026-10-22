@@ -25,7 +25,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { saveRewardScheme, setRewardSchemeArchived } from "@/app/(platform)/rewards/actions";
-import { publishViewSwitch } from "@/components/shell/route-progress";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
@@ -116,7 +115,6 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
   }, [save]);
 
   function selectScheme(scheme: RewardSchemeView): void {
-    if (scheme.id !== selectedId) publishViewSwitch(`reward-scheme:${scheme.id}`);
     setSelectedId(scheme.id);
     setDraft(editable(scheme));
     setBaseline(fingerprint(editable(scheme)));
@@ -150,7 +148,6 @@ export function RewardSchemesManager({ workspace }: { workspace: RewardWorkspace
 
   function selectTab(next: EditorTab): void {
     if (next === tab) return;
-    publishViewSwitch(`reward-editor:${next}`);
     setTab(next);
   }
 

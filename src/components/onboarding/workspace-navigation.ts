@@ -1,7 +1,6 @@
 import type { Route } from "next";
 
 type ReplaceDocument = (path: Route) => void;
-type ScheduleNavigation = (navigate: () => void) => void;
 
 /**
  * Crossing the connection boundary must make a new document request. The
@@ -13,10 +12,6 @@ type ScheduleNavigation = (navigate: () => void) => void;
 export function enterConnectedWorkspace(
   path: Route,
   replaceDocument: ReplaceDocument = (destination) => window.location.replace(destination),
-  scheduleNavigation: ScheduleNavigation = (navigate) => window.requestAnimationFrame(navigate),
 ): void {
-  // Give React one paint opportunity to mount the document-level handoff
-  // before the full navigation begins. The current document then keeps that
-  // handoff visible until the authenticated response is ready to render.
-  scheduleNavigation(() => replaceDocument(path));
+  replaceDocument(path);
 }

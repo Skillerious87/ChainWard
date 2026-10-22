@@ -35,7 +35,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { publishViewSwitch } from "@/components/shell/route-progress";
 
 interface WorkspaceSectionItem {
   id: string;
@@ -154,7 +153,6 @@ export function WorkspaceSectionNavigationProvider({ pathname, children }: { pat
   const selectView = useCallback((nextView: string) => {
     if (!definition || definition.mode !== "local" || !definition.items.some((item) => item.id === nextView)) return;
     setView(nextView);
-    publishViewSwitch(`${definition.key}:${nextView}`);
 
     const nextUrl = new URL(window.location.href);
     if (nextView === definition.defaultView) nextUrl.searchParams.delete("section");

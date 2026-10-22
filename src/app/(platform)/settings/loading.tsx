@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="console" title="Loading settings" hint="Checking workspace configuration" />;
+  return <PageSpinner label="Loading settings" />;
 }

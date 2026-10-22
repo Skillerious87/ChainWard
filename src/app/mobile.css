@@ -64,10 +64,6 @@
   .topbar__menu { display: inline-grid !important; }
   .collapse-button,
   .sidebar-rail-toggle { display: none !important; }
-  .route-loading-core,
-  .route-loading-core::before,
-  .view-loading__centre,
-  .view-loading__centre::before { left: 0; }
 
   /* A saved collapsed preference must not collapse the contents of the drawer. */
   :root[data-sidebar="collapsed"] .sidebar__brand-row { justify-content: space-between; padding-inline: 20px; }
@@ -254,19 +250,8 @@
   .sidebar { width: min(300px, 86vw) !important; padding-bottom: var(--mobile-safe-area-bottom); padding-left: var(--mobile-safe-area-left); }
   .nav-item { height: 48px; }
   .toast-region { right: max(12px, var(--mobile-safe-area-right)); bottom: calc(var(--mobile-bottom-nav-height) + 10px); left: max(12px, var(--mobile-safe-area-left)); width: auto; }
-  .route-loading-core,
-  .view-loading__centre {
-    padding: max(18px, var(--mobile-safe-area-top)) max(18px, var(--mobile-safe-area-right)) max(18px, var(--mobile-safe-area-bottom)) max(18px, var(--mobile-safe-area-left));
-  }
-  .route-loading-core,
-  .route-loading-core::before,
-  .view-loading__centre,
-  .view-loading__centre::before {
-    top: calc(var(--topbar-height) + var(--mobile-status-banner-height) + 2px);
-    right: 0;
-    bottom: var(--mobile-bottom-nav-height);
-    left: 0;
-  }
+
+
   .command-layer {
     display: flex;
     padding: max(10px, var(--mobile-safe-area-top)) max(10px, var(--mobile-safe-area-right)) max(10px, var(--mobile-safe-area-bottom)) max(10px, var(--mobile-safe-area-left));
@@ -333,7 +318,6 @@
   .mobile-tabbar__item--active { background: rgba(var(--accent-rgb), .08); color: var(--accent); }
   .mobile-tabbar__item--active::before { position: absolute; top: 0; right: 20%; left: 20%; height: 2px; border-radius: 0 0 3px 3px; background: var(--accent); content: ""; box-shadow: 0 0 14px rgba(var(--accent-rgb), .34); }
   .mobile-tabbar__item:focus-visible { outline: 2px solid var(--accent); }
-  .mobile-tabbar__item .nav-item__pending { right: 18%; bottom: 2px; left: 18%; }
 
   /* Dense page chrome needs to wrap into a usable control stack rather than
      forcing labels and actions into a single clipped row. */

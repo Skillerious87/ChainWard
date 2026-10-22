@@ -37,54 +37,8 @@
 }
 :root.reduced-motion[data-chain-danger="critical"] .app-shell::after { animation: none; opacity: .75; }
 
-/* Route handoff: every workspace link receives an immediate, visible response
-   (including prefetched links whose framework pending state is skipped). */
-.route-progress {
-  position: relative;
-  z-index: 39;
-  height: 2px;
-  overflow: hidden;
-  background: transparent;
-  pointer-events: none;
-}
-.route-progress::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), .35) 30%, var(--accent) 50%, rgba(var(--accent-rgb), .35) 70%, transparent);
-  content: "";
-  opacity: 0;
-  transform: translateX(-100%);
-}
-.route-progress[data-phase="running"]::after {
-  opacity: 1;
-  animation: route-progress-sweep 1.1s cubic-bezier(.4, 0, .2, 1) infinite;
-}
-.route-progress[data-phase="finishing"]::after {
-  opacity: 1;
-  animation: route-progress-finish 160ms cubic-bezier(.2, .8, .2, 1) forwards;
-}
-.route-loading-core {
-  position: fixed;
-  z-index: 70;
-  top: calc(var(--topbar-height) + var(--workspace-strip-height, 31px));
-  right: 0;
-  bottom: 0;
-  left: var(--rail-width);
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  pointer-events: none;
-  opacity: 0;
-  animation: route-core-in 180ms ease-out forwards;
-  isolation: isolate;
-}
-.route-loading-core::before { position: fixed; z-index: 0; top: calc(var(--topbar-height) + var(--workspace-strip-height, 31px)); right: 0; bottom: 0; left: var(--rail-width); background: radial-gradient(circle at 50% 44%,rgba(var(--accent-rgb),.05),transparent 30%),rgba(8,11,13,.66); backdrop-filter: blur(7px) saturate(115%); -webkit-backdrop-filter: blur(7px) saturate(115%); content: ""; }
-.route-loading-core > .page-loading-core { position: relative; z-index: 1; }
-.route-loading-core[data-phase="finishing"] { animation: route-core-out 260ms ease-in forwards; }
-@keyframes route-core-in { to { opacity: 1; } }
-@keyframes route-core-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes route-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-@keyframes route-progress-finish { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(60%); } }
+/* A small, non-blocking spinner while the router reports pending work. */
+.route-spinner { position: fixed; z-index: 61; top: calc(var(--topbar-height) + var(--workspace-strip-height, 31px) + 12px); right: 20px; pointer-events: none; }
 
 /* The collapsed-rail hover label is positioned outside the item, which made it
    part of the scrollable overflow of `.sidebar__nav` and produced a permanent
@@ -94,58 +48,9 @@
 .sidebar__nav { overflow-x: clip; }
 :root[data-sidebar="collapsed"] .sidebar__nav { overflow: visible; }
 
-/* Per-destination feedback while a route resolves. Fixed size, so it can never
-   move the label it sits beside. */
-.nav-item__pending {
-  position: absolute;
-  right: 10px;
-  bottom: 6px;
-  left: 10px;
-  height: 1.5px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  opacity: 0;
-  transform: scaleX(.35);
-}
-.nav-item__pending[data-pending="true"] {
-  animation: nav-pending-in 220ms ease 110ms forwards, nav-pending-pulse 1s ease-in-out 110ms infinite;
-}
-@keyframes nav-pending-in { to { opacity: .9; transform: scaleX(1); } }
-@keyframes nav-pending-pulse { 50% { opacity: .35; } }
-:root[data-sidebar="collapsed"] .nav-item__pending { right: 18px; left: 18px; }
+.platform-route-stage { min-width: 0; }
 
-/* Route handoff.
-   A server-suspended view gets a shaped fallback while the shell remains
-   interactive and the incoming view rises into place.
-
-   The enter animation avoids `filter: blur()`, which forces an expensive
-   offscreen composite of the entire page on every navigation. */
-.platform-route-stage {
-  min-width: 0;
-  animation: platform-route-enter 300ms cubic-bezier(.22, .82, .28, 1) both;
-}
-.platform-route-stage:has(.view-loading) { animation: none; }
-@keyframes platform-route-enter {
-  from { opacity: 0; transform: translate3d(0, 8px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-/* Route fallbacks replace only the content that is actually still loading. */
-.page-content {
-  transition: opacity 220ms ease, transform 220ms cubic-bezier(.22, .82, .28, 1), filter 220ms ease;
-}
-/* The rail and top chrome stay fully present so the shell never appears to
-   reload — only the view being replaced recedes. */
-:root[data-navigating="true"] .sidebar,
-:root[data-navigating="true"] .topbar { opacity: 1; }
-
-/* Application shell scrolling -----------------------------------------------
-   The document itself no longer scrolls. The shell fills the viewport, the top
-   bar and provenance banner are fixed rows, and only the workspace beneath them
-   scrolls — so the scrollbar starts under the banner instead of running the
-   full height of the window behind fixed chrome. */
-/* Scoped to the platform shell so public pages keep ordinary document
-   scrolling. */
+/* Only the workspace canvas scrolls; public pages retain document scrolling. */
 html:has(.app-shell),
 body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; overscroll-behavior: none; }
 .app-shell { --workspace-strip-height: 31px; height: 100dvh; overflow: hidden; }
@@ -155,7 +60,7 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   flex-direction: column;
   overflow: hidden;
 }
-.topbar, .data-source-banner, .workspace-view-nav, .route-progress { flex: 0 0 auto; }
+.topbar, .data-source-banner, .workspace-view-nav { flex: 0 0 auto; }
 /* The route-specific strip is z-index 40. Keep the header one layer above it
    so its menus can paint over that strip without overtaking the mobile rail. */
 .topbar { position: relative; z-index: 41; }
@@ -172,10 +77,6 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
    workspaces. It remains a fixed row of the shell while only `.app-scroll`
    moves, so there is no sticky-state jump or exposed gutter at the edges. */
 .app-shell:has(.workspace-view-nav) { --workspace-strip-height: 52px; }
-.app-shell:has(.workspace-view-nav) .view-loading__centre,
-.app-shell:has(.workspace-view-nav) .view-loading__centre::before {
-  top: calc(var(--topbar-height) + var(--workspace-strip-height));
-}
 .workspace-view-nav {
   position: relative;
   z-index: 40;
@@ -802,33 +703,16 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
   .about-dialog__facts dd { font-size: 10.5px; }
 }
 
-@media (max-width: 960px) {
-  .route-loading-core,
-  .route-loading-core::before { left: 0; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .route-progress[data-phase="running"]::after,
-  .route-progress[data-phase="finishing"]::after,
-  .nav-item__pending[data-pending="true"],
   .service-summary__pulse::after { animation: none; }
-  .nav-item__pending[data-pending="true"] { opacity: .9; transform: scaleX(1); }
   .platform-route-stage,
-  .route-loading-core,
   .about-dialog__surface,
   .service-drawer__panel,
   .service-drawer__scrim { animation: none; }
-  .route-loading-core { opacity: 1; }
-  .page-content { transition: opacity 120ms ease; }
-  :root[data-navigating="true"] .page-content { transform: none; }
 }
-:root.reduced-motion .route-progress::after,
-:root.reduced-motion .nav-item__pending,
 :root.reduced-motion .service-summary__pulse::after { animation: none; }
 :root.reduced-motion .platform-route-stage { animation: none; }
 :root.reduced-motion .about-dialog__surface { animation: none; }
-:root.reduced-motion .route-loading-core { animation: none; opacity: 1; }
-:root.reduced-motion[data-navigating="true"] .page-content { transform: none; }
 
 /* Licence notices live in the scrolling canvas, so they stay visible without
    stealing fixed-header space from small screens. */
@@ -851,13 +735,3 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 .license-expiry-banner > b { display: inline-flex; align-items: center; gap: 7px; color: #e4c982; font-size: 11px; white-space: nowrap; }
 .license-expiry-banner--urgent,.license-expiry-banner--final-day,.license-expiry-banner--expired { border-color: rgba(242, 109, 109, .32); background: linear-gradient(100deg, rgba(242, 109, 109, .1), rgba(242, 109, 109, .02)); }
 .license-expiry-banner--urgent > span:first-child,.license-expiry-banner--final-day > span:first-child,.license-expiry-banner--expired > span:first-child { border-color: rgba(242, 109, 109, .3); color: var(--danger); }
-
-/* Partial overview loading keeps the live workspace usable while reports arrive. */
-.overview-details-loading { display: grid; gap: 18px; }
-.overview-details-loading__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.overview-details-loading__stats > div { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.overview-details-loading__stats .skeleton-line { width: 65%; height: 10px; }
-.overview-details-loading__stats .skeleton-line:last-child { width: 40%; height: 26px; }
-.overview-details-loading__report { display: grid; gap: 24px; min-height: 220px; padding: 28px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.overview-details-loading__report .skeleton-line { height: 12px; width: 85%; }
-@media (max-width: 560px) { .overview-details-loading__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

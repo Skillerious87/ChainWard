@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="table" title="Loading roster" hint="Fetching verified faction members" />;
+  return <PageSpinner label="Loading roster" />;
 }

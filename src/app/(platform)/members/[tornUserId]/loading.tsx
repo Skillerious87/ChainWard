@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="grid" title="Opening member report" hint="Loading verified roster facts and Chainward records" />;
+  return <PageSpinner label="Opening member report" />;
 }

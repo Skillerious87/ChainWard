@@ -27,7 +27,6 @@ import {
   WebAuthnAbortService,
 } from "@simplewebauthn/browser";
 import { Spinner } from "@/components/ui/spinner";
-import { WorkspaceLoadingOverlay } from "@/components/ui/workspace-loading-overlay";
 import { deriveDeviceLabel } from "@/lib/device-label";
 import { isNativeApp } from "@/lib/is-native-app";
 import { waitForNativeSplashHidden } from "@/lib/native-splash-state";
@@ -395,16 +394,10 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
   const formState = loading || opening ? "validating" : "entry";
   const className = `connect-form connect-form--${formState}${offlineEnabled ? " connect-form--offline" : ""}`;
-  // The key field and its neighbours lock while either flow is in progress,
-  // so the two can't race - but only `loading` drives the submit button's
-  // own "Verifying securely..." visuals, since that one is specific to a key
-  // submission the passkey flow never makes.
-  const formBusy = loading || passkeyBusy;
+  const formBusy = loading || passkeyBusy || opening;
 
   return (
-    <form className={className} onSubmit={submit} aria-busy={formBusy || opening}>
-      <WorkspaceLoadingOverlay visible={opening} />
-      <span className="connect-form__activity" aria-hidden="true" />
+    <form className={className} onSubmit={submit} aria-busy={formBusy}>
       <div className="connect-stage connect-stage--entry">
         <header className="connect-form__heading">
           <span className="login-access-label"><LockKeyhole size={13} /> Secure workspace access</span>
@@ -469,18 +462,12 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
 
             {error && <div className="form-error" role="alert"><AlertTriangle size={17} /><div><strong>{errorTitle(error.code)}</strong><span>{error.message}</span><small>{errorGuidance(error.code)}</small></div></div>}
 
-            <button type="submit" className="button button--primary connect-submit" data-state={loading ? "loading" : "idle"} disabled={formBusy || networkOffline}>
+            <button type="submit" className="button button--primary connect-submit" data-state={loading || opening ? "loading" : "idle"} disabled={formBusy || networkOffline}>
               <span className="connect-submit__text">
-                <span key={loading ? "verifying" : "enter"}>{loading ? "Verifying securely…" : "Enter workspace"}</span>
+                <span>{opening ? "Opening workspace…" : loading ? "Verifying securely…" : "Enter workspace"}</span>
               </span>
               <span className="connect-submit__ind" aria-hidden="true">
-                <ArrowRight className="connect-submit__arrow" size={16} />
-                <span className="connect-submit__spin">
-                  <svg className="connect-submit__spin-svg" viewBox="0 0 20 20">
-                    <circle className="connect-submit__spin-track" cx="10" cy="10" r="7" />
-                    <circle className="connect-submit__spin-head" cx="10" cy="10" r="7" pathLength={100} />
-                  </svg>
-                </span>
+                {loading || opening ? <Spinner size={16} label="Opening workspace" tone="muted" /> : <ArrowRight size={16} />}
               </span>
             </button>
 

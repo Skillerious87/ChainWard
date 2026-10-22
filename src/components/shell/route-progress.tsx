@@ -1,18 +1,15 @@
 "use client";
 
 import { useLinkStatus } from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 
 const NAVIGATION_EVENT = "chainward:navigating";
-const SHOW_DELAY_MS = 150;
-const FINISH_DURATION_MS = 160;
-const NAVIGATION_SAFETY_TIMEOUT_MS = 12_000;
 
 /**
  * Rendered inside a `<Link>`. `useLinkStatus` only reports the pending state to
  * descendants of the link that owns it, so each destination reports its own
- * state and the shell aggregates them into one progress bar.
+ * state and the shell aggregates them into a small spinner.
  */
 export function NavigationBeacon({ id }: { id: string }) {
   const { pending } = useLinkStatus();
@@ -29,115 +26,29 @@ export function NavigationBeacon({ id }: { id: string }) {
     };
   }, [id, pending]);
 
-  return <i className="nav-item__pending" data-pending={pending ? "true" : "false"} aria-hidden="true" />;
+  return null;
 }
 
 export function publishNavigationState(id: string, pending: boolean): void {
   window.dispatchEvent(new CustomEvent<{ id: string; pending: boolean }>(NAVIGATION_EVENT, { detail: { id, pending } }));
 }
 
-/**
- * Client-only panes (settings sections, editor tabs, and similar views) render
- * synchronously, but still deserve the same visible acknowledgement as a route
- * change. Fast switches finish before the delayed progress indicator appears.
- */
-export function publishViewSwitch(id: string): void {
-  publishNavigationState(id, true);
-  window.requestAnimationFrame(() => window.requestAnimationFrame(() => publishNavigationState(id, false)));
-}
-
-/**
- * Immediate workspace navigation feedback. `useLinkStatus` deliberately skips
- * prefetched routes, so a capture listener also observes ordinary same-origin
- * link activation. Only slower transitions show the slim progress bar; route
- * loading boundaries own the fallback without covering a completed view.
- */
+/** Only actual pending navigation controls this spinner. No visibility timers. */
 export function RouteProgress() {
-  const pathname = usePathname();
-  const [phase, setPhase] = useState<"idle" | "running" | "finishing">("idle");
+  const [pending, setPending] = useState(false);
   const pendingIds = useRef(new Set<string>());
-  const manualNavigationId = useRef<string | null>(null);
-  const manualSafetyTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    let showTimer: number | undefined;
-    let idleTimer: number | undefined;
-
     function receive(event: Event): void {
       const detail = (event as CustomEvent<{ id: string; pending: boolean }>).detail;
-      if (!detail || typeof detail.id !== "string") return;
+      if (!detail || typeof detail.id !== "string" || typeof detail.pending !== "boolean") return;
       if (detail.pending) pendingIds.current.add(detail.id);
       else pendingIds.current.delete(detail.id);
-
-      if (pendingIds.current.size > 0) {
-        window.clearTimeout(idleTimer);
-        if (showTimer === undefined) showTimer = window.setTimeout(() => {
-          setPhase("running");
-        }, SHOW_DELAY_MS);
-        return;
-      }
-
-      window.clearTimeout(showTimer);
-      showTimer = undefined;
-      setPhase((current) => current === "idle" ? current : "finishing");
-      idleTimer = window.setTimeout(() => setPhase("idle"), FINISH_DURATION_MS);
+      setPending(pendingIds.current.size > 0);
     }
-
     window.addEventListener(NAVIGATION_EVENT, receive);
-    return () => {
-      window.clearTimeout(showTimer);
-      window.clearTimeout(idleTimer);
-      window.removeEventListener(NAVIGATION_EVENT, receive);
-    };
+    return () => window.removeEventListener(NAVIGATION_EVENT, receive);
   }, []);
 
-  useEffect(() => {
-    function completeManualNavigation(): void {
-      const id = manualNavigationId.current;
-      if (!id) return;
-      manualNavigationId.current = null;
-      window.clearTimeout(manualSafetyTimer.current);
-      manualSafetyTimer.current = undefined;
-      publishNavigationState(id, false);
-    }
-
-    function captureNavigation(event: MouseEvent): void {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const anchor = target.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor || anchor.hasAttribute("download") || (anchor.target && anchor.target !== "_self")) return;
-
-      const destination = new URL(anchor.href, window.location.href);
-      if (destination.origin !== window.location.origin) return;
-      const current = new URL(window.location.href);
-      // Query/hash-only links do not replace a workspace view, and pathname is
-      // the completion signal available without forcing a search-param
-      // Suspense boundary around the persistent shell.
-      if (destination.pathname === current.pathname) return;
-
-      completeManualNavigation();
-      const id = `link:${destination.pathname}${destination.search}:${performance.now()}`;
-      manualNavigationId.current = id;
-      publishNavigationState(id, true);
-      manualSafetyTimer.current = window.setTimeout(completeManualNavigation, NAVIGATION_SAFETY_TIMEOUT_MS);
-    }
-
-    document.addEventListener("click", captureNavigation, true);
-    return () => {
-      document.removeEventListener("click", captureNavigation, true);
-      completeManualNavigation();
-    };
-  }, []);
-
-  useEffect(() => {
-    const id = manualNavigationId.current;
-    if (!id) return;
-    manualNavigationId.current = null;
-    window.clearTimeout(manualSafetyTimer.current);
-    manualSafetyTimer.current = undefined;
-    publishNavigationState(id, false);
-  }, [pathname]);
-
-  return <div className="route-progress" data-phase={phase} aria-hidden="true" />;
+  return pending ? <div className="route-spinner"><Spinner size={20} label="Loading page" /></div> : null;
 }

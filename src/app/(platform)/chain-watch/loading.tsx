@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="table" title="Loading watch schedule" hint="Retrieving faction coverage" />;
+  return <PageSpinner label="Loading watch schedule" />;
 }

@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { Suspense } from "react";
-import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
+import { PageSpinner } from "@/components/ui/page-spinner";
 import { hasPermission } from "@/lib/auth/authorization";
 import { getCurrentActor, getCurrentActorWithProfileImage } from "@/lib/auth/current-actor";
 import { getFactionAccessAssignment, getFactionAccessWorkspace } from "@/lib/auth/faction-access-store";
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<WorkspaceLoadingScreen />}>
+    <Suspense fallback={<PageSpinner label="Loading workspace" fullPage />}>
       <AuthenticatedPlatformLayout>{children}</AuthenticatedPlatformLayout>
     </Suspense>
   );
@@ -47,9 +47,11 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
   const accessPromise = getFactionAccessSummary(connection.factionId);
   const actor = await getCurrentActor();
   if (!actor.tornUserId || connection.tornUserId !== actor.tornUserId) redirect("/connect");
-  // Avatar refresh is display-only: let roster and permission reads proceed
-  // alongside it rather than waiting for an extra Torn round trip first.
-  const displayActorPromise = getCurrentActorWithProfileImage();
+  // Stream the display-only avatar into its own boundary. It must never hold
+  // the workspace behind a loading fallback while Torn's profile endpoint waits.
+  const profileImagePromise = getCurrentActorWithProfileImage()
+    .then((displayActor) => displayActor.profileImageUrl ?? null)
+    .catch(() => actor.profileImageUrl ?? null);
   const owner = isPlatformOwner(actor);
   const assignmentPromise = owner
     ? Promise.resolve(null)
@@ -70,12 +72,11 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
     ]);
     return { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity };
   });
-  const [telemetry, database, authorizationData, pendingReview, displayActor] = await Promise.all([
+  const [telemetry, database, authorizationData, pendingReview] = await Promise.all([
     telemetryPromise,
     databasePromise,
     authorizationDataPromise,
     pendingReviewPromise,
-    displayActorPromise,
   ]);
   if (telemetry.faction && connection.factionId !== telemetry.faction.id) redirect("/connect");
   const factionId = connection.factionId;
@@ -97,5 +98,5 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
       ...buildMemberActivityAlert(currentRoster.data, memberActivity, currentRoster.checkedAt),
     }
     : null;
-  return <AppShell currentUser={displayActor} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}><ApiPoolPresence enabled={workspaceAuthorized && shellTelemetry.mode !== "offline"} />{children}</AppShell>;
+  return <AppShell currentUser={actor} profileImage={profileImagePromise} telemetry={shellTelemetry} access={access} workspaceAuthorized={workspaceAuthorized} database={database} memberActivityAlert={memberActivityAlert} pendingReview={pendingReview}><ApiPoolPresence enabled={workspaceAuthorized && shellTelemetry.mode !== "offline"} />{children}</AppShell>;
 }

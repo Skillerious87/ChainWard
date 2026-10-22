@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="console" title="Loading reward console" hint="Opening the stored schemes" />;
+  return <PageSpinner label="Loading reward console" />;
 }

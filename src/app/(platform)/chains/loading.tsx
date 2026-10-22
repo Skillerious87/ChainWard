@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="table" title="Loading chain history" hint="Retrieving completed chains" />;
+  return <PageSpinner label="Loading chain history" />;
 }

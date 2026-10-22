@@ -162,24 +162,26 @@ describe("server hydration", () => {
 });
 
 describe("navigation feedback", () => {
-  it("never covers or disables a ready page, and skips the indicator for fast switches", async () => {
-    vi.useFakeTimers();
+  it("shows the spinner immediately and removes it as soon as navigation finishes", async () => {
     await mount(<RouteProgress />);
-    await act(async () => { publishNavigationState("fast", true); vi.advanceTimersByTime(50); publishNavigationState("fast", false); vi.advanceTimersByTime(200); });
-    expect(container.firstElementChild?.getAttribute("data-phase")).toBe("idle");
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    await act(async () => { publishNavigationState("page", true); });
+    expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("Loading page");
+    await act(async () => { publishNavigationState("page", false); });
+    expect(container.querySelector('[role="status"]')).toBeNull();
     expect(container.querySelector(".route-loading-core")).toBeNull();
     expect(document.documentElement.dataset.navigating).toBeUndefined();
   });
 
-  it("shows delayed progress for slow transitions and finishes as soon as they complete", async () => {
-    vi.useFakeTimers();
+  it("waits for all actual pending operations without adding timers", async () => {
     await mount(<RouteProgress />);
-    await act(async () => { publishNavigationState("slow", true); vi.advanceTimersByTime(150); });
-    expect(container.firstElementChild?.getAttribute("data-phase")).toBe("running");
-    await act(async () => { publishNavigationState("slow", false); });
-    expect(container.firstElementChild?.getAttribute("data-phase")).toBe("finishing");
-    await act(async () => { vi.advanceTimersByTime(160); });
-    expect(container.firstElementChild?.getAttribute("data-phase")).toBe("idle");
+    const timer = vi.spyOn(window, "setTimeout");
+    await act(async () => { publishNavigationState("first", true); publishNavigationState("second", true); });
+    await act(async () => { publishNavigationState("first", false); });
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    await act(async () => { publishNavigationState("second", false); });
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(timer).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
 import { Activity, ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, Radio, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
+import { PageSpinner } from "@/components/ui/page-spinner";
 import { ChainHero } from "@/components/chain/chain-hero";
 import { ContributionTable } from "@/components/chain/contribution-table";
 import { RecentChains } from "@/components/chain/recent-chains";
@@ -77,7 +78,7 @@ export default async function DashboardPage() {
 
     <header className="overview-section-heading"><div><p className="eyebrow">Live operations</p><h2>What’s happening right now</h2></div><p>Verified operational data, refreshed directly from Torn.</p></header>
     <ChainHero />
-    <Suspense fallback={<DashboardDetailsLoading />}>
+    <Suspense fallback={<PageSpinner label="Loading contributions and chain history" />}>
       <DashboardDetails telemetry={telemetry} data={details} />
     </Suspense>
   </div>;
@@ -111,14 +112,6 @@ async function DashboardDetails({ telemetry, data }: { telemetry: WorkspaceTelem
     </div>
     <RecentChains chains={history} message={historyResult.message} />
   </>;
-}
-
-function DashboardDetailsLoading() {
-  return <section className="overview-details-loading" role="status" aria-label="Loading contributions and chain history">
-    <span className="sr-only">Loading contributions and chain history</span>
-    <div className="overview-details-loading__stats" aria-hidden="true">{[0, 1, 2, 3].map((item) => <div key={item}><span className="skeleton-line" /><span className="skeleton-line" /></div>)}</div>
-    <div className="overview-details-loading__report" aria-hidden="true">{[0, 1, 2, 3].map((item) => <span className="skeleton-line" key={item} />)}</div>
-  </section>;
 }
 
 function formatCheckedTime(value: string): string {

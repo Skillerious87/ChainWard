@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="table" title="Loading payout view" hint="Reading persisted settlements" />;
+  return <PageSpinner label="Loading payout view" />;
 }

@@ -137,7 +137,7 @@ const navigation: NavigationGroup[] = [
 
 type OpenPanel = "faction" | "notifications" | "user" | "health" | null;
 
-export function AppShell({ children, currentUser, telemetry, access, workspaceAuthorized, database, memberActivityAlert, pendingReview }: { children: ReactNode; currentUser: PlatformActor; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; workspaceAuthorized: boolean; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null; pendingReview: PendingReviewSummary | null }) {
+export function AppShell({ children, currentUser, profileImage, telemetry, access, workspaceAuthorized, database, memberActivityAlert, pendingReview }: { children: ReactNode; currentUser: PlatformActor; profileImage?: Promise<string | null>; telemetry: WorkspaceTelemetry; access: FactionAccessSummary; workspaceAuthorized: boolean; database: DatabaseStatus; memberActivityAlert: MemberActivityMonitorSnapshot | null; pendingReview: PendingReviewSummary | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const preferences = useAppearancePreferences();
@@ -720,12 +720,13 @@ export function AppShell({ children, currentUser, telemetry, access, workspaceAu
             </div>
             <div className="topbar-popover-wrap">
               <button ref={userMenuRef} className="user-menu" onClick={() => setOpenPanel(openPanel === "user" ? null : "user")} aria-label="Open user menu" aria-expanded={openPanel === "user"}>
-                <span className="user-menu__avatar"><UserAvatar className="user-avatar__image" imageUrl={currentUser.profileImageUrl} name={currentUser.name} size={30} /></span><span className="user-menu__copy"><strong>{currentUser.name}</strong><small>{ownerAccess ? "Platform owner" : currentUser.tornUserId ? "Faction member" : "Not connected"}</small></span><ChevronDown size={14} />
+                <span className="user-menu__avatar"><UserAvatar className="user-avatar__image" imageUrl={currentUser.profileImageUrl} imageUrlPromise={profileImage} name={currentUser.name} size={30} /></span><span className="user-menu__copy"><strong>{currentUser.name}</strong><small>{ownerAccess ? "Platform owner" : currentUser.tornUserId ? "Faction member" : "Not connected"}</small></span><ChevronDown size={14} />
               </button>
               {openPanel === "user" && (
                 <TopbarPopover className="topbar-popover--user" close={() => setOpenPanel(null)}>
                   <ProfileMenu
                     actor={currentUser}
+                    profileImage={profileImage}
                     compact={compact}
                     ownerAccess={ownerAccess}
                     onClose={() => setOpenPanel(null)}

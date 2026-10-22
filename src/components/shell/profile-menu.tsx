@@ -16,6 +16,7 @@ import type { PlatformActor } from "@/lib/auth/platform-owner";
 
 interface ProfileMenuProps {
   actor: PlatformActor;
+  profileImage?: Promise<string | null>;
   compact: boolean;
   ownerAccess: boolean;
   onClose: () => void;
@@ -26,6 +27,7 @@ interface ProfileMenuProps {
 
 export function ProfileMenu({
   actor,
+  profileImage,
   compact,
   ownerAccess,
   onClose,
@@ -39,7 +41,7 @@ export function ProfileMenu({
     <section className="profile-popover" aria-label="Profile and workspace controls">
       <div className="profile-popover__identity">
         <span className="profile-popover__avatar">
-          <UserAvatar className="user-avatar__image" imageUrl={actor.profileImageUrl} name={actor.name} size={44} />
+          <UserAvatar className="user-avatar__image" imageUrl={actor.profileImageUrl} imageUrlPromise={profileImage} name={actor.name} size={44} />
           <i className={connected ? undefined : "profile-popover__status--offline"} aria-hidden="true" />
         </span>
         <span className="profile-popover__identity-copy">

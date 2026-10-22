@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="table" title="Loading targets" hint="Refreshing target status from Torn" />;
+  return <PageSpinner label="Loading targets" />;
 }

@@ -1,5 +1,5 @@
-import { ViewLoading } from "@/components/ui/view-loading";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
 export default function Loading() {
-  return <ViewLoading variant="grid" title="Loading live chain" hint="Reading the current chain state" />;
+  return <PageSpinner label="Loading live chain" />;
 }
