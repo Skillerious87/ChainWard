@@ -66,12 +66,17 @@ interface ActivityTarget { tornUserId: number; memberName: string }
 interface ActivityActor { tornUserId: number; name: string; isPlatformAdmin: boolean }
 interface ActivityUpdate { state: MemberActivityInputState; holidayUntil: string | null; note: string }
 
-export const getMemberActivityWorkspace = cache(async (factionId: number | null): Promise<MemberActivityWorkspace> => {
+export const getMemberActivityWorkspace = cache((factionId: number | null): Promise<MemberActivityWorkspace> => loadMemberActivityWorkspace(factionId, true));
+
+/** Alerts need policy and current records, not the personnel history or audit. */
+export const getMemberActivityMonitorWorkspace = cache((factionId: number | null): Promise<MemberActivityWorkspace> => loadMemberActivityWorkspace(factionId, false));
+
+async function loadMemberActivityWorkspace(factionId: number | null, includeHistory: boolean): Promise<MemberActivityWorkspace> {
   const hasPostgres = Boolean(process.env.DATABASE_URL?.trim());
   if (!hasPostgres && !localDatabaseExists()) return empty(false, false, "Create local storage in Settings to manage holiday and watch records.");
   if (!factionId) return empty(true, true, "Connect a verified faction to manage member activity.");
-  return hasPostgres ? getPostgresWorkspace(factionId) : getLocalWorkspace(factionId);
-});
+  return hasPostgres ? getPostgresWorkspace(factionId, includeHistory) : getLocalWorkspace(factionId, includeHistory);
+}
 
 export async function setMemberActivity(
   faction: FactionIdentity,
@@ -111,15 +116,15 @@ export async function synchronizeMemberInactivityPeriods(
   return synchronizeLocalInactivity(faction.id, members, records, checkedAt);
 }
 
-function getLocalWorkspace(factionId: number): MemberActivityWorkspace {
+function getLocalWorkspace(factionId: number, includeHistory: boolean): MemberActivityWorkspace {
   const database = openLocalDatabase();
   if (!database) return empty(false, false, "The local activity register is unavailable.");
   try {
     const rows = database.prepare("SELECT key, value_json FROM faction_settings WHERE faction_id = ? AND key LIKE 'members.activity.%' ORDER BY key").all(factionId) as unknown as LocalSettingRow[];
     const policyRow = database.prepare("SELECT value_json FROM faction_settings WHERE faction_id = ? AND key = 'members.policy'").get(factionId) as unknown as { value_json: string } | undefined;
     const records = rows.flatMap((row) => { const record = parseRecord(safeJson(row.value_json)); return record ? [record] : []; });
-    const inactivityPeriods = readLocalInactivityPeriods(database, factionId);
-    const audit = (database.prepare("SELECT * FROM member_activity_audit WHERE faction_id = ? ORDER BY created_at DESC, id DESC LIMIT 30").all(factionId) as unknown as LocalAuditRow[]).map(mapLocalAudit);
+    const inactivityPeriods = includeHistory ? readLocalInactivityPeriods(database, factionId) : [];
+    const audit = includeHistory ? (database.prepare("SELECT * FROM member_activity_audit WHERE faction_id = ? ORDER BY created_at DESC, id DESC LIMIT 30").all(factionId) as unknown as LocalAuditRow[]).map(mapLocalAudit) : [];
     return { databaseConfigured: true, databaseAvailable: true, policy: parsePolicy(policyRow ? safeJson(policyRow.value_json) : null), records, inactivityPeriods, audit, message: records.length ? `${records.length} managed member activity record${records.length === 1 ? "" : "s"}.` : "No holiday or watch records have been created." };
   } catch {
     return empty(true, false, "The local member activity register could not be read safely.");
@@ -206,7 +211,7 @@ function setLocalActivity(factionId: number, target: ActivityTarget, actor: Acti
   } finally { database.close(); }
 }
 
-async function getPostgresWorkspace(factionId: number): Promise<MemberActivityWorkspace> {
+async function getPostgresWorkspace(factionId: number, includeHistory: boolean): Promise<MemberActivityWorkspace> {
   try {
     const { db } = await import("@/lib/db");
     const faction = await db.faction.findUnique({ where: { tornFactionId: factionId } });
@@ -216,8 +221,8 @@ async function getPostgresWorkspace(factionId: number): Promise<MemberActivityWo
         where: { factionId: faction.id, OR: [{ key: "members.policy" }, { key: { startsWith: "members.activity." } }] },
         orderBy: { key: "asc" },
       }),
-      db.factionSetting.findMany({ where: { factionId: faction.id, key: { startsWith: "members.inactivity." } }, orderBy: { updatedAt: "desc" }, take: 2000 }),
-      db.auditLog.findMany({ where: { factionId: faction.id, action: { startsWith: "member_activity." } }, include: { actor: true }, orderBy: { createdAt: "desc" }, take: 30 }),
+      includeHistory ? db.factionSetting.findMany({ where: { factionId: faction.id, key: { startsWith: "members.inactivity." } }, orderBy: { updatedAt: "desc" }, take: 2000 }) : [],
+      includeHistory ? db.auditLog.findMany({ where: { factionId: faction.id, action: { startsWith: "member_activity." } }, include: { actor: true }, orderBy: { createdAt: "desc" }, take: 30 }) : [],
     ]);
     const policy = parsePolicy(managedSettings.find((setting) => setting.key === "members.policy")?.value ?? null);
     const records = managedSettings.filter((setting) => setting.key.startsWith("members.activity.")).flatMap((setting) => { const record = parseRecord(setting.value); return record ? [record] : []; });

@@ -12,13 +12,13 @@ import {
   Fingerprint,
   KeyRound,
   Laptop,
+  LockKeyhole,
   ShieldCheck,
   UserRoundCog,
   WifiOff,
 } from "lucide-react";
 import type { Route } from "next";
-import Image from "next/image";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import {
   browserSupportsWebAuthnAutofill,
   platformAuthenticatorIsAvailable,
@@ -58,6 +58,17 @@ type ConnectionResult = {
 type ConnectionError = { message: string; code: string | null };
 type PasskeyAssertion = Awaited<ReturnType<typeof startAuthentication>>;
 
+function subscribeToNetwork(onChange: () => void): () => void {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
+const networkIsOffline = () => !navigator.onLine;
+const serverIsOffline = () => false;
+
 /**
  * The OS - not this app - decides whether a "platform authenticator" prompt
  * is a fingerprint, Face ID, or a PIN entry, so this can't force one method.
@@ -75,7 +86,7 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<ConnectionError | null>(null);
-  const [networkOffline, setNetworkOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
+  const networkOffline = useSyncExternalStore(subscribeToNetwork, networkIsOffline, serverIsOffline);
   const [platformAuthAvailable, setPlatformAuthAvailable] = useState(false);
   const [autofillSupported, setAutofillSupported] = useState(false);
   // Distinct from `platformAuthAvailable`, which only says the device *has* a
@@ -99,17 +110,6 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
   const isMobile = isMobileUserAgent(typeof navigator === "undefined" ? "" : navigator.userAgent);
   const passkeyNoun = isMobile ? "fingerprint" : "PIN";
   const PasskeyIcon = isMobile ? Fingerprint : KeyRound;
-
-  useEffect(() => {
-    const goOnline = () => setNetworkOffline(false);
-    const goOffline = () => setNetworkOffline(true);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -407,11 +407,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
       <span className="connect-form__activity" aria-hidden="true" />
       <div className="connect-stage connect-stage--entry">
         <header className="connect-form__heading">
-          <div className="connect-hero">
-            <span className="connect-hero__mark"><Image src="/icons/android-chrome-512x512.png?v=2" alt="" width={144} height={144} priority /></span>
-            <span className="connect-hero__word">Chain<span>ward</span></span>
-            <span className="connect-hero__tag">Faction Ops · Secure Access</span>
-          </div>
+          <span className="login-access-label"><LockKeyhole size={13} /> Secure workspace access</span>
+          <h1>Welcome to <span>Chainward.</span></h1>
+          <p>Connect your Torn API key to bring your faction into focus.</p>
         </header>
         <span className="sr-only" aria-live="polite">{loading ? "Verifying your Torn connection." : ""}</span>
 
@@ -453,17 +451,18 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             <div className="api-key-field">
               <label className="api-key-field__label" htmlFor="torn-api-key"><strong>Torn API key</strong><small>16 characters</small></label>
               <div>
+                <KeyRound className="api-key-field__icon" size={18} aria-hidden="true" />
                 <input id="torn-api-key" name="apiKey" type={visible ? "text" : "password"} autoComplete="username webauthn" autoCapitalize="none" spellCheck={false} inputMode="text" enterKeyHint="go" minLength={16} maxLength={16} pattern="[A-Za-z0-9]{16}" required disabled={formBusy} placeholder="Paste your Torn API key" aria-describedby="api-key-guidance" onChange={() => { if (error) setError(null); }} />
                 <button type="button" disabled={formBusy} onClick={() => setVisible((value) => !value)} aria-label={visible ? "Hide API key" : "Show API key"}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
               </div>
               <small id="api-key-guidance">
-                <span><ShieldCheck size={13} /> Limited Access is enough</span>
+                <span><ShieldCheck size={13} /> Public Only key supported</span>
                 <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create a key <ExternalLink size={12} /></a>
               </small>
             </div>
 
             <label className="login-remember">
-              <span className="login-remember__text"><strong>Keep me signed in</strong><small>Remember this browser for 30 days</small></span>
+              <span className="login-remember__text"><strong>Keep me signed in</strong><small>For 30 days on this device</small></span>
               <input name="remember" type="checkbox" defaultChecked disabled={formBusy} />
               <span className="login-remember__track" aria-hidden="true"><span /></span>
             </label>
@@ -486,9 +485,9 @@ export function ConnectForm({ offlineEnabled = false }: { offlineEnabled?: boole
             </button>
 
             <span className="connect-trust"><ShieldCheck size={13} /> Encrypted. Never shared with other players.</span>
-            <ApiUseDisclosure />
+            <ApiUseDisclosure collapsible />
 
-            <span className="connect-footer-link">Need a key? <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noreferrer">Create one <ExternalLink size={12} /></a></span>
+            <span className="connect-footer-link">New here? Your key connects you to your faction.</span>
 
             {offlineEnabled && <details className="offline-test-entry">
               <summary><Laptop size={15} /> Open an offline test workspace <ChevronDown size={15} /></summary>

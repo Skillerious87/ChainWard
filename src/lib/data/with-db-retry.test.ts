@@ -22,7 +22,24 @@ describe("withDbRetry", () => {
 
   it("gives up after every attempt fails, surfacing the last error", async () => {
     let calls = 0;
-    await expect(withDbRetry(async () => { calls += 1; throw new Error(`fail ${calls}`); })).rejects.toThrow("fail 3");
+    await expect(withDbRetry(async () => { calls += 1; throw Object.assign(new Error(`fail ${calls}`), { code: "P1001" }); })).rejects.toThrow("fail 3");
     expect(calls).toBe(3);
+  });
+
+  it.each(["P2002", "P2025", 5, undefined])("does not retry permanent or application errors (%s)", async (code) => {
+    let calls = 0;
+    const error = Object.assign(new Error("Operation refused"), { code });
+    await expect(withDbRetry(async () => { calls += 1; throw error; })).rejects.toBe(error);
+    expect(calls).toBe(1);
+  });
+
+  it.each(["P2024", "P2034", "ECONNRESET", "40001", "40P01"])("recovers from a transient %s failure", async (code) => {
+    let calls = 0;
+    const result = await withDbRetry(async () => {
+      if (++calls === 1) throw Object.assign(new Error("Transient database failure"), { code });
+      return "recovered";
+    });
+    expect(result).toBe("recovered");
+    expect(calls).toBe(2);
   });
 });

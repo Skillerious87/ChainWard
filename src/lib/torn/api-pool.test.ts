@@ -179,6 +179,16 @@ describe.sequential("shared Torn API capacity", () => {
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 
+  it("finishes a successful cold refresh with only its claim and commit transactions", async () => {
+    const transact = vi.spyOn(apiStateStore, "transact");
+    const refresh = vi.fn(async () => ({ value: chain(), fetchedAt: Date.now() }));
+    await readSharedOperation(factionId, chainRequest, refresh);
+    expect(transact).toHaveBeenCalledTimes(2);
+    const transactCount = transact.mock.calls.length;
+    await readSharedOperation(factionId, chainRequest, refresh);
+    expect(transact).toHaveBeenCalledTimes(transactCount);
+  });
+
   it("isolates faction caches and keeps personal endpoints outside the pool", async () => {
     const refresh = vi.fn(async () => ({ value: chain(), fetchedAt: Date.now() }));
     await readSharedOperation(factionId, chainRequest, refresh);

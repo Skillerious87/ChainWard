@@ -64,6 +64,13 @@ describe("current chain contributors", () => {
     expect(result.message).toContain("Last completed");
   });
 
+  it.each(["idle", "cooldown"] as const)("reuses a recent latest report during %s navigation", async (mode) => {
+    const { fetchMock } = setup(mode);
+    await getCurrentChainReportView();
+    await getCurrentChainReportView();
+    expect(fetchMock.mock.calls.filter(([input]) => new URL(String(input)).pathname.endsWith("/chainreport"))).toHaveLength(1);
+  });
+
   it.each(["wrong-chain", "wrong-faction"] as const)("never displays contributors from a %s report", async (mode) => {
     setup(mode);
     const result = await getCurrentChainReportView();

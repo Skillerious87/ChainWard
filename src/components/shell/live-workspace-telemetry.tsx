@@ -120,7 +120,8 @@ export function usePersistentChainCountdown(snapshot: WorkspaceTelemetry): {
 
     stateRef.current = { ...reconciled, clock };
     appliedSnapshotRef.current = telemetryFingerprint(telemetry);
-    setView(projectCountdownView(stateRef.current, nowPerf));
+    const next = projectCountdownView(stateRef.current, nowPerf);
+    setView((current) => retainCountdownView(current, next));
   }, []);
 
   useEffect(() => {
@@ -135,7 +136,8 @@ export function usePersistentChainCountdown(snapshot: WorkspaceTelemetry): {
       anchor: rebaseAnchor(stateRef.current.anchor, nowPerf),
       clock: { ...stateRef.current.clock, atPerf: nowPerf },
     };
-    setView(projectCountdownView(stateRef.current, nowPerf));
+    const next = projectCountdownView(stateRef.current, nowPerf);
+    setView((current) => retainCountdownView(current, next));
   }, []);
 
   useEffect(() => {
@@ -148,7 +150,8 @@ export function usePersistentChainCountdown(snapshot: WorkspaceTelemetry): {
 
   useEffect(() => {
     function tick(): void {
-      setView(projectCountdownView(stateRef.current, performance.now()));
+      const next = projectCountdownView(stateRef.current, performance.now());
+      setView((current) => retainCountdownView(current, next));
     }
     const interval = window.setInterval(tick, 250);
     document.addEventListener("visibilitychange", tick);
@@ -164,6 +167,13 @@ export function usePersistentChainCountdown(snapshot: WorkspaceTelemetry): {
     nowSeconds: view.nowSeconds,
     applyReading,
   }), [applyReading, view]);
+}
+
+/** Keep the precise clock in refs; only visible second changes need a render. */
+function retainCountdownView(current: CountdownView, next: CountdownView): CountdownView {
+  return displaySeconds(current.remainingMs) === displaySeconds(next.remainingMs)
+    && current.deadlineAtSeconds === next.deadlineAtSeconds
+    && current.nowSeconds === next.nowSeconds ? current : next;
 }
 
 function chainReadingKey(telemetry: WorkspaceTelemetry): string {

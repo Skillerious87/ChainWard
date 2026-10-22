@@ -3,10 +3,15 @@ import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { consumeGlobalRateLimit, consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { getFreshWorkspaceTelemetry, getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import { withTornRequestScope } from "@/lib/torn/request-scope";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export function GET(request: Request) {
+  return withTornRequestScope(() => getTelemetry(request));
+}
+
+async function getTelemetry(request: Request) {
   const fresh = new URL(request.url).searchParams.get("fresh") === "1";
   const requestLimit = consumeRateLimit(
     fresh ? "live-chain:fresh-address" : "live-chain:cached-address",

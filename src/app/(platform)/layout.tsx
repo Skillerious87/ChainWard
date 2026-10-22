@@ -2,6 +2,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { ApiPoolPresence } from "@/components/settings/api-pool-presence";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { Suspense } from "react";
 import { WorkspaceLoadingScreen } from "@/components/ui/workspace-loading-screen";
 import { hasPermission } from "@/lib/auth/authorization";
@@ -13,7 +14,7 @@ import { getFactionAccessSummary } from "@/lib/licensing/faction-access";
 import { getLicenceReviewCount, type PendingReviewSummary } from "@/lib/licensing/request-store";
 import { redactLockedTelemetry } from "@/lib/licensing/telemetry";
 import { buildMemberActivityAlert } from "@/lib/members/member-activity-intelligence";
-import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
+import { getMemberActivityMonitorWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
@@ -65,7 +66,7 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
       && (owner || Boolean(assignment && hasPermission(assignment.role, "members:manage")));
     const [currentRoster, memberActivity] = await Promise.all([
       assigned || provisionallyCanManageMembers ? getFactionRoster() : Promise.resolve(null),
-      provisionallyCanManageMembers ? getMemberActivityWorkspace(connection.factionId) : Promise.resolve(null),
+      provisionallyCanManageMembers ? getMemberActivityMonitorWorkspace(connection.factionId) : Promise.resolve(null),
     ]);
     return { access, assignment, provisionallyCanManageMembers, currentRoster, memberActivity };
   });
@@ -84,7 +85,10 @@ async function AuthenticatedPlatformLayout({ children }: { children: React.React
   const shellTelemetry = redactLockedTelemetry(telemetry, access, workspaceAuthorized);
   const canManageMembers = workspaceAuthorized && provisionallyCanManageMembers;
   if (canManageMembers && telemetry.faction && currentRoster?.available && memberActivity?.databaseAvailable) {
-    await synchronizeMemberInactivityPeriods(telemetry.faction, currentRoster.data, memberActivity.records, currentRoster.checkedAt).catch(() => undefined);
+    const faction = telemetry.faction;
+    // These durable history writes do not affect the rendered alert summary.
+    // `after` keeps them alive on Vercel without holding the page response.
+    after(() => synchronizeMemberInactivityPeriods(faction, currentRoster.data, memberActivity.records, currentRoster.checkedAt).then(() => undefined).catch(() => undefined));
   }
   const memberActivityAlert = canManageMembers && currentRoster?.available && memberActivity
     ? {

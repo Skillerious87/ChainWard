@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import { getFactionAccessAssignment } from "@/lib/auth/faction-access-store";
 import { PLATFORM_OWNER } from "@/lib/auth/platform-owner";
 import { getFactionAccessSummary } from "@/lib/licensing/faction-access";
@@ -31,10 +32,10 @@ interface SharedOperationState {
   retryAt?: number;
 }
 
-export async function mayUseFactionPool(ownerId: number, factionId: number): Promise<boolean> {
+export const mayUseFactionPool = cache(async (ownerId: number, factionId: number): Promise<boolean> => {
   const [access, assignment] = await Promise.all([getFactionAccessSummary(factionId), ownerId === PLATFORM_OWNER.tornUserId ? Promise.resolve(null) : getFactionAccessAssignment(factionId, ownerId)]);
   return access.state === "active" && (ownerId === PLATFORM_OWNER.tornUserId || assignment?.status === "ACTIVE");
-}
+});
 
 export async function readSharedOperation(
   factionId: number,
@@ -85,12 +86,6 @@ export async function readSharedOperation(
         return { result: undefined, changes: { [key]: apiState({ snapshot: current.snapshot ?? null, retryAt: Date.now() + 5_000 }, Date.now() + 60_000) } };
       });
       throw error;
-    } finally {
-      await store.transact([key], (values) => {
-        const current = values[key] as SharedOperationState | undefined;
-        if (current?.lease?.token !== token) return { result: undefined, changes: {} };
-        return { result: undefined, changes: { [key]: apiState({ snapshot: current.snapshot ?? null }, Date.now() + 60_000) } };
-      });
     }
   }
   throw new TornApiError(17, "A shared Torn refresh is still in progress.", { retryAfterSeconds: 5 });
@@ -184,6 +179,20 @@ async function refreshWithContributor(context: FactionPoolContext, request: Fact
   return executeOperation(directClient(context.apiKey, context.ownerId), request, context.factionId);
 }
 
+/** Request-scoped only: each viewer is still rechecked on the next request. */
+const readViewerFactionRoster = cache(async (ownerId: number, factionId: number, apiKey: string, background: boolean): Promise<TornResponseSnapshot> => {
+  await verifyTornIdentity(apiKey, ownerId, factionId);
+  const context = { ownerId, factionId, apiKey, background };
+  const rosterRequest = { path: `/faction/${factionId}/members`, query: {}, cacheMs: 30_000, forceRefresh: false };
+  const roster = await readSharedOperation(factionId, rosterRequest, (operation) => refreshWithContributor(context, operation));
+  const members = factionMembersResponseSchema.parse(roster.value).members;
+  if (!members.some((member) => member.id === ownerId)) {
+    await revokeApiPoolGrant(ownerId, factionId);
+    throw new TornApiError(7, "You are no longer in this faction's current roster.");
+  }
+  return roster;
+});
+
 export async function readFactionPoolRequest(context: FactionPoolContext, request: FactionPoolRequest, ownRead?: () => Promise<TornResponseSnapshot>): Promise<TornResponseSnapshot> {
   if (!context.ownerId && !context.background) throw new TornApiError(7, "A verified player session is required for shared faction data.");
   if (context.ownerId && !await mayUseFactionPool(context.ownerId, context.factionId)) {
@@ -191,17 +200,11 @@ export async function readFactionPoolRequest(context: FactionPoolContext, reques
     throw new TornApiError(7, "Faction access is required for shared data.");
   }
   if (context.background && (await getFactionAccessSummary(context.factionId)).state !== "active") throw new TornApiError(7, "Active faction access is required for background monitoring.");
-  if (context.ownerId) {
-    if (!context.apiKey) throw new TornApiError(2, "The viewer's own Torn key is required to verify access.");
-    await verifyTornIdentity(context.apiKey, context.ownerId, context.factionId);
-  }
+  if (context.ownerId && !context.apiKey) throw new TornApiError(2, "The viewer's own Torn key is required to verify access.");
   const rosterRequest = { path: `/faction/${context.factionId}/members`, query: {}, cacheMs: 30_000, forceRefresh: false };
-  const roster = await readSharedOperation(context.factionId, rosterRequest, (operation) => refreshWithContributor(context, operation));
-  const members = factionMembersResponseSchema.parse(roster.value).members;
-  if (context.ownerId && !members.some((member) => member.id === context.ownerId)) {
-    await revokeApiPoolGrant(context.ownerId, context.factionId);
-    throw new TornApiError(7, "You are no longer in this faction's current roster.");
-  }
+  const roster = context.ownerId
+    ? await readViewerFactionRoster(context.ownerId, context.factionId, context.apiKey!, context.background === true)
+    : await readSharedOperation(context.factionId, rosterRequest, (operation) => refreshWithContributor(context, operation));
   if (factionPoolOperation(request.path, context.factionId) === "members") return roster;
   return readSharedOperation(context.factionId, request, (operation) => refreshWithContributor(context, operation));
 }

@@ -33,11 +33,28 @@ export function requestWorkspaceTelemetry(endpoint: string): Promise<TelemetryRe
 }
 
 export function isWorkspaceTelemetry(value: unknown): value is WorkspaceTelemetry {
-  if (!value || typeof value !== "object") return false;
+  if (!isRecord(value)) return false;
   const candidate = value as Partial<WorkspaceTelemetry>;
   return (candidate.source === "live" || candidate.source === "unavailable")
     && typeof candidate.checkedAt === "string"
+    && Number.isFinite(Date.parse(candidate.checkedAt))
     && typeof candidate.message === "string"
-    && (candidate.faction === null || typeof candidate.faction === "object")
-    && (candidate.chain === null || typeof candidate.chain === "object");
+    && (candidate.mode === undefined || candidate.mode === "torn" || candidate.mode === "offline")
+    && (candidate.dataAgeMs === undefined || isNonNegativeNumber(candidate.dataAgeMs))
+    && (candidate.faction === null || (isRecord(candidate.faction)
+      && Number.isSafeInteger(candidate.faction.id) && candidate.faction.id > 0
+      && typeof candidate.faction.name === "string" && typeof candidate.faction.tag === "string"
+      && Number.isSafeInteger(candidate.faction.members) && candidate.faction.members >= 0))
+    && (candidate.chain === null || (isRecord(candidate.chain)
+      && ["active", "cooldown", "idle"].includes(candidate.chain.state)
+      && [candidate.chain.id, candidate.chain.current, candidate.chain.maximum, candidate.chain.timeoutSeconds,
+        candidate.chain.modifier, candidate.chain.cooldownSeconds, candidate.chain.startedAt, candidate.chain.endedAt].every(isNonNegativeNumber)));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }

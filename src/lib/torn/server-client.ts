@@ -9,6 +9,7 @@ import { CHAIN_CACHE_SECONDS, MIN_POLL_SECONDS } from "./polling-policy";
 import { normalizeTornProfileImageUrl } from "./profile-image";
 import { readFactionPoolRequest } from "./api-pool-broker";
 import { verifyTornIdentity } from "./api-identity";
+import { currentTornRequestScope } from "./request-scope";
 import { readRememberedConnection, updateRememberedConnectionImage, REMEMBERED_CONNECTION_COOKIE } from "./remembered-connection";
 
 export interface ConfiguredTornConnection {
@@ -29,7 +30,12 @@ export interface ConfiguredTornConnection {
  * the page, and every workspace data loader, so the result is memoized for the
  * lifetime of one request instead of repeating that work per caller.
  */
-export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTornConnection | null> => {
+export function getConfiguredTornConnection(): Promise<ConfiguredTornConnection | null> {
+  const scope = currentTornRequestScope();
+  return scope ? scope.connection ??= resolveConfiguredTornConnection() : resolveConfiguredTornConnection();
+}
+
+const resolveConfiguredTornConnection = cache(async (): Promise<ConfiguredTornConnection | null> => {
   const cookieStore = await cookies();
   const rememberedToken = cookieStore.get(REMEMBERED_CONNECTION_COOKIE)?.value;
   const remembered = await readRememberedConnection(rememberedToken);
@@ -40,6 +46,7 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
   const client = createTornClient(apiKey, offline, { ownerId: session.tornUserId, factionId: session.factionId });
 
   let profileImagePromise: Promise<string | null> | undefined;
+  let identityPromise: Promise<void> | undefined;
 
   return {
     tornUserId: session.tornUserId,
@@ -49,7 +56,7 @@ export const getConfiguredTornConnection = cache(async (): Promise<ConfiguredTor
     factionName: session.factionName,
     factionTag: session.factionTag,
     client,
-    verifyIdentity: () => offline ? Promise.resolve() : verifyTornIdentity(apiKey, session.tornUserId, session.factionId, true),
+    verifyIdentity: () => identityPromise ??= offline ? Promise.resolve() : verifyTornIdentity(apiKey, session.tornUserId, session.factionId, true),
     // Only the rendered shell needs this request. Telemetry and permission
     // checks must remain independent of avatar API availability.
     refreshProfileImage: () => profileImagePromise ??= resolveProfileImage(client, session, remembered ? rememberedToken : undefined),

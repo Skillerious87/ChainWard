@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { withDbRetry } from "@/lib/data/with-db-retry";
 import { openCredentialDatabase } from "./credential-database";
 
 let nextPostgresCleanupAt = 0;
@@ -43,7 +44,7 @@ export const apiStateStore: ApiStateStore = {
   async read(key) {
     if (process.env.DATABASE_URL?.trim()) {
       const { db } = await import("@/lib/db");
-      const row = await db.tornApiBrokerState.findUnique({ where: { key } });
+      const row = await withDbRetry(() => db.tornApiBrokerState.findUnique({ where: { key } }));
       return row && (!row.expiresAt || row.expiresAt.getTime() > Date.now()) ? row.value : undefined;
     }
     const database = openStateDatabase();
@@ -57,7 +58,7 @@ export const apiStateStore: ApiStateStore = {
   async list(prefix) {
     if (process.env.DATABASE_URL?.trim()) {
       const { db } = await import("@/lib/db");
-      return db.tornApiBrokerState.findMany({ where: { key: { startsWith: prefix }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { key: true, value: true } });
+      return withDbRetry(() => db.tornApiBrokerState.findMany({ where: { key: { startsWith: prefix }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { key: true, value: true } }));
     }
     const database = openStateDatabase();
     try {
@@ -71,7 +72,7 @@ export const apiStateStore: ApiStateStore = {
     const orderedKeys = [...new Set(keys)].sort();
     if (process.env.DATABASE_URL?.trim()) {
       const { db } = await import("@/lib/db");
-      const result = await db.$transaction(async (transaction) => {
+      const result = await withDbRetry(() => db.$transaction(async (transaction) => {
         for (const key of orderedKeys) {
           await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`chainward:torn:${key}`}, 0))`;
         }
@@ -84,7 +85,7 @@ export const apiStateStore: ApiStateStore = {
           await transaction.tornApiBrokerState.upsert({ where: { key }, create: { key, ...data }, update: data });
         }
         return updated.result;
-      }, { maxWait: 15_000, timeout: 10_000 });
+      }, { maxWait: 15_000, timeout: 10_000 }));
       if (Date.now() >= nextPostgresCleanupAt) {
         nextPostgresCleanupAt = Date.now() + 60_000;
         await db.tornApiBrokerState.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 60_000) } } }).catch(() => undefined);

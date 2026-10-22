@@ -9,7 +9,7 @@ import { ChainPanicAlert } from "@/components/chain/chain-panic-alert";
 import { ChainWatchWorkspace } from "@/components/chain/chain-watch-workspace";
 import { readAppearancePreferences, saveAppearancePreferences } from "@/lib/appearance-preferences";
 import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
-import { LiveWorkspaceTelemetryProvider } from "./live-workspace-telemetry";
+import { LiveWorkspaceTelemetryProvider, usePersistentChainCountdown } from "./live-workspace-telemetry";
 import { AppShell } from "./app-shell";
 import { publishNavigationState, RouteProgress } from "./route-progress";
 
@@ -180,5 +180,31 @@ describe("navigation feedback", () => {
     expect(container.firstElementChild?.getAttribute("data-phase")).toBe("finishing");
     await act(async () => { vi.advanceTimersByTime(160); });
     expect(container.firstElementChild?.getAttribute("data-phase")).toBe("idle");
+  });
+});
+
+describe("countdown render efficiency", () => {
+  it("keeps checking the precise clock without rendering unchanged displayed values", async () => {
+    vi.useFakeTimers();
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    let renders = 0;
+    function Clock() {
+      const countdown = usePersistentChainCountdown(telemetry);
+      renders += 1;
+      return <span>{countdown.seconds}</span>;
+    }
+    await mount(<Clock />);
+    const initialRenders = renders;
+    for (const at of [250, 500, 750]) {
+      now = at;
+      await act(async () => { vi.advanceTimersByTime(250); });
+    }
+    expect(renders).toBe(initialRenders);
+    expect(container.textContent).toBe("30");
+    now = 1000;
+    await act(async () => { vi.advanceTimersByTime(250); });
+    expect(container.textContent).toBe("29");
+    expect(renders).toBe(initialRenders + 1);
   });
 });

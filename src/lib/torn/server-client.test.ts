@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   readRememberedConnection: vi.fn(),
   updateRememberedConnectionImage: vi.fn(),
   getMyProfileDetails: vi.fn(),
+  verifyTornIdentity: vi.fn(),
 }));
+
+vi.mock("./api-identity", () => ({ verifyTornIdentity: mocks.verifyTornIdentity }));
 
 vi.mock("next/headers", () => ({ cookies: mocks.cookies }));
 vi.mock("./connection-session", () => ({
@@ -25,6 +28,7 @@ vi.mock("./client", () => ({
 }));
 
 import { getConfiguredTornConnection } from "./server-client";
+import { withTornRequestScope } from "./request-scope";
 
 const oldImage = "https://profileimages.torn.com/old.gif";
 const newImage = "https://profileimages.torn.com/current.gif?v=2";
@@ -51,6 +55,37 @@ describe("configured connection profile image", () => {
     mocks.readRememberedConnection.mockResolvedValue({ ...session });
     mocks.updateRememberedConnectionImage.mockResolvedValue(undefined);
     mocks.getMyProfileDetails.mockResolvedValue({ profile: { id: session.tornUserId, name: session.tornUserName, image: newImage } });
+    mocks.verifyTornIdentity.mockResolvedValue(undefined);
+  });
+
+  it("shares one connection and identity check within a route handler request", async () => {
+    await withTornRequestScope(async () => {
+      const [first, second] = await Promise.all([getConfiguredTornConnection(), getConfiguredTornConnection()]);
+      expect(first).toBe(second);
+      expect(mocks.readRememberedConnection).toHaveBeenCalledOnce();
+      await Promise.all([first!.verifyIdentity(), second!.verifyIdentity()]);
+      expect(mocks.verifyTornIdentity).toHaveBeenCalledOnce();
+    });
+    await withTornRequestScope(() => getConfiguredTornConnection());
+    expect(mocks.readRememberedConnection).toHaveBeenCalledTimes(2);
+  });
+
+  it("isolates connections between concurrent requests from different players", async () => {
+    mocks.cookies.mockResolvedValueOnce(new Map([["remembered", { value: "first" }]]))
+      .mockResolvedValueOnce(new Map([["remembered", { value: "second" }]]));
+    mocks.readRememberedConnection.mockImplementation(async (token) => ({ ...session, tornUserId: token === "first" ? 1 : 2 }));
+    const [first, second] = await Promise.all([
+      withTornRequestScope(async () => {
+        const value = await getConfiguredTornConnection();
+        await Promise.resolve();
+        expect(await getConfiguredTornConnection()).toBe(value);
+        return value;
+      }),
+      withTornRequestScope(() => getConfiguredTornConnection()),
+    ]);
+    expect(first!.tornUserId).toBe(1);
+    expect(second!.tornUserId).toBe(2);
+    expect(mocks.readRememberedConnection).toHaveBeenCalledTimes(2);
   });
 
   it("resolves connections without requesting the display-only profile", async () => {

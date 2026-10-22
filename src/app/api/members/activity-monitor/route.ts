@@ -1,13 +1,19 @@
 import { AuthorizationError } from "@/lib/auth/authorization";
+import { after } from "next/server";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { buildMemberActivityAlert, type MemberActivityMonitorSnapshot } from "@/lib/members/member-activity-intelligence";
-import { getMemberActivityWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
+import { getMemberActivityMonitorWorkspace, synchronizeMemberInactivityPeriods } from "@/lib/members/member-activity-store";
 import { consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { getFactionRoster } from "@/lib/torn/workspace-data-service";
+import { withTornRequestScope } from "@/lib/torn/request-scope";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request): Promise<Response> {
+export function GET(request: Request): Promise<Response> {
+  return withTornRequestScope(() => getActivityMonitor(request));
+}
+
+async function getActivityMonitor(request: Request): Promise<Response> {
   const requestLimit = consumeRateLimit("member-activity-monitor:address", request, { limit: 30, windowMs: 60_000 });
   if (!requestLimit.allowed) {
     return Response.json(
@@ -26,7 +32,7 @@ export async function GET(request: Request): Promise<Response> {
     }
     const [roster, workspace] = await Promise.all([
       getFactionRoster(),
-      getMemberActivityWorkspace(faction.id),
+      getMemberActivityMonitorWorkspace(faction.id),
     ]);
     if (!roster.available) {
       return Response.json(
@@ -34,7 +40,10 @@ export async function GET(request: Request): Promise<Response> {
         { status: 503, headers: { "cache-control": "no-store" } },
       );
     }
-    await synchronizeMemberInactivityPeriods(faction, roster.data, workspace.records, roster.checkedAt);
+    if (!workspace.databaseAvailable) {
+      return Response.json({ error: workspace.message }, { status: 503, headers: { "cache-control": "no-store" } });
+    }
+    after(() => synchronizeMemberInactivityPeriods(faction, roster.data, workspace.records, roster.checkedAt).then(() => undefined).catch(() => undefined));
     const snapshot: MemberActivityMonitorSnapshot = {
       factionId: faction.id,
       factionName: faction.name,

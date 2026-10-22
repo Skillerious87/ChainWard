@@ -1,5 +1,6 @@
 import { Activity, ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, Radio, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { ChainHero } from "@/components/chain/chain-hero";
 import { ContributionTable } from "@/components/chain/contribution-table";
 import { RecentChains } from "@/components/chain/recent-chains";
@@ -9,30 +10,24 @@ import { getCurrentActor } from "@/lib/auth/current-actor";
 import { buildOperationsBrief } from "@/lib/intelligence/operations-brief";
 import { requireLicensedPage } from "@/lib/licensing/guards";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 import { getCompletedChainHistory, getCurrentChainReportView, getFactionRoster } from "@/lib/torn/workspace-data-service";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   await requireLicensedPage();
-  const [telemetry, currentReportResult, historyResult, rosterResult, actor] = await Promise.all([
-    getWorkspaceTelemetry(),
+  // Start the slow report/history work together, but let the welcome and live
+  // chain render as soon as their own data is ready.
+  const details = Promise.all([
     getCurrentChainReportView(),
     getCompletedChainHistory(),
     getFactionRoster(),
+  ]);
+  const [telemetry, actor] = await Promise.all([
+    getWorkspaceTelemetry(),
     getCurrentActor(),
   ]);
-  const report = currentReportResult.data;
-  const history = historyResult.data;
-  const brief = buildOperationsBrief({
-    telemetry,
-    report,
-    reportAvailable: currentReportResult.available,
-    history,
-    historyAvailable: historyResult.available,
-    roster: rosterResult.data,
-    rosterAvailable: rosterResult.available,
-  });
   const date = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date());
   const connected = telemetry.source === "live";
   const displayName = actor.tornUserId > 0 ? actor.name : "there";
@@ -82,6 +77,32 @@ export default async function DashboardPage() {
 
     <header className="overview-section-heading"><div><p className="eyebrow">Live operations</p><h2>What’s happening right now</h2></div><p>Verified operational data, refreshed directly from Torn.</p></header>
     <ChainHero />
+    <Suspense fallback={<DashboardDetailsLoading />}>
+      <DashboardDetails telemetry={telemetry} data={details} />
+    </Suspense>
+  </div>;
+}
+
+type DashboardDetailData = [
+  Awaited<ReturnType<typeof getCurrentChainReportView>>,
+  Awaited<ReturnType<typeof getCompletedChainHistory>>,
+  Awaited<ReturnType<typeof getFactionRoster>>,
+];
+
+async function DashboardDetails({ telemetry, data }: { telemetry: WorkspaceTelemetry; data: Promise<DashboardDetailData> }) {
+  const [currentReportResult, historyResult, rosterResult] = await data;
+  const report = currentReportResult.data;
+  const history = historyResult.data;
+  const brief = buildOperationsBrief({
+    telemetry,
+    report,
+    reportAvailable: currentReportResult.available,
+    history,
+    historyAvailable: historyResult.available,
+    roster: rosterResult.data,
+    rosterAvailable: rosterResult.available,
+  });
+  return <>
     <OperationsBrief brief={brief} />
     <StatStrip telemetry={telemetry} report={report} history={history} />
     <div className="dashboard-grid">
@@ -89,7 +110,15 @@ export default async function DashboardPage() {
       <aside className="panel payout-summary data-provenance-card"><div className="section-heading"><div><h2>Data provenance</h2><p>No estimated operational values</p></div><span className="panel-icon"><ShieldCheck size={18} /></span></div><div className="provenance-list"><div><span><Radio size={15} /></span><p><strong>Current chain</strong><small>{telemetry.source === "live" ? "Verified from /faction/chain" : "Unavailable until connected"}</small></p>{telemetry.source === "live" && <CheckCircle2 size={14} />}</div><div><span><Clock3 size={15} /></span><p><strong>Current contributions</strong><small>{report ? `Matched to Torn report #${report.id}` : currentReportResult.message}</small></p>{report && <CheckCircle2 size={14} />}</div><div><span><CalendarDays size={15} /></span><p><strong>Completed chains</strong><small>{historyResult.available ? `${history.length} records returned by Torn` : historyResult.message}</small></p>{historyResult.available && <CheckCircle2 size={14} />}</div></div><Link href="/connect" className="panel-link">Review API connection <ArrowUpRight size={14} /></Link></aside>
     </div>
     <RecentChains chains={history} message={historyResult.message} />
-  </div>;
+  </>;
+}
+
+function DashboardDetailsLoading() {
+  return <section className="overview-details-loading" role="status" aria-label="Loading contributions and chain history">
+    <span className="sr-only">Loading contributions and chain history</span>
+    <div className="overview-details-loading__stats" aria-hidden="true">{[0, 1, 2, 3].map((item) => <div key={item}><span className="skeleton-line" /><span className="skeleton-line" /></div>)}</div>
+    <div className="overview-details-loading__report" aria-hidden="true">{[0, 1, 2, 3].map((item) => <span className="skeleton-line" key={item} />)}</div>
+  </section>;
 }
 
 function formatCheckedTime(value: string): string {

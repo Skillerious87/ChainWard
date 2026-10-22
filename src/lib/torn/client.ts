@@ -112,6 +112,7 @@ export class TornClient {
   private readonly coordinateRequests: boolean;
   private readonly coordination: TornCoordinationContext;
   private readonly sharedFaction: TornClientOptions["sharedFaction"];
+  private readonly pendingSharedRequests = new Map<string, Promise<TornResponseSnapshot>>();
 
   constructor(options: TornClientOptions) {
     if (!options.apiKey.trim()) throw new Error("A Torn API key is required.");
@@ -278,10 +279,19 @@ export class TornClient {
     options: TornRequestOptions = {},
   ): Promise<{ value: T; fetchedAt: number }> {
     if (this.sharedFaction && factionPoolOperation(path, this.sharedFaction.factionId)) {
-      return this.sharedFaction.read(
-        { path, query, cacheMs, forceRefresh: options.forceRefresh === true },
-        () => this.requestOwnWithMeta(path, schema, cacheMs, query, options),
-      ).then((snapshot) => ({ value: schema.parse(snapshot.value), fetchedAt: snapshot.fetchedAt }));
+      // Layouts, guards and page sections often ask for the same snapshot at
+      // once. Share only the in-flight work, including broker database reads;
+      // subsequent calls still go through normal authorization and freshness.
+      const key = JSON.stringify([path, Object.entries(query).sort(([left], [right]) => left.localeCompare(right)), cacheMs, options.forceRefresh === true, options.bypassUpstreamCache === true]);
+      let pending = this.pendingSharedRequests.get(key);
+      if (!pending) {
+        pending = this.sharedFaction.read(
+          { path, query, cacheMs, forceRefresh: options.forceRefresh === true },
+          () => this.requestOwnWithMeta(path, schema, cacheMs, query, options),
+        ).finally(() => this.pendingSharedRequests.delete(key));
+        this.pendingSharedRequests.set(key, pending);
+      }
+      return pending.then((snapshot) => ({ value: schema.parse(snapshot.value), fetchedAt: snapshot.fetchedAt }));
     }
     return this.requestOwnWithMeta(path, schema, cacheMs, query, options);
   }

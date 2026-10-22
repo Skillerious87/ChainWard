@@ -26,6 +26,8 @@ export function useMemberActivityMonitor(initialSnapshot: MemberActivityMonitorS
   useEffect(() => {
     if (!preferences.enabled || !initialSnapshot) return;
     let stopped = false;
+    let pending = false;
+    let activeRequest: AbortController | null = null;
     // The layout has just built initialSnapshot from the verified roster and
     // activity store. Treat it as the first scheduled reading instead of
     // immediately repeating the same protected API work after hydration.
@@ -35,12 +37,17 @@ export function useMemberActivityMonitor(initialSnapshot: MemberActivityMonitorS
     void ensureNotificationWorker();
 
     async function poll(): Promise<void> {
-      if (!navigator.onLine || document.visibilityState !== "visible") return;
+      if (!navigator.onLine || document.visibilityState !== "visible" || pending) return;
+      pending = true;
       lastCheckedAt = Date.now();
+      const controller = new AbortController();
+      activeRequest = controller;
+      const timeout = window.setTimeout(() => controller.abort(), 15_000);
       try {
         const response = await fetch("/api/members/activity-monitor", {
           headers: { accept: "application/json" },
           cache: "no-store",
+          signal: controller.signal,
         });
         const payload: unknown = await response.json();
         if (!response.ok || !isMonitorSnapshot(payload) || stopped) return;
@@ -48,6 +55,10 @@ export function useMemberActivityMonitor(initialSnapshot: MemberActivityMonitorS
         await maybeNotify(payload, preferences);
       } catch {
         // Monitoring retains the most recent verified snapshot during transient failures.
+      } finally {
+        window.clearTimeout(timeout);
+        activeRequest = null;
+        pending = false;
       }
     }
 
@@ -62,6 +73,7 @@ export function useMemberActivityMonitor(initialSnapshot: MemberActivityMonitorS
     window.addEventListener("online", checkOnResume);
     return () => {
       stopped = true;
+      activeRequest?.abort();
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", checkOnResume);
       window.removeEventListener("online", checkOnResume);

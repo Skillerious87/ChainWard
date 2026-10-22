@@ -27,6 +27,14 @@ describe("browser telemetry requests", () => {
     expect(isWorkspaceTelemetry({ source: "live", checkedAt: "now" })).toBe(false);
   });
 
+  it.each([
+    { chain: {} }, { chain: [] }, { faction: {} }, { faction: [] },
+    { faction: { id: 1, name: "Faction", tag: "F", members: -1 } },
+    { checkedAt: "invalid" }, { dataAgeMs: NaN }, { dataAgeMs: -1 }, { mode: "unknown" },
+  ])("rejects malformed telemetry before it reaches countdown and navigation controls: %j", (invalid) => {
+    expect(isWorkspaceTelemetry({ ...telemetryFixture(), ...invalid })).toBe(false);
+  });
+
   it("bounds a stalled request and allows the next refresh to recover", async () => {
     const controller = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);

@@ -69,7 +69,9 @@ export const getCurrentChainReportView = cache(async (): Promise<TornDataResult<
     // supports ongoing reports by explicit chain ID for the connected faction.
     const report = await client.getChainReport(active ? current.chain.id : undefined, {
       live: true,
-      forceRefresh: true,
+      // Idle visits can reuse the short-lived latest-report snapshot. Active
+      // chains still bypass both caches so contributions stay current.
+      forceRefresh: active,
       bypassUpstreamCache: active,
     });
     if (active && report.chainreport.id !== current.chain.id) {

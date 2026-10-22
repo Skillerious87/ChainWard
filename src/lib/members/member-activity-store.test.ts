@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLocalDatabase } from "@/lib/data/local-database";
-import { getMemberActivityWorkspace, setMemberActivity, setMemberActivityPolicy, synchronizeMemberInactivityPeriods } from "./member-activity-store";
+import { getMemberActivityMonitorWorkspace, getMemberActivityWorkspace, setMemberActivity, setMemberActivityPolicy, synchronizeMemberInactivityPeriods } from "./member-activity-store";
 
 describe.sequential("member activity store", () => {
   const originalPath = process.env.CHAINWARD_LOCAL_DB_PATH;
@@ -65,5 +65,18 @@ describe.sequential("member activity store", () => {
 
     const workspace = await getMemberActivityWorkspace(faction.id);
     expect(workspace.inactivityPeriods).toEqual(periods);
+
+    const actor = { tornUserId: 3212954, name: "Tester", isPlatformAdmin: true };
+    await setMemberActivityPolicy(faction, actor, 5);
+    await setMemberActivity(faction, { tornUserId: 123, memberName: "Member" }, actor, { state: "WATCH", holidayUntil: null, note: "Review" });
+    const full = await getMemberActivityWorkspace(faction.id);
+    const monitor = await getMemberActivityMonitorWorkspace(faction.id);
+    expect(monitor.policy).toEqual(full.policy);
+    expect(monitor.records).toEqual(full.records);
+    expect(monitor.databaseAvailable).toBe(true);
+    expect(monitor.inactivityPeriods).toEqual([]);
+    expect(monitor.audit).toEqual([]);
+    expect(full.inactivityPeriods).toHaveLength(1);
+    expect(full.audit.length).toBeGreaterThan(0);
   });
 });

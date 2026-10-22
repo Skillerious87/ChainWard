@@ -3,12 +3,7 @@
 import { CircleHelp, ExternalLink, KeyRound, ShieldCheck, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-/**
- * The sign-in screen dropped its inline "How your key is used" panel for a
- * quieter card; this is where that guidance lives now — a single question-
- * mark trigger, top-right, opening a short native <dialog> on demand instead
- * of sitting permanently on the page.
- */
+/** On-demand help for creating a key and choosing the right access level. */
 export function ApiKeyHelpDialog() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDialogElement>(null);
@@ -24,7 +19,7 @@ export function ApiKeyHelpDialog() {
   return (
     <>
       <button type="button" className="login-help" onClick={() => setOpen(true)} aria-label="How the Torn API key works">
-        <CircleHelp size={17} />
+        <CircleHelp size={17} /><span>Key help</span>
       </button>
 
       <dialog

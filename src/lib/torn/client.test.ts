@@ -3,6 +3,33 @@ import { parseRetryAfterSeconds, TornClient } from "./client";
 import { TornApiError, userFacingTornError } from "./errors";
 
 describe("TornClient", () => {
+  const sharedChain = { chain: { id: 12, current: 42, max: 100, timeout: 210, modifier: 1, cooldown: 0, start: 1_700_000_000, end: 0 } };
+
+  it("coalesces concurrent shared reads without retaining authorization across later calls", async () => {
+    const read = vi.fn(async () => ({ value: sharedChain, fetchedAt: Date.now() }));
+    const client = new TornClient({ apiKey: "shared-inflight", sharedFaction: { factionId: 51393, read } });
+    const results = await Promise.all([client.getCurrentChain(), client.getCurrentChain(), client.getCurrentChain()]);
+    expect(read).toHaveBeenCalledOnce();
+    expect(results.every((result) => result.chain.current === 42)).toBe(true);
+    await client.getCurrentChain();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases failed shared reads so the next attempt can recover", async () => {
+    const read = vi.fn().mockRejectedValueOnce(new Error("Broker unavailable")).mockResolvedValue({ value: sharedChain, fetchedAt: Date.now() });
+    const client = new TornClient({ apiKey: "shared-recovery", sharedFaction: { factionId: 51393, read } });
+    await expect(client.getCurrentChain()).rejects.toThrow("Broker unavailable");
+    await expect(client.getCurrentChain()).resolves.toEqual(sharedChain);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps explicit shared refreshes separate from cached reads", async () => {
+    const read = vi.fn(async () => ({ value: sharedChain, fetchedAt: Date.now() }));
+    const client = new TornClient({ apiKey: "shared-freshness", sharedFaction: { factionId: 51393, read } });
+    await Promise.all([client.getCurrentChain(), client.getCurrentChain(undefined, { forceRefresh: true, bypassUpstreamCache: true })]);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
   it.each(["profile", "attacks"] as const)("refreshes %s immediately after an attack without reusing the normal cache", async (kind) => {
     const payload = kind === "profile" ? { profile: { id: 123, name: "Target", status: { state: "Okay" } } } : { attacks: [] };
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(payload));

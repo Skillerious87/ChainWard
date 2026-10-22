@@ -851,3 +851,13 @@ body:has(.app-shell) { height: 100%; overflow: hidden; scrollbar-gutter: auto; o
 .license-expiry-banner > b { display: inline-flex; align-items: center; gap: 7px; color: #e4c982; font-size: 11px; white-space: nowrap; }
 .license-expiry-banner--urgent,.license-expiry-banner--final-day,.license-expiry-banner--expired { border-color: rgba(242, 109, 109, .32); background: linear-gradient(100deg, rgba(242, 109, 109, .1), rgba(242, 109, 109, .02)); }
 .license-expiry-banner--urgent > span:first-child,.license-expiry-banner--final-day > span:first-child,.license-expiry-banner--expired > span:first-child { border-color: rgba(242, 109, 109, .3); color: var(--danger); }
+
+/* Partial overview loading keeps the live workspace usable while reports arrive. */
+.overview-details-loading { display: grid; gap: 18px; }
+.overview-details-loading__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.overview-details-loading__stats > div { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.overview-details-loading__stats .skeleton-line { width: 65%; height: 10px; }
+.overview-details-loading__stats .skeleton-line:last-child { width: 40%; height: 26px; }
+.overview-details-loading__report { display: grid; gap: 24px; min-height: 220px; padding: 28px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.overview-details-loading__report .skeleton-line { height: 12px; width: 85%; }
+@media (max-width: 560px) { .overview-details-loading__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
