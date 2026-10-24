@@ -5,6 +5,7 @@ import type { ConfiguredTornConnection } from "./server-client";
 
 interface TornRequestScope {
   connection?: Promise<ConfiguredTornConnection | null>;
+  identityChecks?: Map<string, Promise<void>>;
 }
 
 const requestScope = new AsyncLocalStorage<TornRequestScope>();

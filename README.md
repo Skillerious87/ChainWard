@@ -134,6 +134,11 @@ you run Chainward on your own device, the server and device are the same.
 
 ## Production deployment
 
+`vercel.json` places server functions in London (`lhr1`), alongside the current
+Neon database in AWS `eu-west-2`. Keep compute and database regions together:
+cross-region latency accumulates across session checks and coordinated Torn
+API transactions. Update this setting if the database moves.
+
 Before exposing Chainward to other users:
 
 1. Configure shared PostgreSQL with `DATABASE_URL`, run `npm run db:push`, and
@@ -171,7 +176,7 @@ supplied.
 
 ```bash
 npm run check           # lint, TypeScript, unit tests, production build
-npm run verify:offline  # 100 end-to-end assertions with no network access
+npm run verify:offline  # 115 HTTP acceptance assertions with no network access
 npm run check:full      # both of the above
 ```
 
@@ -182,6 +187,10 @@ unlicensed faction, grants access through the real licensing store, then
 requests every operational route and asserts the offline data labelling,
 telemetry API, and request hardening. It resets only the fixture faction's
 records, so a connected real faction is untouched.
+
+The run also checks next-target and target-refresh access control and reports five warmed HTTP
+render samples for Overview, Live Chain, and Targets. These development/fixture
+measurements do not represent production browser or live Torn latency.
 
 Architecture and current Torn API findings are documented in
 [`docs/architecture.md`](docs/architecture.md) and

@@ -6,12 +6,17 @@ import { enrichWithFairFight } from "@/lib/targets/ffscouter";
 import { mergeSnapshots, readTargetList, targetsStorageAvailable, writeTargetList } from "@/lib/targets/store";
 import { getConfiguredTornConnection } from "@/lib/torn/server-client";
 import { getWorkspaceTelemetry } from "@/lib/torn/telemetry-service";
+import { withTornRequestScope } from "@/lib/torn/request-scope";
 
 export const dynamic = "force-dynamic";
 
 /** Live poll for the Targets workspace: refreshes stale snapshots and returns
  *  the current chain reading. Kept lean — entry edits go through server actions. */
 export async function GET(request: Request): Promise<Response> {
+  return withTornRequestScope(() => refreshTargetWorkspace(request));
+}
+
+async function refreshTargetWorkspace(request: Request): Promise<Response> {
   const addressLimit = consumeRateLimit("targets-refresh:address", request, { limit: 40, windowMs: 60_000 });
   if (!addressLimit.allowed) return tooMany(addressLimit.retryAfterSeconds);
 

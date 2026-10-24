@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { TargetsWorkspace } from "@/components/targets/targets-workspace";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import { requireLicensedPage } from "@/lib/licensing/guards";
-import { enrichWithFairFight, type FairFightInfo } from "@/lib/targets/ffscouter";
 import { hasFfscouterKey } from "@/lib/targets/ffscouter-key-store";
 import { readTargetList, targetsStorageAvailable } from "@/lib/targets/store";
 import type { TargetList } from "@/lib/targets/types";
@@ -22,7 +21,6 @@ export default async function TargetsPage() {
   const storageAvailable = targetsStorageAvailable();
 
   let list: TargetList = { entries: [], snapshots: {} };
-  let fairFight: Record<string, FairFightInfo> = {};
   let ffscouterConfigured = false;
 
   // First paint renders straight from the last-stored snapshots — no Torn calls,
@@ -36,16 +34,10 @@ export default async function TargetsPage() {
     } catch {
       list = { entries: [], snapshots: {} };
     }
-    // Fair Fight badges are a bonus — a failure here must never blank the list.
+    // Read configuration only. The client refresh loads optional Fair Fight
+    // estimates after paint; Torn/FFScouter timeouts must not delay navigation.
     try {
-      const [ffMap, configured] = await Promise.all([
-        list.entries.length > 0
-          ? enrichWithFairFight(factionId, actor.tornUserId, list.entries.map((entry) => entry.tornUserId))
-          : Promise.resolve(new Map()),
-        hasFfscouterKey(factionId, actor.tornUserId),
-      ]);
-      fairFight = Object.fromEntries([...ffMap].map(([tornUserId, info]) => [String(tornUserId), info]));
-      ffscouterConfigured = configured;
+      ffscouterConfigured = await hasFfscouterKey(factionId, actor.tornUserId);
     } catch {
       /* leave FF unenriched; the client's next poll fills it in */
     }
@@ -68,7 +60,7 @@ export default async function TargetsPage() {
       chain={telemetry.chain}
       chainDataAgeMs={telemetry.dataAgeMs ?? 0}
       chainCheckedAt={telemetry.checkedAt}
-      fairFight={fairFight}
+      fairFight={{}}
       ffscouterConfigured={ffscouterConfigured}
     />
   );

@@ -2,11 +2,16 @@ import { AuthorizationError } from "@/lib/auth/authorization";
 import { requireFactionPermission } from "@/lib/auth/faction-authorization";
 import { consumePartitionRateLimit, consumeRateLimit } from "@/lib/security/rate-limit";
 import { getBestChainTarget } from "@/lib/targets/best-target";
+import { withTornRequestScope } from "@/lib/torn/request-scope";
 
 export const dynamic = "force-dynamic";
 const noStore = { "cache-control": "no-store, max-age=0" } as const;
 
 export async function GET(request: Request): Promise<Response> {
+  return withTornRequestScope(() => getNextTarget(request));
+}
+
+async function getNextTarget(request: Request): Promise<Response> {
   const addressLimit = consumeRateLimit("next-target:address", request, { limit: 30, windowMs: 60_000 });
   if (!addressLimit.allowed) return tooMany(addressLimit.retryAfterSeconds);
   try {

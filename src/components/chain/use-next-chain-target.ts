@@ -78,18 +78,20 @@ export function watchNextChainTarget({ autoRefresh, onResult, onUnavailable }: {
 }
 
 /** Target checks are independent of the slower contributor report refresh. */
-export function useNextChainTarget(initial: BestChainTargetResult): BestChainTargetResult {
+export function useNextChainTarget(refreshKey = 0): BestChainTargetResult | null {
   const { telemetry } = useLiveWorkspaceTelemetry();
   const { autoRefresh } = useAppearancePreferences();
-  const [live, setLive] = useState<{ initial: BestChainTargetResult; result: BestChainTargetResult } | null>(null);
+  const [live, setLive] = useState<{ chainId: number | undefined; hits: number | undefined; refreshKey: number; result: BestChainTargetResult } | null>(null);
   const chainId = telemetry.chain?.id;
   const hits = telemetry.chain?.current;
 
   useEffect(() => watchNextChainTarget({
     autoRefresh,
-    onResult: (result) => setLive({ initial, result }),
-    onUnavailable: () => setLive({ initial, result: { target: null, targetCount: initial.targetCount, verificationUnavailable: true } }),
-  }), [initial, chainId, hits, autoRefresh]);
+    onResult: (result) => setLive({ chainId, hits, refreshKey, result }),
+    onUnavailable: () => setLive({ chainId, hits, refreshKey, result: { target: null, targetCount: 0, verificationUnavailable: true } }),
+  }), [refreshKey, chainId, hits, autoRefresh]);
 
-  return live?.initial === initial ? live.result : initial;
+  // Never offer the previous hit's attack link while its replacement is being
+  // verified. A pending check is distinct from an empty target list.
+  return live?.chainId === chainId && live?.hits === hits && live?.refreshKey === refreshKey ? live.result : null;
 }

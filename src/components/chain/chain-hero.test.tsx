@@ -6,7 +6,7 @@ import type { WorkspaceTelemetry } from "@/lib/torn/telemetry-types";
 const mocks = vi.hoisted(() => ({ telemetry: vi.fn(), preferences: vi.fn() }));
 vi.mock("@/components/shell/live-workspace-telemetry", () => ({ useLiveWorkspaceTelemetry: mocks.telemetry }));
 vi.mock("@/lib/appearance-preferences", () => ({ useAppearancePreferences: mocks.preferences, saveAppearancePreferences: vi.fn() }));
-vi.mock("./use-next-chain-target", () => ({ useNextChainTarget: (result: unknown) => result }));
+vi.mock("./use-next-chain-target", () => ({ useNextChainTarget: () => ({ target: null, targetCount: 2 }) }));
 vi.mock("react-dom", async (original) => ({ ...await original<typeof import("react-dom")>(), createPortal: (children: ReactNode) => children }));
 
 import { ChainHero } from "./chain-hero";
@@ -17,7 +17,7 @@ function view(seconds: number, state: "active" | "idle" | "cooldown" = "active")
     chain: { id: 1, current: 10, maximum: 25, timeoutSeconds: seconds, modifier: 1, cooldownSeconds: 0, startedAt: 0, endedAt: 0, state },
   };
   mocks.telemetry.mockReturnValue({ telemetry, seconds, deadlineAtSeconds: 100, nowSeconds: 0 });
-  return renderToStaticMarkup(<ChainHero detailed bestTarget={{ target: null, targetCount: 2 }} />);
+  return renderToStaticMarkup(<ChainHero detailed />);
 }
 
 beforeEach(() => {

@@ -114,12 +114,13 @@ async function openOfflineSession(identity) {
 }
 
 async function getRoute(path, cookie) {
+  const startedAt = performance.now();
   const response = await fetch(`${ORIGIN}${path}`, {
     headers: { accept: "text/html", ...(cookie ? { cookie } : {}) },
     redirect: "manual",
   });
   const html = response.status >= 300 && response.status < 400 ? "" : await response.text();
-  return { status: response.status, location: response.headers.get("location"), html };
+  return { status: response.status, location: response.headers.get("location"), html, durationMs: performance.now() - startedAt };
 }
 
 /**
@@ -326,6 +327,28 @@ async function run() {
     const anonymousTelemetry = await fetch(`${ORIGIN}/api/telemetry/live-chain`, { headers: { accept: "application/json" } });
     check("telemetry rejects an unauthenticated caller", anonymousTelemetry.status === 401, `status ${anonymousTelemetry.status}`);
 
+    console.log("\nNext target API");
+    const nextTarget = await fetch(`${ORIGIN}/api/targets/next`, { headers: { cookie: session.cookie } });
+    const nextTargetPayload = await nextTarget.json();
+    check("next target endpoint answers independently of the contributor report", nextTarget.ok && typeof nextTargetPayload.targetCount === "number", `status ${nextTarget.status}`);
+    check("next target responses are never cached", nextTarget.headers.get("cache-control")?.includes("no-store"));
+    check("next target never leaks a credential", !JSON.stringify(nextTargetPayload).toLowerCase().includes("apikey"));
+    for (const [label, cookie] of [["unassigned", guestSession.cookie], ["departed", departedSession.cookie], ["anonymous", ""]]) {
+      const denied = await fetch(`${ORIGIN}/api/targets/next`, { headers: { ...(cookie ? { cookie } : {}) } });
+      check(`next target rejects ${label} callers`, denied.status === 403, `status ${denied.status}`);
+    }
+
+    console.log("\nTargets refresh API");
+    const targetRefresh = await fetch(`${ORIGIN}/api/targets/refresh?budget=1`, { headers: { cookie: session.cookie } });
+    const targetRefreshPayload = await targetRefresh.json();
+    check("targets refresh answers with bounded snapshot data", targetRefresh.ok && Array.isArray(targetRefreshPayload.snapshots), `status ${targetRefresh.status}`);
+    check("targets refresh responses are never cached", targetRefresh.headers.get("cache-control")?.includes("no-store"));
+    check("targets refresh never leaks a credential", !JSON.stringify(targetRefreshPayload).toLowerCase().includes("apikey"));
+    for (const [label, cookie] of [["unassigned", guestSession.cookie], ["departed", departedSession.cookie], ["anonymous", ""]]) {
+      const denied = await fetch(`${ORIGIN}/api/targets/refresh?budget=1`, { headers: { ...(cookie ? { cookie } : {}) } });
+      check(`targets refresh rejects ${label} callers`, denied.status === 403, `status ${denied.status}`);
+    }
+
     console.log("\nMember activity monitor API");
     const activityMonitor = await fetch(`${ORIGIN}/api/members/activity-monitor`, { headers: { accept: "application/json", cookie: ownerSession.cookie } });
     const activityPayload = await activityMonitor.json();
@@ -349,6 +372,15 @@ async function run() {
       body: JSON.stringify({ apiKey: "x".repeat(5_000) }),
     });
     check("oversized validate-key body is refused", oversized.status === 413 || oversized.status === 400, `status ${oversized.status}`);
+
+    console.log("\nWarmed offline HTTP renders (5 samples, development server; not live Torn or browser timings)");
+    for (const path of ["/dashboard", "/live-chain", "/targets"]) {
+      const samples = [];
+      for (let index = 0; index < 5; index += 1) samples.push(await getRoute(path, session.cookie));
+      check(`${path} renders reliably across repeated visits`, samples.every((sample) => sample.status === 200 && !redirectTarget(sample) && !looksLikeErrorPage(sample.html)));
+      const durations = samples.map((sample) => sample.durationMs).sort((a, b) => a - b);
+      console.log(`        ${path}: median ${Math.round(durations[2])} ms, maximum ${Math.round(durations[4])} ms`);
+    }
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => setTimeout(resolve, 400));

@@ -2,16 +2,15 @@
 
 import { Activity, ArrowUpRight, Clock3, Crosshair, Expand, Siren, Swords, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { saveAppearancePreferences, useAppearancePreferences } from "@/lib/appearance-preferences";
 import { useLiveWorkspaceTelemetry } from "@/components/shell/live-workspace-telemetry";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/client-actions";
-import type { BestChainTargetResult } from "@/lib/targets/best-target";
 import { isWorkspaceTelemetry, requestWorkspaceTelemetry } from "@/lib/torn/telemetry-client";
 import { workspaceTelemetryEvent } from "@/lib/torn/telemetry-events";
 import { useNextChainTarget } from "./use-next-chain-target";
-interface ChainHeroProps { detailed?: boolean; bestTarget?: BestChainTargetResult; onRefresh?: () => void; }
+interface ChainHeroProps { detailed?: boolean; onRefresh?: () => void; }
 
 /**
  * Torn awards a flat respect bonus at thirteen fixed chain lengths. Torn's
@@ -32,9 +31,10 @@ function milestoneWindow(target: number): number[] {
   return [...CHAIN_BONUS_MILESTONES].slice(Math.max(0, index - 1), index + 3);
 }
 
-export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHeroProps) {
+export function ChainHero({ detailed = false, onRefresh }: ChainHeroProps) {
   const { telemetry: snapshot, seconds, deadlineAtSeconds, nowSeconds } = useLiveWorkspaceTelemetry();
   const [syncing, setSyncing] = useState(false);
+  const [targetRefreshKey, setTargetRefreshKey] = useState(0);
   const [focus, setFocus] = useState(false);
   const { chainPanicMode } = useAppearancePreferences();
   const exitButtonRef = useRef<HTMLButtonElement>(null);
@@ -79,6 +79,7 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
       const payload = result.payload;
       const { transitMs } = result;
       window.dispatchEvent(workspaceTelemetryEvent(payload, transitMs));
+      setTargetRefreshKey((value) => value + 1);
       onRefresh?.();
       notify({
         title: payload.source === "live" ? "Torn telemetry checked" : "Telemetry unavailable",
@@ -220,9 +221,10 @@ export function ChainHero({ detailed = false, bestTarget, onRefresh }: ChainHero
           windowSeconds={timeoutWindow}
           deadlineAtSeconds={deadlineAtSeconds}
           warmup={chain.current < 10}
-          bestTarget={bestTarget}
           panicMode={chainPanicMode}
-        />
+        >
+          {detailed && <ChainAttackSuggestion refreshKey={targetRefreshKey} />}
+        </TimeoutRing>
       </div>
 
       <div className="chain-console__metrics">
@@ -250,14 +252,14 @@ function TimeoutRing({
   windowSeconds,
   deadlineAtSeconds,
   warmup,
-  bestTarget,
+  children,
   panicMode,
 }: {
   seconds: number;
   windowSeconds: number;
   deadlineAtSeconds: number;
   warmup: boolean;
-  bestTarget?: BestChainTargetResult;
+  children?: ReactNode;
   panicMode: boolean;
 }) {
   const radius = 54;
@@ -352,7 +354,7 @@ function TimeoutRing({
         <span>Last 60s</span>
       </button>
 
-      {bestTarget && <ChainAttackSuggestion result={bestTarget} />}
+      {children}
 
       <small title="Torn reports seconds remaining when it answers. Automatic active-chain checks bypass the service cache and project each response with a monotonic clock.">
         {warmup ? "First 10 hits share one 5m window" : "Anchored to server time · each new hit restarts 5m"}
@@ -367,8 +369,10 @@ function TimeoutRing({
  * now, one tap away from keeping the chain alive without a detour through
  * the Targets page.
  */
-function ChainAttackSuggestion({ result: initial }: { result: BestChainTargetResult }) {
-  const { target, targetCount, verificationUnavailable } = useNextChainTarget(initial);
+function ChainAttackSuggestion({ refreshKey }: { refreshKey: number }) {
+  const result = useNextChainTarget(refreshKey);
+  if (!result) return <div className="timeout-ring__attack timeout-ring__attack--empty" role="status"><Spinner size={16} label="Checking next target" /></div>;
+  const { target, targetCount, verificationUnavailable } = result;
 
   if (target) {
     const lead = target.reasons[0];

@@ -96,7 +96,16 @@ const CATCHUP_BUDGET = 15;
 const CATCHUP_GAP_MS = 7_000;
 const LIVE_KEY = "chainward:targets-live:v1";
 
-const sleep = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => {
+  if (signal.aborted) return resolve();
+  const finish = () => {
+    window.clearTimeout(timer);
+    signal.removeEventListener("abort", finish);
+    resolve();
+  };
+  const timer = window.setTimeout(finish, ms);
+  signal.addEventListener("abort", finish, { once: true });
+});
 /** Matches ffscouter.com's own difficulty bands. */
 const WINNABLE_FF_CEILING = 3.5;
 
@@ -192,9 +201,21 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   /** Chain id + highest risk tier already alerted, so escalation fires once per chain. */
   const chainAlertRef = useRef<{ id: number; tier: number }>({ id: 0, tier: 0 });
   /** Guards the catch-up loop against overlapping runs; survives re-renders. */
-  const catchUpRef = useRef(false);
+  const catchUpRef = useRef<symbol | null>(null);
+  const refreshLifecycle = useRef<AbortController | null>(null);
   /** One automatic catch-up per mount when the list lands with a big backlog. */
   const autoCatchUpDoneRef = useRef(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    refreshLifecycle.current = controller;
+    return () => {
+      controller.abort();
+      refreshLifecycle.current = null;
+      catchUpRef.current = null;
+      autoCatchUpDoneRef.current = false;
+    };
+  }, []);
 
   // The ref above only seeds once at mount. A server round-trip (add/remove, a
   // manual refresh, a plain navigation) hands back a fresh `snapshots` prop
@@ -462,12 +483,13 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   //  • { full } → the "Refresh all" sweep: walk every entry in deterministic
   //    id-chunks so progress is exact and it always terminates.
   const catchingUp = catchUp !== null;
-  const postRefresh = useCallback(async (query: string): Promise<{ fetched: number; dueTotal: number } | null> => {
+  const postRefresh = useCallback(async (query: string, signal: AbortSignal): Promise<{ fetched: number; dueTotal: number } | null> => {
+    if (signal.aborted) return null;
     try {
-      const response = await fetch(`/api/targets/refresh?${query}`, { headers: { accept: "application/json" }, cache: "no-store" });
+      const response = await fetch(`/api/targets/refresh?${query}`, { headers: { accept: "application/json" }, cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
       if (!response.ok) return null;
       const payload = await response.json();
-      if (!payload || !Array.isArray(payload.snapshots)) return null;
+      if (signal.aborted || !payload || !Array.isArray(payload.snapshots)) return null;
       applyPoll(payload);
       return { fetched: payload.snapshots.length, dueTotal: typeof payload.dueTotal === "number" ? payload.dueTotal : 0 };
     } catch {
@@ -476,8 +498,10 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   }, [applyPoll]);
 
   const runCatchUp = useCallback(async ({ full = false }: { full?: boolean } = {}) => {
-    if (catchUpRef.current || !connected) return;
-    catchUpRef.current = true;
+    const signal = refreshLifecycle.current?.signal;
+    if (catchUpRef.current || !connected || !signal || signal.aborted) return;
+    const run = Symbol();
+    catchUpRef.current = run;
     let ranLean = false;
     try {
       if (full) {
@@ -486,16 +510,18 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
         ranLean = true;
         setCatchUp({ done: 0, total: ids.length });
         let idleWaits = 0;
-        for (let i = 0; i < ids.length;) {
+        for (let i = 0; i < ids.length && !signal.aborted;) {
           if (document.visibilityState !== "visible" || !navigator.onLine) {
             if (++idleWaits > 150) break; // ~5 min backgrounded — give up, the trickle poll takes over
-            await sleep(2_000);
+            await sleep(2_000, signal);
             continue;
           }
           idleWaits = 0;
-          if (i > 0) await sleep(CATCHUP_GAP_MS);
+          if (i > 0) await sleep(CATCHUP_GAP_MS, signal);
+          if (signal.aborted) break;
           const chunk = ids.slice(i, i + CATCHUP_BUDGET);
-          const step = await postRefresh(`ids=${chunk.join(",")}`);
+          const step = await postRefresh(`ids=${chunk.join(",")}`, signal);
+          if (signal.aborted) break;
           i += chunk.length;
           setCatchUp({ done: Math.min(ids.length, i), total: ids.length });
           if (!step) break;
@@ -503,26 +529,29 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
         return;
       }
 
-      const first = await postRefresh(`budget=${CATCHUP_BUDGET}`);
+      const first = await postRefresh(`budget=${CATCHUP_BUDGET}`, signal);
       ranLean = true;
       if (!first || first.dueTotal <= first.fetched) return; // nothing waiting beyond this batch
       const total = first.dueTotal;
       setCatchUp({ done: Math.min(total, first.fetched), total });
       let guard = 0;
-      while (guard++ < 80) {
-        if (document.visibilityState !== "visible" || !navigator.onLine) { await sleep(2_000); continue; }
-        await sleep(CATCHUP_GAP_MS);
-        const next = await postRefresh(`budget=${CATCHUP_BUDGET}`);
+      while (guard++ < 80 && !signal.aborted) {
+        if (document.visibilityState !== "visible" || !navigator.onLine) { await sleep(2_000, signal); continue; }
+        await sleep(CATCHUP_GAP_MS, signal);
+        if (signal.aborted) break;
+        const next = await postRefresh(`budget=${CATCHUP_BUDGET}`, signal);
         if (!next) break;
         setCatchUp({ done: Math.max(0, Math.min(total, total - next.dueTotal + next.fetched)), total });
         if (next.dueTotal <= next.fetched || next.fetched === 0) break;
       }
     } finally {
-      catchUpRef.current = false;
-      setCatchUp(null);
+      if (catchUpRef.current === run) {
+        catchUpRef.current = null;
+        if (!signal.aborted) setCatchUp(null);
+      }
       // The loop ran lean (no chain / Fair Fight); one plain poll now pulls
       // those in rather than waiting a full interval for the live poll.
-      if (ranLean && connected) void postRefresh("");
+      if (ranLean && connected && !signal.aborted) void postRefresh("", signal);
     }
   }, [connected, entries, postRefresh]);
 
@@ -539,17 +568,21 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
   useEffect(() => {
     if (!live || !connected || catchingUp) return;
     let stopped = false;
+    let polling = false;
+    const controller = new AbortController();
     let lastPoll = Date.parse(fetchedAt ?? "") || Date.now();
 
     async function poll(): Promise<void> {
-      if (stopped || !navigator.onLine || document.visibilityState !== "visible") return;
+      if (stopped || polling || !navigator.onLine || document.visibilityState !== "visible") return;
+      polling = true;
       lastPoll = Date.now();
       try {
-        const response = await fetch("/api/targets/refresh", { headers: { accept: "application/json" }, cache: "no-store" });
+        const response = await fetch("/api/targets/refresh", { headers: { accept: "application/json" }, cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) });
         if (!response.ok || stopped) return;
         const payload = await response.json();
-        if (payload && Array.isArray(payload.snapshots)) applyPoll(payload);
+        if (!stopped && payload && Array.isArray(payload.snapshots)) applyPoll(payload);
       } catch { /* keep the last good reading */ }
+      finally { polling = false; }
     }
 
     function resume(): void {
@@ -562,6 +595,7 @@ export function TargetsWorkspace(props: TargetsWorkspaceProps) {
     window.addEventListener("online", resume);
     return () => {
       stopped = true;
+      controller.abort();
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);
