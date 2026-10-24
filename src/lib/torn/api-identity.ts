@@ -58,9 +58,12 @@ const verifyIdentityForRender = cache(async (apiKey: string, ownerId: number, fa
   } catch (error) {
     if (isInvalidIdentity(error)) {
       const key = `credential:${fingerprint}`;
-      await apiStateStore.transact([key], () => ({ result: undefined, changes: { [key]: apiState({ disabled: true, errorCode: error.code }) } }));
-      await revokeApiPoolGrant(ownerId, factionId);
-      throw error;
+      // Persistence failures must not replace a known identity refusal with
+      // an outage that a display-only caller is permitted to tolerate.
+      await Promise.allSettled([
+        apiStateStore.transact([key], () => ({ result: undefined, changes: { [key]: apiState({ disabled: true, errorCode: error.code }) } })),
+        revokeApiPoolGrant(ownerId, factionId),
+      ]);
     }
     throw error;
   }

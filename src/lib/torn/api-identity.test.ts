@@ -60,4 +60,16 @@ describe("request-scoped identity verification", () => {
     expect(mocks.revoke).toHaveBeenCalledWith(1, 10);
     expect(mocks.keyInfo).not.toHaveBeenCalled();
   });
+
+  it("keeps a known invalid credential denied when both revocation writes fail", async () => {
+    mocks.read.mockImplementation(async (key: string) => key.startsWith("credential:") ? { disabled: true, errorCode: 18 } : undefined);
+    mocks.transact.mockRejectedValue(new Error("Credential write unavailable"));
+    mocks.revoke.mockRejectedValue(new Error("Grant write unavailable"));
+    await withTornRequestScope(async () => {
+      await expect(verifyTornIdentity("key", 1, 10, true)).rejects.toMatchObject({ code: 18 });
+      await expect(verifyTornIdentity("key", 1, 10)).rejects.toMatchObject({ code: 18 });
+    });
+    expect(mocks.transact).toHaveBeenCalledOnce();
+    expect(mocks.revoke).toHaveBeenCalledOnce();
+  });
 });

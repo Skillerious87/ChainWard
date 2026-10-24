@@ -20,7 +20,8 @@ them. Production response headers also identified US function execution
 - Identity proofs are shared within one server render or route-handler request,
   including between the shell and the faction data pool. Separate credentials,
   players, factions and requests remain isolated. Outage-tolerant shell checks
-  cannot authorize a strict pool caller. Later requests still read durable
+  cannot authorize a strict pool caller. Known invalid credentials remain
+  denied even if revocation writes fail. Later requests still read durable
   revocation state.
 - Both target endpoints now share their decrypted connection and identity
   checks within an isolated request scope.
@@ -32,7 +33,7 @@ them. Production response headers also identified US function execution
 
 ## Validation
 
-- `npm run check:full`: ESLint, TypeScript, 588 tests in 99 files, production
+- `npm run check:full`: ESLint, TypeScript, 589 tests in 99 files, production
   build, and 115 offline HTTP acceptance assertions.
 - Acceptance coverage includes public and operational routes, owner/member
   access, licensing, departed and unassigned members, rewards and payouts,
@@ -52,7 +53,7 @@ them. Production response headers also identified US function execution
   remain disabled even when the offline environment flag is deliberately set.
 
 Five warmed offline development HTTP samples from the final full check
-measured medians of 386 ms for Overview, 202 ms for Live Chain and 196 ms
+measured medians of 348 ms for Overview, 201 ms for Live Chain and 194 ms
 for Targets. `verify:offline` now reports these measurements on every run.
 These are complete fixture HTML response times, not browser interaction
 latencies or live Torn/production benchmarks. No before/after improvement
